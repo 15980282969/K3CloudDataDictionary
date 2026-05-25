@@ -1,0 +1,101 @@
+<Application x:Class="K3CloudDataDictionary.App"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             StartupUri="MainWindow.xaml">
+    <Application.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="pack://application:,,,/HandyControl;component/Themes/SkinDefault.xaml" />
+                <ResourceDictionary Source="pack://application:,,,/HandyControl;component/Themes/Theme.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+
+            <Color x:Key="AppAccentColor">#2D5F8A</Color>
+            <Color x:Key="AppAccentLightColor">#3A7BB5</Color>
+            <Color x:Key="AppSideBarColor">#F5F7FA</Color>
+            <Color x:Key="AppSideBarText">#374151</Color>
+            <Color x:Key="AppSideBarHover">#E8ECF1</Color>
+            <Color x:Key="AppSideBarDivider">#E0E4EA</Color>
+            <Color x:Key="AppHeaderBg">#F5F7FA</Color>
+            <Color x:Key="AppStatusBg">#E8ECF1</Color>
+            <Color x:Key="AppGridLine">#E0E4EA</Color>
+            <Color x:Key="AppGridHeaderBg">#F0F3F7</Color>
+            <Color x:Key="AppGridAltRow">#F8FAFB</Color>
+
+            <SolidColorBrush x:Key="AppAccentBrush" Color="{StaticResource AppAccentColor}" />
+            <SolidColorBrush x:Key="AppAccentLightBrush" Color="{StaticResource AppAccentLightColor}" />
+            <SolidColorBrush x:Key="AppSideBarBrush" Color="{StaticResource AppSideBarColor}" />
+            <SolidColorBrush x:Key="AppSideBarTextBrush" Color="{StaticResource AppSideBarText}" />
+            <SolidColorBrush x:Key="AppSideBarHoverBrush" Color="{StaticResource AppSideBarHover}" />
+            <SolidColorBrush x:Key="AppSideBarDividerBrush" Color="{StaticResource AppSideBarDivider}" />
+            <SolidColorBrush x:Key="AppHeaderBgBrush" Color="{StaticResource AppHeaderBg}" />
+            <SolidColorBrush x:Key="AppStatusBgBrush" Color="{StaticResource AppStatusBg}" />
+            <SolidColorBrush x:Key="AppGridLineBrush" Color="{StaticResource AppGridLine}" />
+            <SolidColorBrush x:Key="AppGridHeaderBgBrush" Color="{StaticResource AppGridHeaderBg}" />
+            <SolidColorBrush x:Key="AppGridAltRowBrush" Color="{StaticResource AppGridAltRow}" />
+
+            <Style x:Key="AppDataGridCellStyle" TargetType="DataGridCell">
+                <Setter Property="BorderBrush" Value="{StaticResource AppGridLineBrush}" />
+                <Setter Property="BorderThickness" Value="0.6" />
+                <Setter Property="VerticalAlignment" Value="Center" />
+                <Setter Property="Padding" Value="6,4" />
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="DataGridCell">
+                            <Border BorderBrush="{TemplateBinding BorderBrush}"
+                                    BorderThickness="{TemplateBinding BorderThickness}"
+                                    Background="{TemplateBinding Background}"
+                                    Padding="{TemplateBinding Padding}">
+                                <ContentPresenter VerticalAlignment="Center" />
+                            </Border>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+
+            <Style x:Key="AppDataGridColumnHeaderStyle" TargetType="DataGridColumnHeader">
+                <Setter Property="Background" Value="{StaticResource AppGridHeaderBgBrush}" />
+                <Setter Property="Foreground" Value="#374151" />
+                <Setter Property="FontWeight" Value="SemiBold" />
+                <Setter Property="FontSize" Value="14" />
+                <Setter Property="Padding" Value="4,4" />
+                <Setter Property="BorderBrush" Value="{StaticResource AppGridLineBrush}" />
+                <Setter Property="BorderThickness" Value="0.6" />
+                <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            </Style>
+
+            <Style x:Key="AppDataGridStyle" TargetType="DataGrid">
+                <Setter Property="Background" Value="White" />
+                <Setter Property="BorderThickness" Value="0" />
+                <Setter Property="GridLinesVisibility" Value="All" />
+                <Setter Property="HeadersVisibility" Value="All" />
+                <Setter Property="HorizontalGridLinesBrush" Value="{StaticResource AppGridLineBrush}" />
+                <Setter Property="VerticalGridLinesBrush" Value="{StaticResource AppGridLineBrush}" />
+                <Setter Property="RowBackground" Value="White" />
+                <Setter Property="AlternatingRowBackground" Value="{StaticResource AppGridAltRowBrush}" />
+                <Setter Property="FontSize" Value="13" />
+                <Setter Property="CellStyle" Value="{StaticResource AppDataGridCellStyle}" />
+                <Setter Property="ColumnHeaderStyle" Value="{StaticResource AppDataGridColumnHeaderStyle}" />
+                <Setter Property="AutoGenerateColumns" Value="False" />
+                <Setter Property="IsReadOnly" Value="True" />
+                <Setter Property="CanUserSortColumns" Value="True" />
+                <Setter Property="CanUserResizeColumns" Value="True" />
+                <Setter Property="CanUserReorderColumns" Value="True" />
+                <Setter Property="SelectionMode" Value="Extended" />
+                <Setter Property="ClipboardCopyMode" Value="ExcludeHeader" />
+                <Setter Property="RowHeaderWidth" Value="40" />
+            </Style>
+
+            <Style x:Key="AppDataGridRowHeaderStyle" TargetType="DataGridRowHeader">
+                <Setter Property="Background" Value="{StaticResource AppGridHeaderBgBrush}" />
+                <Setter Property="Foreground" Value="#6B7280" />
+                <Setter Property="FontWeight" Value="Normal" />
+                <Setter Property="FontSize" Value="11" />
+                <Setter Property="HorizontalContentAlignment" Value="Center" />
+                <Setter Property="VerticalContentAlignment" Value="Center" />
+                <Setter Property="BorderBrush" Value="{StaticResource AppGridLineBrush}" />
+                <Setter Property="BorderThickness" Value="0,0,0.6,0.6" />
+                <Setter Property="Width" Value="40" />
+            </Style>
+        </ResourceDictionary>
+    </Application.Resources>
+</Application>
