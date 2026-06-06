@@ -1,6 +1,4 @@
-using System;
 using System.Collections.Generic;
-using System.Data.SqlClient;
 using System.Linq;
 using System.Xml.Linq;
 
@@ -55,17 +53,6 @@ namespace K3CloudDataDictionary.Views
 
             XDocument doc = XDocument.Parse(xmlContent);
             return ParseEntities(doc);
-        }
-
-        public static (List<EntityInfo> WithOid, List<EntityInfo> WithoutOid) ExtractByFid(string connectionString, string fid)
-        {
-            string xmlContent = MetadataDbHelper.QueryFKernelXML(connectionString, fid);
-            if (string.IsNullOrEmpty(xmlContent))
-            {
-                return (new List<EntityInfo>(), new List<EntityInfo>());
-            }
-
-            return ExtractFromXml(xmlContent);
         }
 
         private static (List<EntityInfo> WithOid, List<EntityInfo> WithoutOid) ParseEntities(XDocument doc)

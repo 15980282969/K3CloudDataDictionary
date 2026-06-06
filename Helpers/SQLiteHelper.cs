@@ -1,8 +1,7 @@
+using K3CloudDataDictionary.Models;
 using System;
 using System.Collections.Generic;
-using System.Data;
 using System.Data.SQLite;
-using K3CloudDataDictionary.Models;
 
 namespace K3CloudDataDictionary.Helpers
 {
@@ -59,7 +58,7 @@ namespace K3CloudDataDictionary.Helpers
                             ServerIp = reader.GetString(2),
                             Port = reader.GetInt32(3),
                             UserName = reader.GetString(4),
-                            Password = reader.GetString(5),
+                            Password = PasswordHelper.Decrypt(reader.GetString(5)),
                             Database = reader.GetString(6),
                             IsDefault = reader.GetInt32(7) == 1
                         });
@@ -87,7 +86,7 @@ namespace K3CloudDataDictionary.Helpers
                             ServerIp = reader.GetString(2),
                             Port = reader.GetInt32(3),
                             UserName = reader.GetString(4),
-                            Password = reader.GetString(5),
+                            Password = PasswordHelper.Decrypt(reader.GetString(5)),
                             Database = reader.GetString(6),
                             IsDefault = reader.GetInt32(7) == 1
                         };
@@ -110,7 +109,7 @@ namespace K3CloudDataDictionary.Helpers
                     cmd.Parameters.AddWithValue("@ServerIp", info.ServerIp ?? "");
                     cmd.Parameters.AddWithValue("@Port", info.Port);
                     cmd.Parameters.AddWithValue("@UserName", info.UserName ?? "");
-                    cmd.Parameters.AddWithValue("@Password", info.Password ?? "");
+                    cmd.Parameters.AddWithValue("@Password", PasswordHelper.Encrypt(info.Password ?? ""));
                     cmd.Parameters.AddWithValue("@Database", info.Database ?? "");
                     cmd.Parameters.AddWithValue("@IsDefault", info.IsDefault ? 1 : 0);
                     cmd.ExecuteNonQuery();
@@ -135,7 +134,7 @@ namespace K3CloudDataDictionary.Helpers
                     cmd.Parameters.AddWithValue("@ServerIp", info.ServerIp ?? "");
                     cmd.Parameters.AddWithValue("@Port", info.Port);
                     cmd.Parameters.AddWithValue("@UserName", info.UserName ?? "");
-                    cmd.Parameters.AddWithValue("@Password", info.Password ?? "");
+                    cmd.Parameters.AddWithValue("@Password", PasswordHelper.Encrypt(info.Password ?? ""));
                     cmd.Parameters.AddWithValue("@Database", info.Database ?? "");
                     cmd.Parameters.AddWithValue("@IsDefault", info.IsDefault ? 1 : 0);
                     cmd.Parameters.AddWithValue("@Id", info.Id);

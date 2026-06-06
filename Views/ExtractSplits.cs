@@ -1,7 +1,4 @@
-using System;
 using System.Collections.Generic;
-using System.Data.SqlClient;
-using System.Linq;
 using System.Xml.Linq;
 
 namespace K3CloudDataDictionary.Views
@@ -58,15 +55,5 @@ namespace K3CloudDataDictionary.Views
             return result;
         }
 
-        public static List<SplitTableInfo> ExtractByFid(string connectionString, string fid)
-        {
-            string xmlContent = MetadataDbHelper.QueryFKernelXML(connectionString, fid);
-            if (string.IsNullOrEmpty(xmlContent))
-            {
-                return new List<SplitTableInfo>();
-            }
-
-            return ExtractFromXml(xmlContent);
-        }
     }
 }

@@ -7,6 +7,7 @@ using System.Data.SQLite;
 using System.IO;
 using System.Linq;
 using System.Runtime.CompilerServices;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Input;
 using K3CloudDataDictionary.Helpers;
@@ -30,9 +31,6 @@ namespace K3CloudDataDictionary.ViewModels
         private ICommand _closeLeftTabsCommand;
         private ICommand _closeRightTabsCommand;
         private ICommand _closeOtherTabsCommand;
-        private bool _suppressCollectionChanged;
-        private ModuleTabItem _recentlyRemovedTab;
-        private int _recentlyRemovedIndex = -1;
         private bool _isClosingTab;
         private string _localDbPath;
 
@@ -123,9 +121,9 @@ namespace K3CloudDataDictionary.ViewModels
 
         private void UpdateStatusForTab(ModuleTabItem tab)
         {
-            if (tab == null || !IsConnected)
+            if (tab == null)
             {
-                if (!IsConnected) return;
+                if (IsConnected) StatusText = "本地数据";
                 return;
             }
 
@@ -188,21 +186,8 @@ namespace K3CloudDataDictionary.ViewModels
 
         private void OpenTabs_CollectionChanged(object sender, NotifyCollectionChangedEventArgs e)
         {
-            if (_suppressCollectionChanged) return;
-
-            if (e.Action == NotifyCollectionChangedAction.Remove)
+            if (e.Action == NotifyCollectionChangedAction.Remove || e.Action == NotifyCollectionChangedAction.Reset)
             {
-                if (e.OldItems?.Count == 1 && e.OldItems[0] is ModuleTabItem removedTab)
-                {
-                    _recentlyRemovedTab = removedTab;
-                    _recentlyRemovedIndex = e.OldStartingIndex;
-                }
-                else
-                {
-                    _recentlyRemovedTab = null;
-                    _recentlyRemovedIndex = -1;
-                }
-
                 if (!_isClosingTab)
                 {
                     if (OpenTabs.Count > 0 && (SelectedTab == null || !OpenTabs.Contains(SelectedTab)))
@@ -213,42 +198,6 @@ namespace K3CloudDataDictionary.ViewModels
                     {
                         SelectedTab = null;
                     }
-                }
-            }
-            else if (e.Action == NotifyCollectionChangedAction.Add)
-            {
-                if (e.NewStartingIndex == 0 && e.NewItems?.Count == 1 && e.NewItems[0] is ModuleTabItem addedTab)
-                {
-                    if (addedTab == _recentlyRemovedTab && _recentlyRemovedIndex > 0)
-                    {
-                        var targetIndex = _recentlyRemovedIndex;
-                        _recentlyRemovedTab = null;
-                        _recentlyRemovedIndex = -1;
-                        Application.Current.Dispatcher.BeginInvoke(new Action(() =>
-                        {
-                            _suppressCollectionChanged = true;
-                            OpenTabs.RemoveAt(0);
-                            OpenTabs.Insert(targetIndex, addedTab);
-                            _suppressCollectionChanged = false;
-                            SelectedTab = addedTab;
-                        }));
-                        return;
-                    }
-                }
-                _recentlyRemovedTab = null;
-                _recentlyRemovedIndex = -1;
-            }
-            else if (e.Action == NotifyCollectionChangedAction.Reset)
-            {
-                _recentlyRemovedTab = null;
-                _recentlyRemovedIndex = -1;
-                if (OpenTabs.Count > 0 && (SelectedTab == null || !OpenTabs.Contains(SelectedTab)))
-                {
-                    SelectedTab = OpenTabs[OpenTabs.Count - 1];
-                }
-                else if (OpenTabs.Count == 0)
-                {
-                    SelectedTab = null;
                 }
             }
         }
@@ -264,7 +213,7 @@ namespace K3CloudDataDictionary.ViewModels
             }
         }
 
-        public void ApplyConnection(ConnectionInfo connection)
+        public async Task ApplyConnectionAsync(ConnectionInfo connection)
         {
             CurrentConnection = connection;
             IsConnected = true;
@@ -274,7 +223,7 @@ namespace K3CloudDataDictionary.ViewModels
             if (HasLocalData)
             {
                 StatusText = $"已连接：{connection.DisplayName}（本地数据）";
-                LoadTreeData();
+                await LoadTreeDataAsync();
             }
             else
             {
@@ -282,15 +231,15 @@ namespace K3CloudDataDictionary.ViewModels
             }
         }
 
-        public void OnRefreshCompleted(string localDbPath)
+        public async Task OnRefreshCompletedAsync(string localDbPath)
         {
             LocalDbPath = localDbPath;
             OpenTabs.Clear();
             StatusText = $"已连接：{CurrentConnection?.DisplayName}（本地数据）";
-            LoadTreeData();
+            await LoadTreeDataAsync();
         }
 
-        private List<Dictionary<string, object>> ExecuteQuery(string sql)
+        private List<Dictionary<string, object>> ExecuteQuery(string sql, IEnumerable<SQLiteParameter> parameters = null)
         {
             var results = new List<Dictionary<string, object>>();
             using (var conn = new SQLiteConnection($"Data Source={LocalDbPath};Version=3;"))
@@ -298,6 +247,11 @@ namespace K3CloudDataDictionary.ViewModels
                 conn.Open();
                 using (var cmd = new SQLiteCommand(sql, conn))
                 {
+                    if (parameters != null)
+                    {
+                        foreach (var p in parameters)
+                            cmd.Parameters.Add(p);
+                    }
                     using (var reader = cmd.ExecuteReader())
                     {
                         while (reader.Read())
@@ -316,14 +270,14 @@ namespace K3CloudDataDictionary.ViewModels
             return results;
         }
 
-        private void OnModuleSelected(ModuleTreeItem module)
+        private async void OnModuleSelected(ModuleTreeItem module)
         {
             if (module == null) return;
             module.IsExpanded = true;
-            OpenTabForModule(module);
+            await OpenTabForModuleAsync(module);
         }
 
-        private void OpenTabForModule(ModuleTreeItem module)
+        private async Task OpenTabForModuleAsync(ModuleTreeItem module)
         {
             var existingTab = OpenTabs.FirstOrDefault(t => t.ModuleId == module.Id && t.TabType == TabType.Form);
             if (existingTab != null)
@@ -339,13 +293,13 @@ namespace K3CloudDataDictionary.ViewModels
                 TabType = TabType.Form
             };
 
-            LoadFormData(tab, module.Id);
+            await LoadFormDataAsync(tab, module.Id);
 
             OpenTabs.Add(tab);
             SelectedTab = tab;
         }
 
-        public void OpenEntityTab(FormInfo form)
+        public async Task OpenEntityTabAsync(FormInfo form)
         {
             if (form == null || !HasLocalData) return;
 
@@ -364,13 +318,13 @@ namespace K3CloudDataDictionary.ViewModels
                 TabType = TabType.Entity
             };
 
-            LoadEntityData(tab, form.FormId);
+            await LoadEntityDataAsync(tab, form.FormId);
 
             OpenTabs.Add(tab);
             SelectedTab = tab;
         }
 
-        public void OpenFieldDetailTab(FormEntityInfo entity)
+        public async Task OpenFieldDetailTabAsync(FormEntityInfo entity)
         {
             if (entity == null || !HasLocalData) return;
 
@@ -389,7 +343,7 @@ namespace K3CloudDataDictionary.ViewModels
                 TabType = TabType.Field
             };
 
-            LoadFieldData(tab, entity.FormId, entity.EntityId);
+            await LoadFieldDataAsync(tab, entity.FormId, entity.EntityId);
 
             OpenTabs.Add(tab);
             SelectedTab = tab;
@@ -455,7 +409,7 @@ namespace K3CloudDataDictionary.ViewModels
             SelectedTab = tab;
         }
 
-        public void LoadTreeData()
+        public async Task LoadTreeDataAsync()
         {
             if (!HasLocalData) return;
 
@@ -464,9 +418,12 @@ namespace K3CloudDataDictionary.ViewModels
 
             try
             {
-                LoadLevel1Nodes(nodeList, nodeDict);
-                LoadLevel2Nodes(nodeList, nodeDict);
-                LoadLevel3Nodes(nodeList, nodeDict);
+                await Task.Run(() =>
+                {
+                    LoadLevel1Nodes(nodeList, nodeDict);
+                    LoadLevel2Nodes(nodeList, nodeDict);
+                    LoadLevel3Nodes(nodeList, nodeDict);
+                });
 
                 ModuleTree.Clear();
                 foreach (var node in nodeList) ModuleTree.Add(node);
@@ -552,14 +509,14 @@ namespace K3CloudDataDictionary.ViewModels
             }
         }
 
-        private void LoadFormData(ModuleTabItem tab, string moduleId)
+        private async Task LoadFormDataAsync(ModuleTabItem tab, string moduleId)
         {
             if (!HasLocalData) return;
 
             try
             {
-                string sql = BuildFormQuery(moduleId, null, null);
-                var rows = ExecuteQuery(sql);
+                var (sql, parameters) = BuildFormQuery(moduleId, null, null);
+                var rows = await Task.Run(() => ExecuteQuery(sql, parameters));
                 foreach (var row in rows)
                 {
                     tab.Forms.Add(new FormInfo
@@ -580,14 +537,14 @@ namespace K3CloudDataDictionary.ViewModels
             }
         }
 
-        private void LoadEntityData(ModuleTabItem tab, string formId)
+        private async Task LoadEntityDataAsync(ModuleTabItem tab, string formId)
         {
             if (!HasLocalData) return;
 
             try
             {
-                string sql = BuildEntityQuery(formId);
-                var rows = ExecuteQuery(sql);
+                var (sql, parameters) = BuildEntityQuery(formId);
+                var rows = await Task.Run(() => ExecuteQuery(sql, parameters));
                 foreach (var row in rows)
                 {
                     tab.FormEntities.Add(MapFormEntityInfo(row));
@@ -601,14 +558,14 @@ namespace K3CloudDataDictionary.ViewModels
             }
         }
 
-        private void LoadFieldData(ModuleTabItem tab, string formId, string entityId)
+        private async Task LoadFieldDataAsync(ModuleTabItem tab, string formId, string entityId)
         {
             if (!HasLocalData) return;
 
             try
             {
-                string sql = BuildFieldQuery(formId, entityId);
-                var rows = ExecuteQuery(sql);
+                var (sql, parameters) = BuildFieldQuery(formId, entityId);
+                var rows = await Task.Run(() => ExecuteQuery(sql, parameters));
                 foreach (var row in rows)
                 {
                     tab.Fields.Add(new FieldInfo
@@ -649,10 +606,12 @@ namespace K3CloudDataDictionary.ViewModels
             };
         }
 
-        private string BuildFormQuery(string moduleId, string searchText, string operatorValue)
+        private (string sql, List<SQLiteParameter> parameters) BuildFormQuery(string moduleId, string searchText, string operatorValue)
         {
             var whereConditions = new List<string>();
+            var parameters = new List<SQLiteParameter>();
 
+            bool needEntityJoin = !string.IsNullOrEmpty(searchText);
             string sql = "SELECT DISTINCT a.FID as FFORMID, " +
                          "       a.FFORMIDENTIFIER as FFORMIDENTIFIER, " +
                          "       a.FNAME as FDJMC, " +
@@ -660,24 +619,28 @@ namespace K3CloudDataDictionary.ViewModels
                          "       sl.FNAME as FSUBSYSTEMNAME " +
                          "FROM T_FORM a " +
                          "LEFT JOIN T_MDL_ELEMENTTYPE_L et ON et.FID = a.FMODELTYPEID AND et.FLOCALEID = 2052 " +
-                         "LEFT JOIN T_META_SUBSYSTEM sl ON sl.FID = a.FSUBSYSTEMID ";
+                         "LEFT JOIN T_META_SUBSYSTEM sl ON sl.FID = a.FSUBSYSTEMID " +
+                         (needEntityJoin ? "LEFT JOIN T_ENTITY ent ON ent.FFORMID = a.FID " : "");
 
             if (!string.IsNullOrEmpty(searchText))
             {
-                string safeValue = searchText.Replace("'", "''");
                 switch (operatorValue)
                 {
                     case "LIKE":
-                        whereConditions.Add($"(a.FFORMIDENTIFIER LIKE '%{safeValue}%' OR a.FNAME LIKE '%{safeValue}%')");
+                        whereConditions.Add("(a.FFORMIDENTIFIER LIKE @SearchValue OR a.FNAME LIKE @SearchValue OR ent.FTableName LIKE @SearchValue)");
+                        parameters.Add(new SQLiteParameter("@SearchValue", $"%{searchText}%"));
                         break;
                     case "LIKE_START":
-                        whereConditions.Add($"(a.FFORMIDENTIFIER LIKE '{safeValue}%' OR a.FNAME LIKE '{safeValue}%')");
+                        whereConditions.Add("(a.FFORMIDENTIFIER LIKE @SearchValue OR a.FNAME LIKE @SearchValue OR ent.FTableName LIKE @SearchValue)");
+                        parameters.Add(new SQLiteParameter("@SearchValue", $"{searchText}%"));
                         break;
                     case "LIKE_END":
-                        whereConditions.Add($"(a.FFORMIDENTIFIER LIKE '%{safeValue}' OR a.FNAME LIKE '%{safeValue}')");
+                        whereConditions.Add("(a.FFORMIDENTIFIER LIKE @SearchValue OR a.FNAME LIKE @SearchValue OR ent.FTableName LIKE @SearchValue)");
+                        parameters.Add(new SQLiteParameter("@SearchValue", $"%{searchText}"));
                         break;
                     default:
-                        whereConditions.Add($"(a.FFORMIDENTIFIER = '{safeValue}' OR a.FNAME = '{safeValue}')");
+                        whereConditions.Add("(a.FFORMIDENTIFIER = @SearchValue OR a.FNAME = @SearchValue OR ent.FTableName = @SearchValue)");
+                        parameters.Add(new SQLiteParameter("@SearchValue", searchText));
                         break;
                 }
             }
@@ -690,16 +653,19 @@ namespace K3CloudDataDictionary.ViewModels
                 else if (moduleId.StartsWith("T_"))
                 {
                     string topClassId = moduleId.Substring(2);
-                    whereConditions.Add($"a.FSUBSYSTEMID IN (SELECT FID FROM T_META_SUBSYSTEM WHERE FTOPCLASSID = '{topClassId}')");
+                    whereConditions.Add("a.FSUBSYSTEMID IN (SELECT FID FROM T_META_SUBSYSTEM WHERE FTOPCLASSID = @TopClassId)");
+                    parameters.Add(new SQLiteParameter("@TopClassId", topClassId));
                 }
                 else if (moduleId.StartsWith("S_"))
                 {
                     string subSysId = moduleId.Substring(2);
-                    whereConditions.Add($"a.FSUBSYSTEMID = '{subSysId}'");
+                    whereConditions.Add("a.FSUBSYSTEMID = @SubSysId");
+                    parameters.Add(new SQLiteParameter("@SubSysId", subSysId));
                 }
                 else
                 {
-                    whereConditions.Add($"a.FFORMIDENTIFIER = '{moduleId}'");
+                    whereConditions.Add("a.FFORMIDENTIFIER = @FormIdentifier");
+                    parameters.Add(new SQLiteParameter("@FormIdentifier", moduleId));
                 }
             }
 
@@ -707,12 +673,12 @@ namespace K3CloudDataDictionary.ViewModels
                 sql += " WHERE " + string.Join(" AND ", whereConditions) + " ";
 
             sql += "ORDER BY a.FID";
-            return sql;
+            return (sql, parameters);
         }
 
-        private string BuildEntityQuery(string formId)
+        private (string sql, List<SQLiteParameter> parameters) BuildEntityQuery(string formId)
         {
-            return "SELECT a.FID as FFORMID, " +
+            string sql = "SELECT a.FID as FFORMID, " +
                    "       b.FID as FENTITYID, " +
                    "       a.FFORMIDENTIFIER as FFORMIDENTIFIER, " +
                    "       a.FNAME as FDJMC, " +
@@ -727,13 +693,18 @@ namespace K3CloudDataDictionary.ViewModels
                    "FROM T_FORM a " +
                    "INNER JOIN T_ENTITY b ON a.FID = b.FFORMID " +
                    "LEFT JOIN T_MDL_ELEMENTTYPE_L et ON et.FID = b.FElementType AND et.FLOCALEID = 2052 " +
-                   $"WHERE a.FID = {formId} " +
+                   "WHERE a.FID = @FormId " +
                    "ORDER BY b.FID";
+            var parameters = new List<SQLiteParameter>
+            {
+                new SQLiteParameter("@FormId", formId)
+            };
+            return (sql, parameters);
         }
 
-        private string BuildFieldQuery(string formId, string entityId)
+        private (string sql, List<SQLiteParameter> parameters) BuildFieldQuery(string formId, string entityId)
         {
-            return "SELECT d.FKey as FKey, " +
+            string sql = "SELECT d.FKey as FKey, " +
                    "       d.FName as FName, " +
                    "       d.FFieldName as FFieldName, " +
                    "       d.FPropertyName as FPropertyName, " +
@@ -745,11 +716,17 @@ namespace K3CloudDataDictionary.ViewModels
                    "INNER JOIN T_FIELD d ON b.FID = d.FENTITYID " +
                    "LEFT JOIN T_ENTITYSPLIT c ON c.FID = d.FENTITYSPLITID AND c.FFORMID = a.FID " +
                    "LEFT JOIN T_MDL_ELEMENTTYPE_L e ON e.FID = d.FElementType AND e.FLOCALEID = 2052 " +
-                   $"WHERE a.FID = {formId} AND b.FID = {entityId} " +
+                   "WHERE a.FID = @FormId AND b.FID = @EntityId " +
                    "ORDER BY d.FID";
+            var parameters = new List<SQLiteParameter>
+            {
+                new SQLiteParameter("@FormId", formId),
+                new SQLiteParameter("@EntityId", entityId)
+            };
+            return (sql, parameters);
         }
 
-        private void ExecuteSearch(object parameter)
+        private async void ExecuteSearch(object parameter)
         {
             if (!HasLocalData) return;
             if (string.IsNullOrWhiteSpace(SearchText)) return;
@@ -764,11 +741,11 @@ namespace K3CloudDataDictionary.ViewModels
                 };
 
                 string opValue = SelectedOperator?.OperatorValue ?? "=";
-                string sql = BuildFormQuery(null, SearchText, opValue);
+                var (sql, queryParams) = BuildFormQuery(null, SearchText, opValue);
 
                 try
                 {
-                    var rows = ExecuteQuery(sql);
+                    var rows = await Task.Run(() => ExecuteQuery(sql, queryParams));
                     foreach (var row in rows)
                     {
                         searchTab.Forms.Add(new FormInfo
@@ -792,11 +769,11 @@ namespace K3CloudDataDictionary.ViewModels
             }
             else
             {
-                SearchInTab();
+                await SearchInTabAsync();
             }
         }
 
-        private void SearchInTab()
+        private async Task SearchInTabAsync()
         {
             try
             {
@@ -805,8 +782,8 @@ namespace K3CloudDataDictionary.ViewModels
                 if (SelectedTab.TabType == TabType.Form)
                 {
                     SelectedTab.Header = $"搜索: {SearchText}";
-                    string sql = BuildFormQuery(SelectedTab.ModuleId, SearchText, opValue);
-                    var rows = ExecuteQuery(sql);
+                    var (sql, queryParams) = BuildFormQuery(SelectedTab.ModuleId, SearchText, opValue);
+                    var rows = await Task.Run(() => ExecuteQuery(sql, queryParams));
 
                     SelectedTab.Forms.Clear();
                     foreach (var row in rows)
@@ -835,34 +812,6 @@ namespace K3CloudDataDictionary.ViewModels
         protected virtual void OnPropertyChanged([CallerMemberName] string propertyName = null)
         {
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
-        }
-    }
-
-    public class OperatorItem
-    {
-        public string DisplayName { get; set; }
-        public string OperatorValue { get; set; }
-    }
-
-    public class RelayCommand : ICommand
-    {
-        private readonly Action<object> _execute;
-        private readonly Func<object, bool> _canExecute;
-
-        public RelayCommand(Action<object> execute, Func<object, bool> canExecute = null)
-        {
-            _execute = execute;
-            _canExecute = canExecute;
-        }
-
-        public bool CanExecute(object parameter) => _canExecute?.Invoke(parameter) ?? true;
-
-        public void Execute(object parameter) => _execute(parameter);
-
-        public event EventHandler CanExecuteChanged
-        {
-            add { CommandManager.RequerySuggested += value; }
-            remove { CommandManager.RequerySuggested -= value; }
         }
     }
 }

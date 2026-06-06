@@ -1,9 +1,7 @@
 using System;
 using System.Collections.Generic;
-using System.Data.SqlClient;
 using System.IO;
 using System.Linq;
-using System.Xml.Linq;
 
 namespace K3CloudDataDictionary.Views
 {
@@ -102,6 +100,7 @@ namespace K3CloudDataDictionary.Views
         private readonly Dictionary<string, ObjectBasicInfo> _allObjects;
         private readonly Dictionary<string, List<string>> _extensionMappings;
         private readonly List<string> _targetFids;
+        private readonly HashSet<string> _fidsWithExtensions;
 
         /// <summary>
         /// 初始化上下文：仅加载所有基础信息（不含XML），内存构建扩展映射和目标FID列表
@@ -111,6 +110,7 @@ namespace K3CloudDataDictionary.Views
         {
             _allObjects = MetadataDbHelper.LoadAllObjectBasicInfo(connectionString);
             _extensionMappings = BuildExtensionMappings();
+            _fidsWithExtensions = BuildFidsWithExtensions();
             _targetFids = _allObjects.Values
                 .Where(o => o.FDevType != "2")
                 .Select(o => o.FId)
@@ -118,9 +118,20 @@ namespace K3CloudDataDictionary.Views
         }
 
         /// <summary>
-        /// 获取需要处理的目标FID列表（FDEVTYPE < 2的基础资料和单据）
+        /// 获取不存在扩展的目标FID列表（处理速度快，无需遍历扩展链）
         /// </summary>
-        public List<string> GetTargetFids() => _targetFids;
+        public List<string> GetTargetFidsWithoutExtensions()
+        {
+            return _targetFids.Where(fid => !_fidsWithExtensions.Contains(fid)).ToList();
+        }
+
+        /// <summary>
+        /// 获取存在扩展的目标FID列表（需要遍历扩展链合并数据）
+        /// </summary>
+        public List<string> GetTargetFidsWithExtensions()
+        {
+            return _targetFids.Where(fid => _fidsWithExtensions.Contains(fid)).ToList();
+        }
 
         /// <summary>
         /// 获取指定FID的基础信息（线程安全，只读操作）
@@ -199,6 +210,30 @@ namespace K3CloudDataDictionary.Views
                         result[obj.FBaseObjectId] = list;
                     }
                     list.Add(obj.FId);
+                }
+            }
+            return result;
+        }
+
+        /// <summary>
+        /// 构建存在扩展的目标FID集合：从FDEVTYPE=2的对象的FINHERITPATH中提取第一位（根FID），
+        /// 这些根FID是真正被扩展的基础对象，需要额外处理扩展链合并
+        /// </summary>
+        private HashSet<string> BuildFidsWithExtensions()
+        {
+            var result = new HashSet<string>();
+            foreach (var obj in _allObjects.Values)
+            {
+                if (obj.FDevType == "2" && !string.IsNullOrEmpty(obj.FInheritPath))
+                {
+                    // FINHERITPATH格式如 ",STK_Inventory," 或 ",PLM_PDM_T_xxx,PLM_CFG_BASE,"
+                    // Split后第一个非空元素就是根FID
+                    var parts = obj.FInheritPath.Split(',');
+                    var rootFid = parts.FirstOrDefault(p => !string.IsNullOrWhiteSpace(p))?.Trim();
+                    if (!string.IsNullOrEmpty(rootFid) && _allObjects.ContainsKey(rootFid))
+                    {
+                        result.Add(rootFid);
+                    }
                 }
             }
             return result;

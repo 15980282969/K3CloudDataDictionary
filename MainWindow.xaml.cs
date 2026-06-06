@@ -1,17 +1,18 @@
+using K3CloudDataDictionary.Helpers;
+using K3CloudDataDictionary.Models;
+using K3CloudDataDictionary.ViewModels;
+using K3CloudDataDictionary.Views;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
 using System.Windows.Input;
 using System.Windows.Media;
-using K3CloudDataDictionary.Helpers;
-using K3CloudDataDictionary.Models;
-using K3CloudDataDictionary.ViewModels;
-using K3CloudDataDictionary.Views;
 
 namespace K3CloudDataDictionary
 {
@@ -21,6 +22,7 @@ namespace K3CloudDataDictionary
         private readonly Dictionary<Type, Dictionary<string, PropertyInfo>> _propertyCache = new Dictionary<Type, Dictionary<string, PropertyInfo>>();
         private System.Windows.Threading.DispatcherTimer _filterDebounceTimer;
         private TextBox _pendingFilterTextBox;
+        private int _isRefreshing; // 0=false, 1=true，用于 Interlocked 原子操作
 
         public MainWindow()
         {
@@ -28,7 +30,7 @@ namespace K3CloudDataDictionary
             Loaded += MainWindow_Loaded;
         }
 
-        private void MainWindow_Loaded(object sender, RoutedEventArgs e)
+        private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
         {
             var vm = DataContext as MainViewModel;
             if (vm != null)
@@ -45,7 +47,7 @@ namespace K3CloudDataDictionary
                 vm.StatusText = vm.CurrentConnection != null && !string.IsNullOrWhiteSpace(vm.CurrentConnection.ServerIp)
                     ? $"已连接：{vm.CurrentConnection.DisplayName}（本地数据）"
                     : "本地数据模式";
-                vm.LoadTreeData();
+                await vm.LoadTreeDataAsync();
             }
             else if (vm?.CurrentConnection != null && !string.IsNullOrWhiteSpace(vm.CurrentConnection.ServerIp))
             {
@@ -89,7 +91,7 @@ namespace K3CloudDataDictionary
             }
         }
 
-        private void MenuConnection_Click(object sender, RoutedEventArgs e)
+        private async void MenuConnection_Click(object sender, RoutedEventArgs e)
         {
             var dialog = new ConnectionDialog();
             dialog.Owner = this;
@@ -97,7 +99,10 @@ namespace K3CloudDataDictionary
             if (dialog.ShowDialog() == true && dialog.SelectedConnection != null)
             {
                 var vm = DataContext as MainViewModel;
-                vm?.ApplyConnection(dialog.SelectedConnection);
+                if (vm != null)
+                {
+                    await vm.ApplyConnectionAsync(dialog.SelectedConnection);
+                }
             }
             else
             {
@@ -114,8 +119,6 @@ namespace K3CloudDataDictionary
             }
         }
 
-        private bool _isRefreshing;
-
         private void RefreshMetadata_Click(object sender, RoutedEventArgs e)
         {
             var vm = DataContext as MainViewModel;
@@ -131,7 +134,7 @@ namespace K3CloudDataDictionary
                 return;
             }
 
-            if (_isRefreshing) return;
+            if (Interlocked.CompareExchange(ref _isRefreshing, 1, 0) != 0) return;
 
             var result = MessageBox.Show(
                 "刷新元数据将重建 T_FORM、T_ENTITY、T_ENTITYSPLIT、T_FIELD 表并重新提取所有元数据，是否继续？",
@@ -139,28 +142,31 @@ namespace K3CloudDataDictionary
                 MessageBoxButton.YesNo,
                 MessageBoxImage.Question);
 
-            if (result != MessageBoxResult.Yes) return;
+            if (result != MessageBoxResult.Yes)
+            {
+                Interlocked.Exchange(ref _isRefreshing, 0);
+                return;
+            }
 
-            _isRefreshing = true;
             RefreshProgressBar.Visibility = Visibility.Visible;
             RefreshProgressBar.Value = 0;
             vm.StatusText = "正在刷新元数据...";
 
             var connectionString = vm.CurrentConnection.ConnectionString;
             var localDbPath = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "data", "metadata.db");
-            const int batchSize = 20;
 
             Task.Run(() =>
             {
                 try
                 {
                     var context = new MetadataContext(connectionString);
-                    var allFids = context.GetTargetFids();
-                    var totalFids = allFids.Count;
+                    var fidsWithoutExt = context.GetTargetFidsWithoutExtensions();
+                    var fidsWithExt = context.GetTargetFidsWithExtensions();
+                    var totalFids = fidsWithoutExt.Count + fidsWithExt.Count;
 
                     Dispatcher.Invoke(() =>
                     {
-                        vm.StatusText = $"正在刷新元数据... 共 {totalFids} 个对象";
+                        vm.StatusText = $"正在刷新元数据... 共 {totalFids} 个对象（无扩展 {fidsWithoutExt.Count}，有扩展 {fidsWithExt.Count}）";
                         RefreshProgressBar.Maximum = totalFids;
                     });
 
@@ -169,48 +175,18 @@ namespace K3CloudDataDictionary
                         Dispatcher.Invoke(() => vm.StatusText = "正在保存查找表...");
                         sqliteWriter.WriteLookupTables(connectionString);
 
-                        Task<List<MetadataResult>> nextTask = null;
+                        int totalProcessed = 0;
 
-                        for (int i = 0; i < allFids.Count; i += batchSize)
-                        {
-                            var batchFids = allFids.Skip(i).Take(batchSize).ToList();
-                            if (batchFids.Count == 0) break;
+                        // 第一阶段：处理无扩展的FID
+                        totalProcessed = ProcessBatch(context, connectionString, sqliteWriter, fidsWithoutExt, totalProcessed, totalFids, vm, "无扩展");
 
-                            List<MetadataResult> currentResults;
-                            if (nextTask != null)
-                            {
-                                currentResults = nextTask.Result;
-                            }
-                            else
-                            {
-                                currentResults = MetadataExtractor.ExtractBatch(context, connectionString, batchFids);
-                            }
-
-                            int nextIndex = i + batchSize;
-                            var nextBatchFids = allFids.Skip(nextIndex).Take(batchSize).ToList();
-                            nextTask = nextBatchFids.Count > 0
-                                ? Task.Run(() => MetadataExtractor.ExtractBatch(context, connectionString, nextBatchFids))
-                                : null;
-
-                            foreach (var r in currentResults)
-                            {
-                                sqliteWriter.Write(r);
-                            }
-
-                            sqliteWriter.Flush();
-
-                            int processed = Math.Min(i + batchSize, totalFids);
-                            Dispatcher.Invoke(() =>
-                            {
-                                vm.StatusText = $"正在刷新元数据... {processed}/{totalFids} ({processed * 100 / totalFids}%)";
-                                RefreshProgressBar.Value = processed;
-                            });
-                        }
+                        // 第二阶段：处理有扩展的FID
+                        ProcessBatch(context, connectionString, sqliteWriter, fidsWithExt, totalProcessed, totalFids, vm, "有扩展");
                     }
 
                     Dispatcher.Invoke(() =>
                     {
-                        vm.OnRefreshCompleted(localDbPath);
+                        vm.OnRefreshCompletedAsync(localDbPath).ConfigureAwait(false);
                         RefreshProgressBar.Visibility = Visibility.Collapsed;
                         HandyControl.Controls.Growl.Success(new HandyControl.Data.GrowlInfo
                         {
@@ -234,7 +210,117 @@ namespace K3CloudDataDictionary
                 }
                 finally
                 {
-                    _isRefreshing = false;
+                    Interlocked.Exchange(ref _isRefreshing, 0);
+                }
+            });
+        }
+
+        private void RefreshExtensionMetadata_Click(object sender, RoutedEventArgs e)
+        {
+            var vm = DataContext as MainViewModel;
+            if (vm?.CurrentConnection == null || string.IsNullOrWhiteSpace(vm.CurrentConnection.ServerIp))
+            {
+                MessageBox.Show("请先连接远程数据库", "提示", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            if (!DbHelper.TestConnection(vm.CurrentConnection.ConnectionString, out string connError))
+            {
+                MessageBox.Show($"远程数据库连接失败：{connError}", "错误", MessageBoxButton.OK, MessageBoxImage.Error);
+                return;
+            }
+
+            if (!vm.HasLocalData)
+            {
+                MessageBox.Show("请先执行\"重新获取元数据\"以建立本地数据", "提示", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            if (Interlocked.CompareExchange(ref _isRefreshing, 1, 0) != 0) return;
+
+            var result = MessageBox.Show(
+                "将仅重新获取存在扩展的元数据，是否继续？",
+                "确认刷新",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Question);
+
+            if (result != MessageBoxResult.Yes)
+            {
+                Interlocked.Exchange(ref _isRefreshing, 0);
+                return;
+            }
+
+            RefreshProgressBar.Visibility = Visibility.Visible;
+            RefreshProgressBar.Value = 0;
+            vm.StatusText = "正在刷新扩展元数据...";
+
+            var connectionString = vm.CurrentConnection.ConnectionString;
+            var localDbPath = vm.LocalDbPath;
+
+            Task.Run(() =>
+            {
+                try
+                {
+                    var context = new MetadataContext(connectionString);
+                    var fidsWithExt = context.GetTargetFidsWithExtensions();
+
+                    if (fidsWithExt.Count == 0)
+                    {
+                        Dispatcher.Invoke(() =>
+                        {
+                            vm.StatusText = "未发现存在扩展的元数据";
+                            RefreshProgressBar.Visibility = Visibility.Collapsed;
+                            HandyControl.Controls.Growl.Info(new HandyControl.Data.GrowlInfo
+                            {
+                                Message = "未发现存在扩展的元数据",
+                                WaitTime = 2
+                            });
+                        });
+                        return;
+                    }
+
+                    Dispatcher.Invoke(() =>
+                    {
+                        vm.StatusText = $"正在刷新扩展元数据... 共 {fidsWithExt.Count} 个对象";
+                        RefreshProgressBar.Maximum = fidsWithExt.Count;
+                    });
+
+                    using (var sqliteWriter = new MetadataSqliteWriter(localDbPath, false))
+                    {
+                        // 先删除存在扩展的旧数据
+                        sqliteWriter.DeleteFormsByIdentifiers(fidsWithExt);
+
+                        // 重新获取
+                        ProcessBatch(context, connectionString, sqliteWriter, fidsWithExt, 0, fidsWithExt.Count, vm, "有扩展");
+                    }
+
+                    Dispatcher.Invoke(() =>
+                    {
+                        vm.OnRefreshCompletedAsync(localDbPath).ConfigureAwait(false);
+                        RefreshProgressBar.Visibility = Visibility.Collapsed;
+                        HandyControl.Controls.Growl.Success(new HandyControl.Data.GrowlInfo
+                        {
+                            Message = $"扩展元数据刷新完成，共 {fidsWithExt.Count} 个对象",
+                            WaitTime = 2
+                        });
+                    });
+                }
+                catch (Exception ex)
+                {
+                    Dispatcher.Invoke(() =>
+                    {
+                        vm.StatusText = $"扩展元数据刷新失败：{ex.Message}";
+                        RefreshProgressBar.Visibility = Visibility.Collapsed;
+                        HandyControl.Controls.Growl.Error(new HandyControl.Data.GrowlInfo
+                        {
+                            Message = $"刷新失败：{ex.Message}",
+                            WaitTime = 3
+                        });
+                    });
+                }
+                finally
+                {
+                    Interlocked.Exchange(ref _isRefreshing, 0);
                 }
             });
         }
@@ -277,6 +363,66 @@ namespace K3CloudDataDictionary
             e.Row.Header = (e.Row.GetIndex() + 1).ToString();
         }
 
+        private int ProcessBatch(MetadataContext context, string connectionString, MetadataSqliteWriter sqliteWriter, List<string> fids, int totalProcessed, int totalFids, MainViewModel vm, string phase)
+        {
+            const int batchSize = 50;
+            Task<List<MetadataResult>> nextTask = null;
+
+            for (int i = 0; i < fids.Count; i += batchSize)
+            {
+                var batchFids = fids.Skip(i).Take(batchSize).ToList();
+                if (batchFids.Count == 0) break;
+
+                List<MetadataResult> currentResults;
+                if (nextTask != null)
+                {
+                    currentResults = nextTask.Result;
+                }
+                else
+                {
+                    currentResults = MetadataExtractor.ExtractBatch(context, connectionString, batchFids);
+                }
+
+                int nextIndex = i + batchSize;
+                var nextBatchFids = fids.Skip(nextIndex).Take(batchSize).ToList();
+                nextTask = nextBatchFids.Count > 0
+                    ? Task.Run(() => MetadataExtractor.ExtractBatch(context, connectionString, nextBatchFids))
+                    : null;
+
+                foreach (var r in currentResults)
+                {
+                    sqliteWriter.Write(r);
+                }
+
+                sqliteWriter.Flush();
+
+                totalProcessed += batchFids.Count;
+                int captured = totalProcessed;
+                Dispatcher.Invoke(() =>
+                {
+                    vm.StatusText = $"正在刷新元数据[{phase}]... {captured}/{totalFids} ({captured * 100 / totalFids}%)";
+                    RefreshProgressBar.Value = captured;
+                });
+            }
+
+            return totalProcessed;
+        }
+
+        private void DataGrid_Sorting(object sender, DataGridSortingEventArgs e)
+        {
+            var dataGrid = (DataGrid)sender;
+            var view = CollectionViewSource.GetDefaultView(dataGrid.ItemsSource);
+            if (view == null || view.SortDescriptions.Count == 0) return;
+
+            var currentSort = view.SortDescriptions.FirstOrDefault(s => s.PropertyName == e.Column.SortMemberPath);
+            if (currentSort.PropertyName == e.Column.SortMemberPath && currentSort.Direction == System.ComponentModel.ListSortDirection.Descending)
+            {
+                e.Handled = true;
+                view.SortDescriptions.Clear();
+                e.Column.SortDirection = null;
+            }
+        }
+
         private void DataGrid_PreviewMouseRightButtonDown(object sender, MouseButtonEventArgs e)
         {
             if (sender is DataGrid dataGrid)
@@ -306,7 +452,7 @@ namespace K3CloudDataDictionary
             }
         }
 
-        private void FormDataGrid_MouseDoubleClick(object sender, MouseButtonEventArgs e)
+        private async void FormDataGrid_MouseDoubleClick(object sender, MouseButtonEventArgs e)
         {
             if (e.ChangedButton != MouseButton.Left) return;
 
@@ -317,11 +463,14 @@ namespace K3CloudDataDictionary
             if (dep is DataGridRow row && row.Item is FormInfo form)
             {
                 var vm = DataContext as MainViewModel;
-                vm?.OpenEntityTab(form);
+                if (vm != null)
+                {
+                    await vm.OpenEntityTabAsync(form);
+                }
             }
         }
 
-        private void EntityDataGrid_MouseDoubleClick(object sender, MouseButtonEventArgs e)
+        private async void EntityDataGrid_MouseDoubleClick(object sender, MouseButtonEventArgs e)
         {
             if (e.ChangedButton != MouseButton.Left) return;
 
@@ -332,7 +481,10 @@ namespace K3CloudDataDictionary
             if (dep is DataGridRow row && row.Item is FormEntityInfo entity)
             {
                 var vm = DataContext as MainViewModel;
-                vm?.OpenFieldDetailTab(entity);
+                if (vm != null)
+                {
+                    await vm.OpenFieldDetailTabAsync(entity);
+                }
             }
         }
 

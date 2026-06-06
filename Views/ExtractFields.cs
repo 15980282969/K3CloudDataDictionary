@@ -1,6 +1,4 @@
-using System;
 using System.Collections.Generic;
-using System.Data.SqlClient;
 using System.Linq;
 using System.Xml.Linq;
 
@@ -57,17 +55,6 @@ namespace K3CloudDataDictionary.Views
             return ParseFields(doc);
         }
 
-        public static (List<MetadataFieldInfo> WithOid, List<MetadataFieldInfo> WithoutOid) ExtractByFid(string connectionString, string fid)
-        {
-            string xmlContent = MetadataDbHelper.QueryFKernelXML(connectionString, fid);
-            if (string.IsNullOrEmpty(xmlContent))
-            {
-                return (new List<MetadataFieldInfo>(), new List<MetadataFieldInfo>());
-            }
-
-            return ExtractFromXml(xmlContent);
-        }
-
         private static (List<MetadataFieldInfo> WithOid, List<MetadataFieldInfo> WithoutOid) ParseFields(XDocument doc)
         {
             var withOid = new List<MetadataFieldInfo>();
@@ -77,7 +64,7 @@ namespace K3CloudDataDictionary.Views
                 .Where(e => e.Name.LocalName.EndsWith("Field")
                     && e.Attribute("ElementType") != null
                     && e.Attribute("ElementType")?.Value != "0"
-                    && !e.Parent.Parent.Name.LocalName.EndsWith("Field"));
+                    && e.Parent?.Parent != null && !e.Parent.Parent.Name.LocalName.EndsWith("Field"));
 
             foreach (var element in fieldElements)
             {
