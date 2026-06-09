@@ -296,7 +296,7 @@
                                     </DataTemplate>
                                 </DataGridTextColumn.HeaderTemplate>
                             </DataGridTextColumn>
-                            <DataGridTextColumn Header="Key" Binding="{Binding EntityKey}" Width="Auto" MinWidth="60">
+                            <DataGridTextColumn Header="标识" Binding="{Binding EntityKey}" Width="Auto" MinWidth="60">
                                 <DataGridTextColumn.HeaderTemplate>
                                     <DataTemplate>
                                         <DockPanel>
@@ -306,7 +306,7 @@
                                     </DataTemplate>
                                 </DataGridTextColumn.HeaderTemplate>
                             </DataGridTextColumn>
-                            <DataGridTextColumn Header="EntryName" Binding="{Binding EntityEntryName}" Width="Auto" MinWidth="80">
+                            <DataGridTextColumn Header="ORM实体名" Binding="{Binding EntityEntryName}" Width="Auto" MinWidth="80">
                                 <DataGridTextColumn.HeaderTemplate>
                                     <DataTemplate>
                                         <DockPanel>
@@ -388,7 +388,7 @@
                               CanUserSortColumns="True"
                               Sorting="DataGrid_Sorting">
                         <DataGrid.Columns>
-                            <DataGridTextColumn Header="键" Binding="{Binding Key}" Width="Auto" MinWidth="60">
+                            <DataGridTextColumn Header="标识" Binding="{Binding Key}" Width="Auto" MinWidth="60">
                                 <DataGridTextColumn.HeaderTemplate>
                                     <DataTemplate>
                                         <DockPanel>
@@ -418,7 +418,7 @@
                                     </DataTemplate>
                                 </DataGridTextColumn.HeaderTemplate>
                             </DataGridTextColumn>
-                            <DataGridTextColumn Header="属性名" Binding="{Binding PropertyName}" Width="Auto" MinWidth="80">
+                            <DataGridTextColumn Header="绑定实体属性" Binding="{Binding PropertyName}" Width="Auto" MinWidth="80">
                                 <DataGridTextColumn.HeaderTemplate>
                                     <DataTemplate>
                                         <DockPanel>
@@ -458,7 +458,7 @@
                                     </DataTemplate>
                                 </DataGridTextColumn.HeaderTemplate>
                             </DataGridTextColumn>
-                            <DataGridTextColumn Header="后缀" Binding="{Binding Suffix}" Width="Auto" MinWidth="60">
+                            <DataGridTextColumn Header="拆分表" Binding="{Binding Suffix}" Width="Auto" MinWidth="60">
                                 <DataGridTextColumn.HeaderTemplate>
                                     <DataTemplate>
                                         <DockPanel>
@@ -591,7 +591,7 @@
                                     </DataTemplate>
                                 </DataGridTextColumn.HeaderTemplate>
                             </DataGridTextColumn>
-                            <DataGridTextColumn Header="键" Binding="{Binding Key}" Width="Auto" MinWidth="60">
+                            <DataGridTextColumn Header="标识" Binding="{Binding Key}" Width="Auto" MinWidth="60">
                                 <DataGridTextColumn.HeaderTemplate>
                                     <DataTemplate>
                                         <DockPanel>
@@ -621,7 +621,7 @@
                                     </DataTemplate>
                                 </DataGridTextColumn.HeaderTemplate>
                             </DataGridTextColumn>
-                            <DataGridTextColumn Header="属性名" Binding="{Binding PropertyName}" Width="Auto" MinWidth="80">
+                            <DataGridTextColumn Header="绑定实体属性" Binding="{Binding PropertyName}" Width="Auto" MinWidth="80">
                                 <DataGridTextColumn.HeaderTemplate>
                                     <DataTemplate>
                                         <DockPanel>
@@ -661,7 +661,7 @@
                                     </DataTemplate>
                                 </DataGridTextColumn.HeaderTemplate>
                             </DataGridTextColumn>
-                            <DataGridTextColumn Header="后缀" Binding="{Binding Suffix}" Width="Auto" MinWidth="60">
+                            <DataGridTextColumn Header="拆分表" Binding="{Binding Suffix}" Width="Auto" MinWidth="60">
                                 <DataGridTextColumn.HeaderTemplate>
                                     <DataTemplate>
                                         <DockPanel>
