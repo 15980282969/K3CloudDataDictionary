@@ -375,7 +375,7 @@ namespace K3CloudDataDictionary.ViewModels
             if (field == null || !HasLocalData || string.IsNullOrWhiteSpace(field.LookUpObjectID)) return;
 
             // 通过 LookUpObjectID 查找对应的 FFORMID（表单标识）
-            string lookupSql = "SELECT FFORMID FROM T_Meta_LookupClass WHERE FID = @FID";
+            string lookupSql = @"SELECT FFORMID FROM T_Meta_LookupClass WHERE FID = @FID";
             var lookupRows = await Task.Run(() => ExecuteQuery(lookupSql, new[] { new SQLiteParameter("@FID", field.LookUpObjectID) }));
             if (lookupRows.Count == 0) return;
 
@@ -383,7 +383,7 @@ namespace K3CloudDataDictionary.ViewModels
             if (string.IsNullOrWhiteSpace(formIdentifier)) return;
 
             // 通过表单标识查找 T_FORM 的 FID
-            string formSql = "SELECT FID, FFORMIDENTIFIER, FNAME FROM T_FORM WHERE FFORMIDENTIFIER = @FormIdentifier";
+            string formSql = @"SELECT FID, FFORMIDENTIFIER, FNAME FROM T_FORM WHERE FFORMIDENTIFIER = @FormIdentifier";
             var formRows = await Task.Run(() => ExecuteQuery(formSql, new[] { new SQLiteParameter("@FormIdentifier", formIdentifier) }));
             if (formRows.Count == 0) return;
 
@@ -433,7 +433,7 @@ namespace K3CloudDataDictionary.ViewModels
                 TabType = TabType.Enum
             };
 
-            string sql = "SELECT FVALUE, FCAPTION FROM T_META_FORMENUM WHERE FID = @FID ORDER BY FVALUE";
+            string sql = @"SELECT FVALUE, FCAPTION FROM T_META_FORMENUM WHERE FID = @FID ORDER BY FVALUE";
             var rows = await Task.Run(() => ExecuteQuery(sql, new[] { new SQLiteParameter("@FID", field.EnumType) }));
             foreach (var row in rows)
             {
@@ -493,9 +493,20 @@ namespace K3CloudDataDictionary.ViewModels
                 return;
             }
 
+            // 查找表单名称
+            string formName = formIdentifier;
+            try
+            {
+                var rows = ExecuteQuery(@"SELECT FNAME FROM T_FORM WHERE FFORMIDENTIFIER = @FormIdentifier",
+                    new[] { new SQLiteParameter("@FormIdentifier", formIdentifier) });
+                if (rows.Count > 0 && !string.IsNullOrWhiteSpace(rows[0]["FNAME"]?.ToString()))
+                    formName = rows[0]["FNAME"].ToString();
+            }
+            catch { }
+
             var tab = new ModuleTabItem
             {
-                Header = $"单据类型 - {formIdentifier}",
+                Header = $"{formName} - 单据类型",
                 ModuleId = tabKey,
                 TabType = TabType.BillType
             };
@@ -514,7 +525,7 @@ namespace K3CloudDataDictionary.ViewModels
             if (!HasLocalData || string.IsNullOrWhiteSpace(formId)) return null;
             try
             {
-                var rows = ExecuteQuery("SELECT FFORMIDENTIFIER FROM T_FORM WHERE FID = @FormId", new[] { new SQLiteParameter("@FormId", formId) });
+                var rows = ExecuteQuery(@"SELECT FFORMIDENTIFIER FROM T_FORM WHERE FID = @FormId", new[] { new SQLiteParameter("@FormId", formId) });
                 if (rows.Count > 0) return rows[0]["FFORMIDENTIFIER"]?.ToString();
             }
             catch { }
@@ -527,7 +538,7 @@ namespace K3CloudDataDictionary.ViewModels
 
             try
             {
-                string sql = "SELECT FBILLTYPEID, FBILLFORMID, FNUMBER, FNAME FROM T_BAS_BILLTYPE WHERE FBILLFORMID = @FormIdentifier ORDER BY FNUMBER";
+                string sql = @"SELECT FBILLTYPEID, FBILLFORMID, FNUMBER, FNAME FROM T_BAS_BILLTYPE WHERE FBILLFORMID = @FormIdentifier ORDER BY FNUMBER";
                 var rows = await Task.Run(() => ExecuteQuery(sql, new[] { new SQLiteParameter("@FormIdentifier", formIdentifier) }));
                 foreach (var row in rows)
                 {
@@ -587,28 +598,29 @@ namespace K3CloudDataDictionary.ViewModels
 
         private (string sql, List<SQLiteParameter> parameters) BuildAllFieldsQuery(string formId)
         {
-            string sql = "SELECT a.FNAME as FDJMC, " +
-                   "       b.FName as FENTITYNAME, " +
-                   "       b.FTableName as FTABLENAME, " +
-                   "       d.FKey as FKey, " +
-                   "       d.FName as FName, " +
-                   "       d.FFieldName as FFieldName, " +
-                   "       d.FPropertyName as FPropertyName, " +
-                   "       e.FNAME as FELEMENTTYPENAME, " +
-                   "       d.FLookUpObjectID as FLookUpObjectID, " +
-                   "       d.FEnumType as FEnumType, " +
-                   "       lk.FFORMID as FLookUpObjectDisplay, " +
-                   "       (SELECT FNAME FROM T_META_FORMENUM WHERE FID = d.FEnumType LIMIT 1) as FEnumTypeDisplay, " +
-                   "       c.FSUFFIX as FSUFFIX, " +
-                   "       c.FDESCRIPTION as FSPLITDESCRIPTION " +
-                   "FROM T_FORM a " +
-                   "INNER JOIN T_ENTITY b ON a.FID = b.FFORMID " +
-                   "INNER JOIN T_FIELD d ON b.FID = d.FENTITYID " +
-                   "LEFT JOIN T_ENTITYSPLIT c ON c.FID = d.FENTITYSPLITID AND c.FFORMID = a.FID " +
-                   "LEFT JOIN T_MDL_ELEMENTTYPE_L e ON e.FID = d.FElementType AND e.FLOCALEID = 2052 " +
-                   "LEFT JOIN T_Meta_LookupClass lk ON lk.FID = d.FLookUpObjectID " +
-                   "WHERE a.FID = @FormId " +
-                   "ORDER BY b.FID, d.FID";
+            string sql = @"
+SELECT a.FNAME as FDJMC,
+       b.FName as FENTITYNAME,
+       b.FTableName as FTABLENAME,
+       d.FKey as FKey,
+       d.FName as FName,
+       d.FFieldName as FFieldName,
+       d.FPropertyName as FPropertyName,
+       e.FNAME as FELEMENTTYPENAME,
+       d.FLookUpObjectID as FLookUpObjectID,
+       d.FEnumType as FEnumType,
+       lk.FFORMID as FLookUpObjectDisplay,
+       (SELECT FNAME FROM T_META_FORMENUM WHERE FID = d.FEnumType LIMIT 1) as FEnumTypeDisplay,
+       c.FSUFFIX as FSUFFIX,
+       c.FDESCRIPTION as FSPLITDESCRIPTION
+FROM T_FORM a
+INNER JOIN T_ENTITY b ON a.FID = b.FFORMID
+INNER JOIN T_FIELD d ON b.FID = d.FENTITYID
+LEFT JOIN T_ENTITYSPLIT c ON c.FID = d.FENTITYSPLITID AND c.FFORMID = a.FID
+LEFT JOIN T_MDL_ELEMENTTYPE_L e ON e.FID = d.FElementType AND e.FLOCALEID = 2052
+LEFT JOIN T_Meta_LookupClass lk ON lk.FID = d.FLookUpObjectID
+WHERE a.FID = @FormId
+ORDER BY b.FID, d.FID";
             var parameters = new List<SQLiteParameter>
             {
                 new SQLiteParameter("@FormId", formId)
@@ -716,7 +728,7 @@ namespace K3CloudDataDictionary.ViewModels
 
         private void LoadLevel1Nodes(List<ModuleTreeItem> nodeList, Dictionary<string, ModuleTreeItem> nodeDict)
         {
-            string sql = "SELECT 'T_' || FTOPCLASSID as id, FNAME as text, '0' as parentid FROM T_META_TOPCLASS_L WHERE FLOCALEID = 2052";
+            string sql = @"SELECT 'T_' || FTOPCLASSID as id, FNAME as text, '0' as parentid FROM T_META_TOPCLASS_L WHERE FLOCALEID = 2052";
             var rows = ExecuteQuery(sql);
             foreach (var row in rows)
             {
@@ -730,7 +742,7 @@ namespace K3CloudDataDictionary.ViewModels
 
         private void LoadLevel2Nodes(List<ModuleTreeItem> nodeList, Dictionary<string, ModuleTreeItem> nodeDict)
         {
-            string sql = "SELECT 'S_' || FID as id, FNAME as text, 'T_' || FTOPCLASSID as parentid FROM T_META_SUBSYSTEM";
+            string sql = @"SELECT 'S_' || FID as id, FNAME as text, 'T_' || FTOPCLASSID as parentid FROM T_META_SUBSYSTEM";
             var rows = ExecuteQuery(sql);
             foreach (var row in rows)
             {
@@ -754,7 +766,7 @@ namespace K3CloudDataDictionary.ViewModels
 
         private void LoadLevel3Nodes(List<ModuleTreeItem> nodeList, Dictionary<string, ModuleTreeItem> nodeDict)
         {
-            string sql = "SELECT DISTINCT FFORMIDENTIFIER as id, FNAME as text, 'S_' || FSUBSYSTEMID as parentid FROM T_FORM";
+            string sql = @"SELECT DISTINCT FFORMIDENTIFIER as id, FNAME as text, 'S_' || FSUBSYSTEMID as parentid FROM T_FORM";
             var rows = ExecuteQuery(sql);
             foreach (var row in rows)
             {
@@ -883,15 +895,17 @@ namespace K3CloudDataDictionary.ViewModels
             var parameters = new List<SQLiteParameter>();
 
             bool needEntityJoin = !string.IsNullOrEmpty(searchText);
-            string sql = "SELECT DISTINCT a.FID as FFORMID, " +
-                         "       a.FFORMIDENTIFIER as FFORMIDENTIFIER, " +
-                         "       a.FNAME as FDJMC, " +
-                         "       et.FNAME as FELEMENTTYPENAME, " +
-                         "       sl.FNAME as FSUBSYSTEMNAME " +
-                         "FROM T_FORM a " +
-                         "LEFT JOIN T_MDL_ELEMENTTYPE_L et ON et.FID = a.FMODELTYPEID AND et.FLOCALEID = 2052 " +
-                         "LEFT JOIN T_META_SUBSYSTEM sl ON sl.FID = a.FSUBSYSTEMID " +
-                         (needEntityJoin ? "LEFT JOIN T_ENTITY ent ON ent.FFORMID = a.FID " : "");
+            string sql = @"
+SELECT DISTINCT a.FID as FFORMID,
+       a.FFORMIDENTIFIER as FFORMIDENTIFIER,
+       a.FNAME as FDJMC,
+       et.FNAME as FELEMENTTYPENAME,
+       sl.FNAME as FSUBSYSTEMNAME
+FROM T_FORM a
+LEFT JOIN T_MDL_ELEMENTTYPE_L et ON et.FID = a.FMODELTYPEID AND et.FLOCALEID = 2052
+LEFT JOIN T_META_SUBSYSTEM sl ON sl.FID = a.FSUBSYSTEMID"
++ (needEntityJoin ? @"
+LEFT JOIN T_ENTITY ent ON ent.FFORMID = a.FID" : "");
 
             if (!string.IsNullOrEmpty(searchText))
             {
@@ -949,23 +963,24 @@ namespace K3CloudDataDictionary.ViewModels
 
         private (string sql, List<SQLiteParameter> parameters) BuildEntityQuery(string formId)
         {
-            string sql = "SELECT a.FID as FFORMID, " +
-                   "       b.FID as FENTITYID, " +
-                   "       a.FFORMIDENTIFIER as FFORMIDENTIFIER, " +
-                   "       a.FNAME as FDJMC, " +
-                   "       a.FMODELTYPEID as FMODELTYPEID, " +
-                   "       b.FKey as FKey, " +
-                   "       b.FEntryName as FEntryName, " +
-                   "       b.FName as FENTITYNAME, " +
-                   "       b.FTableName as FTABLENAME, " +
-                   "       b.FEntryPkFieldName as FENTRYPKFIELDNAME, " +
-                   "       et.FNAME as FELEMENTTYPENAME, " +
-                   "       b.FElementType as FELEMENTTYPE " +
-                   "FROM T_FORM a " +
-                   "INNER JOIN T_ENTITY b ON a.FID = b.FFORMID " +
-                   "LEFT JOIN T_MDL_ELEMENTTYPE_L et ON et.FID = b.FElementType AND et.FLOCALEID = 2052 " +
-                   "WHERE a.FID = @FormId " +
-                   "ORDER BY b.FID";
+            string sql = @"
+SELECT a.FID as FFORMID,
+       b.FID as FENTITYID,
+       a.FFORMIDENTIFIER as FFORMIDENTIFIER,
+       a.FNAME as FDJMC,
+       a.FMODELTYPEID as FMODELTYPEID,
+       b.FKey as FKey,
+       b.FEntryName as FEntryName,
+       b.FName as FENTITYNAME,
+       b.FTableName as FTABLENAME,
+       b.FEntryPkFieldName as FENTRYPKFIELDNAME,
+       et.FNAME as FELEMENTTYPENAME,
+       b.FElementType as FELEMENTTYPE
+FROM T_FORM a
+INNER JOIN T_ENTITY b ON a.FID = b.FFORMID
+LEFT JOIN T_MDL_ELEMENTTYPE_L et ON et.FID = b.FElementType AND et.FLOCALEID = 2052
+WHERE a.FID = @FormId
+ORDER BY b.FID";
             var parameters = new List<SQLiteParameter>
             {
                 new SQLiteParameter("@FormId", formId)
@@ -975,25 +990,26 @@ namespace K3CloudDataDictionary.ViewModels
 
         private (string sql, List<SQLiteParameter> parameters) BuildFieldQuery(string formId, string entityId)
         {
-            string sql = "SELECT d.FKey as FKey, " +
-                   "       d.FName as FName, " +
-                   "       d.FFieldName as FFieldName, " +
-                   "       d.FPropertyName as FPropertyName, " +
-                   "       e.FNAME as FELEMENTTYPENAME, " +
-                   "       c.FSUFFIX as FSUFFIX, " +
-                   "       c.FDESCRIPTION as FSPLITDESCRIPTION, " +
-                   "       d.FLookUpObjectID as FLookUpObjectID, " +
-                   "       d.FEnumType as FEnumType, " +
-                   "       lk.FFORMID as FLookUpObjectDisplay, " +
-                   "       (SELECT FNAME FROM T_META_FORMENUM WHERE FID = d.FEnumType LIMIT 1) as FEnumTypeDisplay " +
-                   "FROM T_FORM a " +
-                   "INNER JOIN T_ENTITY b ON a.FID = b.FFORMID " +
-                   "INNER JOIN T_FIELD d ON b.FID = d.FENTITYID " +
-                   "LEFT JOIN T_ENTITYSPLIT c ON c.FID = d.FENTITYSPLITID AND c.FFORMID = a.FID " +
-                   "LEFT JOIN T_MDL_ELEMENTTYPE_L e ON e.FID = d.FElementType AND e.FLOCALEID = 2052 " +
-                   "LEFT JOIN T_Meta_LookupClass lk ON lk.FID = d.FLookUpObjectID " +
-                   "WHERE a.FID = @FormId AND b.FID = @EntityId " +
-                   "ORDER BY d.FID";
+            string sql = @"
+SELECT d.FKey as FKey,
+       d.FName as FName,
+       d.FFieldName as FFieldName,
+       d.FPropertyName as FPropertyName,
+       e.FNAME as FELEMENTTYPENAME,
+       c.FSUFFIX as FSUFFIX,
+       c.FDESCRIPTION as FSPLITDESCRIPTION,
+       d.FLookUpObjectID as FLookUpObjectID,
+       d.FEnumType as FEnumType,
+       lk.FFORMID as FLookUpObjectDisplay,
+       (SELECT FNAME FROM T_META_FORMENUM WHERE FID = d.FEnumType LIMIT 1) as FEnumTypeDisplay
+FROM T_FORM a
+INNER JOIN T_ENTITY b ON a.FID = b.FFORMID
+INNER JOIN T_FIELD d ON b.FID = d.FENTITYID
+LEFT JOIN T_ENTITYSPLIT c ON c.FID = d.FENTITYSPLITID AND c.FFORMID = a.FID
+LEFT JOIN T_MDL_ELEMENTTYPE_L e ON e.FID = d.FElementType AND e.FLOCALEID = 2052
+LEFT JOIN T_Meta_LookupClass lk ON lk.FID = d.FLookUpObjectID
+WHERE a.FID = @FormId AND b.FID = @EntityId
+ORDER BY d.FID";
             var parameters = new List<SQLiteParameter>
             {
                 new SQLiteParameter("@FormId", formId),
