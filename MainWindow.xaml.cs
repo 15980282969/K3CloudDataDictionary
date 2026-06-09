@@ -775,43 +775,29 @@ namespace K3CloudDataDictionary
         {
             if (e.ChangedButton != MouseButton.Left) return;
 
-            // 判断双击的是哪个单元格
             var dep = (DependencyObject)e.OriginalSource;
-            while (dep != null && !(dep is DataGridCell))
+            while (dep != null && !(dep is DataGridRow))
                 dep = VisualTreeHelper.GetParent(dep);
 
-            if (!(dep is DataGridCell cell)) return;
-
-            // 获取点击的列
-            var column = cell.Column;
-            if (column == null) return;
-
-            // 获取行数据
+            if (!(dep is DataGridRow dataRow)) return;
             var dataGrid = (DataGrid)sender;
-            DependencyObject rowDep = cell;
-            while (rowDep != null && !(rowDep is DataGridRow))
-                rowDep = VisualTreeHelper.GetParent(rowDep);
-
-            if (!(rowDep is DataGridRow dataRow)) return;
             var rowItem = dataGrid.ItemContainerGenerator.ItemFromContainer(dataRow);
             if (!(rowItem is Models.FieldInfo field)) return;
 
             var vm = DataContext as MainViewModel;
             if (vm == null) return;
 
-            // 根据列判断联查类型
-            string header = column.Header?.ToString() ?? "";
-            if (header == "引用对象" && !string.IsNullOrWhiteSpace(field.LookUpObjectID))
+            // 根据行数据自动判断联查类型
+            if (!string.IsNullOrWhiteSpace(field.LookUpObjectID))
             {
                 await vm.OpenLookupEntityTabAsync(field);
             }
-            else if (header == "枚举类型" && !string.IsNullOrWhiteSpace(field.EnumType))
+            else if (!string.IsNullOrWhiteSpace(field.EnumType))
             {
                 await vm.OpenEnumDetailTabAsync(field);
             }
-            else if (header == "元素类型" && field.ElementTypeName == "单据类型")
+            else if (field.ElementTypeName == "单据类型")
             {
-                // 从当前标签获取 formId，再查找 FFORMIDENTIFIER
                 var currentTab = vm.SelectedTab;
                 if (currentTab != null && currentTab.ModuleId.StartsWith("field_"))
                 {
@@ -834,30 +820,20 @@ namespace K3CloudDataDictionary
             if (e.ChangedButton != MouseButton.Left) return;
 
             var dep = (DependencyObject)e.OriginalSource;
-            while (dep != null && !(dep is DataGridCell))
+            while (dep != null && !(dep is DataGridRow))
                 dep = VisualTreeHelper.GetParent(dep);
 
-            if (!(dep is DataGridCell cell)) return;
-
-            var column = cell.Column;
-            if (column == null) return;
-
+            if (!(dep is DataGridRow dataRow)) return;
             var dataGrid = (DataGrid)sender;
-            DependencyObject rowDep = cell;
-            while (rowDep != null && !(rowDep is DataGridRow))
-                rowDep = VisualTreeHelper.GetParent(rowDep);
-
-            if (!(rowDep is DataGridRow dataRow)) return;
             var rowItem = dataGrid.ItemContainerGenerator.ItemFromContainer(dataRow);
             if (!(rowItem is Models.AllFieldInfo allField)) return;
 
             var vm = DataContext as MainViewModel;
             if (vm == null) return;
 
-            string header = column.Header?.ToString() ?? "";
-            if (header == "引用对象" && !string.IsNullOrWhiteSpace(allField.LookUpObjectID))
+            // 根据行数据自动判断联查类型
+            if (!string.IsNullOrWhiteSpace(allField.LookUpObjectID))
             {
-                // 构造 FieldInfo 用于联查
                 var fieldInfo = new Models.FieldInfo
                 {
                     LookUpObjectID = allField.LookUpObjectID,
@@ -865,7 +841,7 @@ namespace K3CloudDataDictionary
                 };
                 await vm.OpenLookupEntityTabAsync(fieldInfo);
             }
-            else if (header == "枚举类型" && !string.IsNullOrWhiteSpace(allField.EnumType))
+            else if (!string.IsNullOrWhiteSpace(allField.EnumType))
             {
                 var fieldInfo = new Models.FieldInfo
                 {
@@ -874,9 +850,8 @@ namespace K3CloudDataDictionary
                 };
                 await vm.OpenEnumDetailTabAsync(fieldInfo);
             }
-            else if (header == "元素类型" && allField.ElementTypeName == "单据类型")
+            else if (allField.ElementTypeName == "单据类型")
             {
-                // 从当前标签获取 formId，再查找 FFORMIDENTIFIER
                 var currentTab = vm.SelectedTab;
                 if (currentTab != null && currentTab.ModuleId.StartsWith("allfields_"))
                 {
