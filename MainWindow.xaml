@@ -7,7 +7,7 @@
            xmlns:local="clr-namespace:K3CloudDataDictionary"
            Title="数据字典"
            Icon="pack://application:,,,/Resources/app.ico"
-           NonClientAreaBackground="#F5F7FA"
+                      NonClientAreaBackground="#F5F7FA"
            NonClientAreaForeground="#4B5563"
            Width="1200" Height="750"
            MinWidth="900" MinHeight="600"
@@ -35,8 +35,12 @@
                         <Border x:Name="BtnBorder"
                                 Background="Transparent"
                                 Padding="8,4"
+                                CornerRadius="4"
                                 SnapsToDevicePixels="True">
                             <StackPanel Orientation="Horizontal">
+                                <Path Data="M12,4A4,4 0 0,0 8,8A4,4 0 0,0 12,12A4,4 0 0,0 16,8A4,4 0 0,0 12,4M12,14C8.42,14 5,15.79 5,18V20H19V18C19,15.79 15.58,14 12,14Z"
+                                      Width="14" Height="14" Stretch="Uniform" Fill="#B3FFFFFF"
+                                      VerticalAlignment="Center" Margin="0,0,6,0" />
                                 <TextBlock x:Name="BtnText"
                                            Text="实体映射管理"
                                            FontSize="12"
@@ -53,10 +57,10 @@
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="BtnBorder" Property="Background" Value="#E5E7EB" />
+                                <Setter TargetName="BtnBorder" Property="Background" Value="#26FFFFFF" />
                             </Trigger>
                             <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="BtnBorder" Property="Background" Value="#D1D5DB" />
+                                <Setter TargetName="BtnBorder" Property="Background" Value="#40FFFFFF" />
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -69,22 +73,22 @@
                         <ContextMenu.Template>
                             <ControlTemplate TargetType="ContextMenu">
                                 <Border Background="White"
-                                        CornerRadius="5"
-                                        BorderBrush="#D1D5DB"
+                                        CornerRadius="8"
+                                        BorderBrush="#E2E8F0"
                                         BorderThickness="1"
                                         SnapsToDevicePixels="True">
                                     <Border.Effect>
-                                        <DropShadowEffect ShadowDepth="2" BlurRadius="8" Opacity="0.08" Color="#000000" />
+                                        <DropShadowEffect ShadowDepth="2" BlurRadius="12" Opacity="0.12" Color="#000000" />
                                     </Border.Effect>
-                                    <ItemsPresenter Margin="2" />
+                                    <ItemsPresenter Margin="4" />
                                 </Border>
                             </ControlTemplate>
                         </ContextMenu.Template>
                         <ContextMenu.Resources>
                             <Style TargetType="Separator">
                                 <Setter Property="Height" Value="1" />
-                                <Setter Property="Margin" Value="6,3" />
-                                <Setter Property="Background" Value="#E5E7EB" />
+                                <Setter Property="Margin" Value="8,4" />
+                                <Setter Property="Background" Value="#E2E8F0" />
                                 <Setter Property="Template">
                                     <Setter.Value>
                                         <ControlTemplate TargetType="Separator">
@@ -96,21 +100,21 @@
                                 </Setter>
                             </Style>
                             <Style TargetType="MenuItem">
-                                <Setter Property="Padding" Value="8,5" />
+                                <Setter Property="Padding" Value="10,7" />
                                 <Setter Property="FontSize" Value="12" />
-                                <Setter Property="Foreground" Value="#374151" />
+                                <Setter Property="Foreground" Value="#334155" />
                                 <Setter Property="Template">
                                     <Setter.Value>
                                         <ControlTemplate TargetType="MenuItem">
                                             <Border x:Name="ItemBorder"
                                                     Background="Transparent"
-                                                    CornerRadius="3"
+                                                    CornerRadius="4"
                                                     Padding="{TemplateBinding Padding}"
-                                                    Margin="1"
+                                                    Margin="2"
                                                     SnapsToDevicePixels="True">
                                                 <Grid>
                                                     <Grid.ColumnDefinitions>
-                                                        <ColumnDefinition Width="20" />
+                                                        <ColumnDefinition Width="24" />
                                                         <ColumnDefinition Width="*" />
                                                     </Grid.ColumnDefinitions>
                                                     <ContentPresenter Grid.Column="0"
@@ -125,7 +129,8 @@
                                             </Border>
                                             <ControlTemplate.Triggers>
                                                 <Trigger Property="IsHighlighted" Value="True">
-                                                    <Setter TargetName="ItemBorder" Property="Background" Value="#F3F4F6" />
+                                                    <Setter TargetName="ItemBorder" Property="Background" Value="#EEF2FF" />
+                                                    <Setter Property="Foreground" Value="#4F46E5" />
                                                 </Trigger>
                                             </ControlTemplate.Triggers>
                                         </ControlTemplate>
@@ -135,18 +140,18 @@
                         </ContextMenu.Resources>
                         <MenuItem Header="连接管理..." Click="MenuConnection_Click">
                             <MenuItem.Icon>
-                                <Path Data="M12,4A4,4 0 0,0 8,8A4,4 0 0,0 12,12A4,4 0 0,0 16,8A4,4 0 0,0 12,4M12,14C8.42,14 5,15.79 5,18V20H19V18C19,15.79 15.58,14 12,14Z" Width="14" Height="14" Stretch="Uniform" Fill="#6B7280" />
+                                <Path Data="M12,4A4,4 0 0,0 8,8A4,4 0 0,0 12,12A4,4 0 0,0 16,8A4,4 0 0,0 12,4M12,14C8.42,14 5,15.79 5,18V20H19V18C19,15.79 15.58,14 12,14Z" Width="14" Height="14" Stretch="Uniform" Fill="#64748B" />
                             </MenuItem.Icon>
                         </MenuItem>
                         <Separator />
                         <MenuItem Header="重新获取元数据" Click="RefreshMetadata_Click">
                             <MenuItem.Icon>
-                                <Path Data="M17.65,6.35C16.2,4.9 14.21,4 12,4C7.58,4 4.01,7.58 4.01,12C4.01,16.42 7.58,20 12,20C15.73,20 18.84,17.45 19.73,14H17.65C16.83,16.33 14.61,18 12,18C8.69,18 6,15.31 6,12C6,8.69 8.69,6 12,6C13.66,6 15.14,6.69 16.22,7.78L13,11H20V4L17.65,6.35Z" Width="14" Height="14" Stretch="Uniform" Fill="#6B7280" />
+                                <Path Data="M17.65,6.35C16.2,4.9 14.21,4 12,4C7.58,4 4.01,7.58 4.01,12C4.01,16.42 7.58,20 12,20C15.73,20 18.84,17.45 19.73,14H17.65C16.83,16.33 14.61,18 12,18C8.69,18 6,15.31 6,12C6,8.69 8.69,6 12,6C13.66,6 15.14,6.69 16.22,7.78L13,11H20V4L17.65,6.35Z" Width="14" Height="14" Stretch="Uniform" Fill="#64748B" />
                             </MenuItem.Icon>
                         </MenuItem>
                         <MenuItem Header="刷新扩展元数据" Click="RefreshExtensionMetadata_Click">
                             <MenuItem.Icon>
-                                <Path Data="M19,3H5C3.89,3 3,3.89 3,5V19A2,2 0 0,0 5,21H19A2,2 0 0,0 21,19V5C21,3.89 20.1,3 19,3M10,17L5,12L6.41,10.59L10,14.17L17.59,6.58L19,8L10,17Z" Width="14" Height="14" Stretch="Uniform" Fill="#6B7280" />
+                                <Path Data="M19,3H5C3.89,3 3,3.89 3,5V19A2,2 0 0,0 5,21H19A2,2 0 0,0 21,19V5C21,3.89 20.1,3 19,3M10,17L5,12L6.41,10.59L10,14.17L17.59,6.58L19,8L10,17Z" Width="14" Height="14" Stretch="Uniform" Fill="#64748B" />
                             </MenuItem.Icon>
                         </MenuItem>
                     </ContextMenu>
@@ -168,13 +173,21 @@
         <BooleanToVisibilityConverter x:Key="BoolToVis" />
 
         <DataTemplate x:Key="FormTabTemplate" DataType="{x:Type model:ModuleTabItem}">
-            <Border Background="White" Padding="4">
+            <Border Background="White" Padding="0">
                 <DockPanel>
-                    <TextBlock DockPanel.Dock="Top"
-                               Text="{Binding Header, StringFormat='表单列表 - {0}'}"
-                               FontWeight="SemiBold" FontSize="13"
-                               Foreground="{StaticResource AppAccentBrush}"
-                               Margin="8,4,0,6" />
+                    <Border DockPanel.Dock="Top" Background="#FFFFFF" Padding="14,6" BorderBrush="#E2E8F0" BorderThickness="0,0,0,1">
+                        <StackPanel Orientation="Horizontal">
+                            <Border Width="22" Height="22" Background="#EEF2FF" CornerRadius="5" Margin="0,0,10,0" VerticalAlignment="Center">
+                                <Path Data="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20Z"
+                                      Width="12" Height="12" Stretch="Uniform" Fill="#4F46E5"
+                                      HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            </Border>
+                            <TextBlock Text="{Binding Header}"
+                                       FontWeight="SemiBold" FontSize="14"
+                                       Foreground="#2D5F8A"
+                                       VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Border>
                     <DataGrid ItemsSource="{Binding Forms}"
                               Style="{StaticResource AppDataGridStyle}"
                               RowHeaderStyle="{StaticResource AppDataGridRowHeaderStyle}"
@@ -232,13 +245,27 @@
         </DataTemplate>
 
         <DataTemplate x:Key="EntityTabTemplate" DataType="{x:Type model:ModuleTabItem}">
-            <Border Background="White" Padding="4">
+            <Border Background="White" Padding="0">
                 <DockPanel>
-                    <TextBlock DockPanel.Dock="Top"
-                               Text="{Binding Header, StringFormat='实体列表 - {0}'}"
-                               FontWeight="SemiBold" FontSize="13"
-                               Foreground="{StaticResource AppAccentBrush}"
-                               Margin="8,4,0,6" />
+                    <Border DockPanel.Dock="Top" Background="#FFFFFF" Padding="14,6" BorderBrush="#E2E8F0" BorderThickness="0,0,0,1">
+                        <DockPanel>
+                            <StackPanel Orientation="Horizontal">
+                                <Border Width="22" Height="22" Background="#ECFDF5" CornerRadius="5" Margin="0,0,10,0" VerticalAlignment="Center">
+                                    <Path Data="M3,3H21V5H3V3M3,7H21V9H3V7M3,11H21V13H3V11M3,15H21V17H3V15M3,19H21V21H3V19Z"
+                                          Width="12" Height="12" Stretch="Uniform" Fill="#059669"
+                                          HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                </Border>
+                                <TextBlock Text="{Binding Header}"
+                                           FontWeight="SemiBold" FontSize="14"
+                                           Foreground="#2D5F8A"
+                                           VerticalAlignment="Center" />
+                            </StackPanel>
+                            <Button Content="显示所有字段" Click="ShowAllFields_Click"
+                                    HorizontalAlignment="Right" VerticalAlignment="Center"
+                                    FontSize="12" Padding="10,3"
+                                    Cursor="Hand" />
+                        </DockPanel>
+                    </Border>
                     <DataGrid ItemsSource="{Binding FormEntities}"
                               Style="{StaticResource AppDataGridStyle}"
                               RowHeaderStyle="{StaticResource AppDataGridRowHeaderStyle}"
@@ -336,19 +363,28 @@
         </DataTemplate>
 
         <DataTemplate x:Key="FieldTabTemplate" DataType="{x:Type model:ModuleTabItem}">
-            <Border Background="White" Padding="4">
+            <Border Background="White" Padding="0">
                 <DockPanel>
-                    <TextBlock DockPanel.Dock="Top"
-                               Text="{Binding Header, StringFormat='字段详情 - {0}'}"
-                               FontWeight="SemiBold" FontSize="13"
-                               Foreground="{StaticResource AppAccentBrush}"
-                               Margin="8,4,0,6" />
+                    <Border DockPanel.Dock="Top" Background="#FFFFFF" Padding="14,6" BorderBrush="#E2E8F0" BorderThickness="0,0,0,1">
+                        <StackPanel Orientation="Horizontal">
+                            <Border Width="22" Height="22" Background="#FFF7ED" CornerRadius="5" Margin="0,0,10,0" VerticalAlignment="Center">
+                                <Path Data="M4,4H6V6H4V4M4,10H6V12H4V10M4,16H6V18H4V16M8,4H20V6H8V4M8,10H20V12H8V10M8,16H20V18H8V16Z"
+                                      Width="12" Height="12" Stretch="Uniform" Fill="#D97706"
+                                      HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            </Border>
+                            <TextBlock Text="{Binding Header}"
+                                       FontWeight="SemiBold" FontSize="14"
+                                       Foreground="#2D5F8A"
+                                       VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Border>
                     <DataGrid ItemsSource="{Binding Fields}"
                               Style="{StaticResource AppDataGridStyle}"
                               RowHeaderStyle="{StaticResource AppDataGridRowHeaderStyle}"
                               SelectionUnit="Cell"
                               LoadingRow="DataGrid_LoadingRow"
                               PreviewMouseRightButtonDown="DataGrid_PreviewMouseRightButtonDown"
+                              MouseDoubleClick="FieldDataGrid_MouseDoubleClick"
                               CanUserSortColumns="True"
                               Sorting="DataGrid_Sorting">
                         <DataGrid.Columns>
@@ -402,6 +438,26 @@
                                     </DataTemplate>
                                 </DataGridTextColumn.HeaderTemplate>
                             </DataGridTextColumn>
+                            <DataGridTextColumn Header="引用对象" Binding="{Binding LookUpObjectDisplay}" Width="Auto" MinWidth="80">
+                                <DataGridTextColumn.HeaderTemplate>
+                                    <DataTemplate>
+                                        <DockPanel>
+                                            <TextBlock DockPanel.Dock="Top" Text="{Binding}" />
+                                            <TextBox Tag="LookUpObjectDisplay" TextChanged="FilterTextBox_TextChanged" FontSize="13" FontWeight="Normal" Padding="3,1" Margin="0,2,0,0" hc:InfoElement.Placeholder="过滤" />
+                                        </DockPanel>
+                                    </DataTemplate>
+                                </DataGridTextColumn.HeaderTemplate>
+                            </DataGridTextColumn>
+                            <DataGridTextColumn Header="枚举类型" Binding="{Binding EnumTypeDisplay}" Width="Auto" MinWidth="80">
+                                <DataGridTextColumn.HeaderTemplate>
+                                    <DataTemplate>
+                                        <DockPanel>
+                                            <TextBlock DockPanel.Dock="Top" Text="{Binding}" />
+                                            <TextBox Tag="EnumTypeDisplay" TextChanged="FilterTextBox_TextChanged" FontSize="13" FontWeight="Normal" Padding="3,1" Margin="0,2,0,0" hc:InfoElement.Placeholder="过滤" />
+                                        </DockPanel>
+                                    </DataTemplate>
+                                </DataGridTextColumn.HeaderTemplate>
+                            </DataGridTextColumn>
                             <DataGridTextColumn Header="后缀" Binding="{Binding Suffix}" Width="Auto" MinWidth="60">
                                 <DataGridTextColumn.HeaderTemplate>
                                     <DataTemplate>
@@ -428,35 +484,308 @@
             </Border>
         </DataTemplate>
 
+        <DataTemplate x:Key="EnumTabTemplate" DataType="{x:Type model:ModuleTabItem}">
+            <Border Background="White" Padding="0">
+                <DockPanel>
+                    <Border DockPanel.Dock="Top" Background="#FFFFFF" Padding="14,6" BorderBrush="#E2E8F0" BorderThickness="0,0,0,1">
+                        <StackPanel Orientation="Horizontal">
+                            <Border Width="22" Height="22" Background="#F5F3FF" CornerRadius="5" Margin="0,0,10,0" VerticalAlignment="Center">
+                                <Path Data="M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M12,20A8,8 0 0,1 4,12A8,8 0 0,1 12,4A8,8 0 0,1 20,12A8,8 0 0,1 12,20M12,6A6,6 0 0,0 6,12A6,6 0 0,0 12,18A6,6 0 0,0 18,12A6,6 0 0,0 12,6M12,16A4,4 0 0,1 8,12A4,4 0 0,1 12,8A4,4 0 0,1 16,12A4,4 0 0,1 12,16Z"
+                                      Width="12" Height="12" Stretch="Uniform" Fill="#7C3AED"
+                                      HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            </Border>
+                            <TextBlock Text="{Binding Header}"
+                                       FontWeight="SemiBold" FontSize="14"
+                                       Foreground="#2D5F8A"
+                                       VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Border>
+                    <DataGrid ItemsSource="{Binding EnumItems}"
+                              Style="{StaticResource AppDataGridStyle}"
+                              RowHeaderStyle="{StaticResource AppDataGridRowHeaderStyle}"
+                              SelectionUnit="Cell"
+                              LoadingRow="DataGrid_LoadingRow"
+                              PreviewMouseRightButtonDown="DataGrid_PreviewMouseRightButtonDown"
+                              CanUserSortColumns="True"
+                              Sorting="DataGrid_Sorting">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="值" Binding="{Binding FValue}" Width="Auto" MinWidth="80">
+                                <DataGridTextColumn.HeaderTemplate>
+                                    <DataTemplate>
+                                        <DockPanel>
+                                            <TextBlock DockPanel.Dock="Top" Text="{Binding}" />
+                                            <TextBox Tag="FValue" TextChanged="FilterTextBox_TextChanged" FontSize="13" FontWeight="Normal" Padding="3,1" Margin="0,2,0,0" hc:InfoElement.Placeholder="过滤" />
+                                        </DockPanel>
+                                    </DataTemplate>
+                                </DataGridTextColumn.HeaderTemplate>
+                            </DataGridTextColumn>
+                            <DataGridTextColumn Header="说明" Binding="{Binding FCaption}" Width="*" MinWidth="80">
+                                <DataGridTextColumn.HeaderTemplate>
+                                    <DataTemplate>
+                                        <DockPanel>
+                                            <TextBlock DockPanel.Dock="Top" Text="{Binding}" />
+                                            <TextBox Tag="FCaption" TextChanged="FilterTextBox_TextChanged" FontSize="13" FontWeight="Normal" Padding="3,1" Margin="0,2,0,0" hc:InfoElement.Placeholder="过滤" />
+                                        </DockPanel>
+                                    </DataTemplate>
+                                </DataGridTextColumn.HeaderTemplate>
+                            </DataGridTextColumn>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </DockPanel>
+            </Border>
+        </DataTemplate>
+
+        <DataTemplate x:Key="AllFieldsTabTemplate" DataType="{x:Type model:ModuleTabItem}">
+            <Border Background="White" Padding="0">
+                <DockPanel>
+                    <Border DockPanel.Dock="Top" Background="#FFFFFF" Padding="14,6" BorderBrush="#E2E8F0" BorderThickness="0,0,0,1">
+                        <StackPanel Orientation="Horizontal">
+                            <Border Width="22" Height="22" Background="#EFF6FF" CornerRadius="5" Margin="0,0,10,0" VerticalAlignment="Center">
+                                <Path Data="M4,4H6V6H4V4M4,10H6V12H4V10M4,16H6V18H4V16M8,4H20V6H8V4M8,10H20V12H8V10M8,16H20V18H8V16Z"
+                                      Width="12" Height="12" Stretch="Uniform" Fill="#2563EB"
+                                      HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            </Border>
+                            <TextBlock Text="{Binding Header}"
+                                       FontWeight="SemiBold" FontSize="14"
+                                       Foreground="#2D5F8A"
+                                       VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Border>
+                    <DataGrid ItemsSource="{Binding AllFields}"
+                              Style="{StaticResource AppDataGridStyle}"
+                              RowHeaderStyle="{StaticResource AppDataGridRowHeaderStyle}"
+                              SelectionUnit="Cell"
+                              LoadingRow="DataGrid_LoadingRow"
+                              PreviewMouseRightButtonDown="DataGrid_PreviewMouseRightButtonDown"
+                              MouseDoubleClick="AllFieldsDataGrid_MouseDoubleClick"
+                              CanUserSortColumns="True"
+                              Sorting="DataGrid_Sorting">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="单据名称" Binding="{Binding FormName}" Width="Auto" MinWidth="80">
+                                <DataGridTextColumn.HeaderTemplate>
+                                    <DataTemplate>
+                                        <DockPanel>
+                                            <TextBlock DockPanel.Dock="Top" Text="{Binding}" />
+                                            <TextBox Tag="FormName" TextChanged="FilterTextBox_TextChanged" FontSize="13" FontWeight="Normal" Padding="3,1" Margin="0,2,0,0" hc:InfoElement.Placeholder="过滤" />
+                                        </DockPanel>
+                                    </DataTemplate>
+                                </DataGridTextColumn.HeaderTemplate>
+                            </DataGridTextColumn>
+                            <DataGridTextColumn Header="实体名称" Binding="{Binding EntityName}" Width="Auto" MinWidth="80">
+                                <DataGridTextColumn.HeaderTemplate>
+                                    <DataTemplate>
+                                        <DockPanel>
+                                            <TextBlock DockPanel.Dock="Top" Text="{Binding}" />
+                                            <TextBox Tag="EntityName" TextChanged="FilterTextBox_TextChanged" FontSize="13" FontWeight="Normal" Padding="3,1" Margin="0,2,0,0" hc:InfoElement.Placeholder="过滤" />
+                                        </DockPanel>
+                                    </DataTemplate>
+                                </DataGridTextColumn.HeaderTemplate>
+                            </DataGridTextColumn>
+                            <DataGridTextColumn Header="表名" Binding="{Binding EntityTableName}" Width="Auto" MinWidth="80">
+                                <DataGridTextColumn.HeaderTemplate>
+                                    <DataTemplate>
+                                        <DockPanel>
+                                            <TextBlock DockPanel.Dock="Top" Text="{Binding}" />
+                                            <TextBox Tag="EntityTableName" TextChanged="FilterTextBox_TextChanged" FontSize="13" FontWeight="Normal" Padding="3,1" Margin="0,2,0,0" hc:InfoElement.Placeholder="过滤" />
+                                        </DockPanel>
+                                    </DataTemplate>
+                                </DataGridTextColumn.HeaderTemplate>
+                            </DataGridTextColumn>
+                            <DataGridTextColumn Header="键" Binding="{Binding Key}" Width="Auto" MinWidth="60">
+                                <DataGridTextColumn.HeaderTemplate>
+                                    <DataTemplate>
+                                        <DockPanel>
+                                            <TextBlock DockPanel.Dock="Top" Text="{Binding}" />
+                                            <TextBox Tag="Key" TextChanged="FilterTextBox_TextChanged" FontSize="13" FontWeight="Normal" Padding="3,1" Margin="0,2,0,0" hc:InfoElement.Placeholder="过滤" />
+                                        </DockPanel>
+                                    </DataTemplate>
+                                </DataGridTextColumn.HeaderTemplate>
+                            </DataGridTextColumn>
+                            <DataGridTextColumn Header="名称" Binding="{Binding Name}" Width="Auto" MinWidth="60">
+                                <DataGridTextColumn.HeaderTemplate>
+                                    <DataTemplate>
+                                        <DockPanel>
+                                            <TextBlock DockPanel.Dock="Top" Text="{Binding}" />
+                                            <TextBox Tag="Name" TextChanged="FilterTextBox_TextChanged" FontSize="13" FontWeight="Normal" Padding="3,1" Margin="0,2,0,0" hc:InfoElement.Placeholder="过滤" />
+                                        </DockPanel>
+                                    </DataTemplate>
+                                </DataGridTextColumn.HeaderTemplate>
+                            </DataGridTextColumn>
+                            <DataGridTextColumn Header="字段名" Binding="{Binding FieldName}" Width="Auto" MinWidth="80">
+                                <DataGridTextColumn.HeaderTemplate>
+                                    <DataTemplate>
+                                        <DockPanel>
+                                            <TextBlock DockPanel.Dock="Top" Text="{Binding}" />
+                                            <TextBox Tag="FieldName" TextChanged="FilterTextBox_TextChanged" FontSize="13" FontWeight="Normal" Padding="3,1" Margin="0,2,0,0" hc:InfoElement.Placeholder="过滤" />
+                                        </DockPanel>
+                                    </DataTemplate>
+                                </DataGridTextColumn.HeaderTemplate>
+                            </DataGridTextColumn>
+                            <DataGridTextColumn Header="属性名" Binding="{Binding PropertyName}" Width="Auto" MinWidth="80">
+                                <DataGridTextColumn.HeaderTemplate>
+                                    <DataTemplate>
+                                        <DockPanel>
+                                            <TextBlock DockPanel.Dock="Top" Text="{Binding}" />
+                                            <TextBox Tag="PropertyName" TextChanged="FilterTextBox_TextChanged" FontSize="13" FontWeight="Normal" Padding="3,1" Margin="0,2,0,0" hc:InfoElement.Placeholder="过滤" />
+                                        </DockPanel>
+                                    </DataTemplate>
+                                </DataGridTextColumn.HeaderTemplate>
+                            </DataGridTextColumn>
+                            <DataGridTextColumn Header="元素类型" Binding="{Binding ElementTypeName}" Width="Auto" MinWidth="80">
+                                <DataGridTextColumn.HeaderTemplate>
+                                    <DataTemplate>
+                                        <DockPanel>
+                                            <TextBlock DockPanel.Dock="Top" Text="{Binding}" />
+                                            <TextBox Tag="ElementTypeName" TextChanged="FilterTextBox_TextChanged" FontSize="13" FontWeight="Normal" Padding="3,1" Margin="0,2,0,0" hc:InfoElement.Placeholder="过滤" />
+                                        </DockPanel>
+                                    </DataTemplate>
+                                </DataGridTextColumn.HeaderTemplate>
+                            </DataGridTextColumn>
+                            <DataGridTextColumn Header="引用对象" Binding="{Binding LookUpObjectDisplay}" Width="Auto" MinWidth="80">
+                                <DataGridTextColumn.HeaderTemplate>
+                                    <DataTemplate>
+                                        <DockPanel>
+                                            <TextBlock DockPanel.Dock="Top" Text="{Binding}" />
+                                            <TextBox Tag="LookUpObjectDisplay" TextChanged="FilterTextBox_TextChanged" FontSize="13" FontWeight="Normal" Padding="3,1" Margin="0,2,0,0" hc:InfoElement.Placeholder="过滤" />
+                                        </DockPanel>
+                                    </DataTemplate>
+                                </DataGridTextColumn.HeaderTemplate>
+                            </DataGridTextColumn>
+                            <DataGridTextColumn Header="枚举类型" Binding="{Binding EnumTypeDisplay}" Width="Auto" MinWidth="80">
+                                <DataGridTextColumn.HeaderTemplate>
+                                    <DataTemplate>
+                                        <DockPanel>
+                                            <TextBlock DockPanel.Dock="Top" Text="{Binding}" />
+                                            <TextBox Tag="EnumTypeDisplay" TextChanged="FilterTextBox_TextChanged" FontSize="13" FontWeight="Normal" Padding="3,1" Margin="0,2,0,0" hc:InfoElement.Placeholder="过滤" />
+                                        </DockPanel>
+                                    </DataTemplate>
+                                </DataGridTextColumn.HeaderTemplate>
+                            </DataGridTextColumn>
+                            <DataGridTextColumn Header="后缀" Binding="{Binding Suffix}" Width="Auto" MinWidth="60">
+                                <DataGridTextColumn.HeaderTemplate>
+                                    <DataTemplate>
+                                        <DockPanel>
+                                            <TextBlock DockPanel.Dock="Top" Text="{Binding}" />
+                                            <TextBox Tag="Suffix" TextChanged="FilterTextBox_TextChanged" FontSize="13" FontWeight="Normal" Padding="3,1" Margin="0,2,0,0" hc:InfoElement.Placeholder="过滤" />
+                                        </DockPanel>
+                                    </DataTemplate>
+                                </DataGridTextColumn.HeaderTemplate>
+                            </DataGridTextColumn>
+                            <DataGridTextColumn Header="拆分说明" Binding="{Binding SplitDescription}" Width="*" MinWidth="80">
+                                <DataGridTextColumn.HeaderTemplate>
+                                    <DataTemplate>
+                                        <DockPanel>
+                                            <TextBlock DockPanel.Dock="Top" Text="{Binding}" />
+                                            <TextBox Tag="SplitDescription" TextChanged="FilterTextBox_TextChanged" FontSize="13" FontWeight="Normal" Padding="3,1" Margin="0,2,0,0" hc:InfoElement.Placeholder="过滤" />
+                                        </DockPanel>
+                                    </DataTemplate>
+                                </DataGridTextColumn.HeaderTemplate>
+                            </DataGridTextColumn>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </DockPanel>
+            </Border>
+        </DataTemplate>
+
+        <DataTemplate x:Key="BillTypeTabTemplate" DataType="{x:Type model:ModuleTabItem}">
+            <Border Background="White" Padding="0">
+                <DockPanel>
+                    <Border DockPanel.Dock="Top" Background="#FFFFFF" Padding="14,6" BorderBrush="#E2E8F0" BorderThickness="0,0,0,1">
+                        <StackPanel Orientation="Horizontal">
+                            <Border Width="22" Height="22" Background="#FEF3C7" CornerRadius="5" Margin="0,0,10,0" VerticalAlignment="Center">
+                                <Path Data="M19,3H5C3.89,3 3,3.89 3,5V19A2,2 0 0,0 5,21H19A2,2 0 0,0 21,19V5C21,3.89 20.1,3 19,3M9,17H7V15H9V17M9,13H7V11H9V13M9,9H7V7H9V9M17,17H11V15H17V17M17,13H11V11H17V13M17,9H11V7H17V9Z"
+                                      Width="12" Height="12" Stretch="Uniform" Fill="#B45309"
+                                      HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            </Border>
+                            <TextBlock Text="{Binding Header}"
+                                       FontWeight="SemiBold" FontSize="14"
+                                       Foreground="#2D5F8A"
+                                       VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Border>
+                    <DataGrid ItemsSource="{Binding BillTypes}"
+                              Style="{StaticResource AppDataGridStyle}"
+                              RowHeaderStyle="{StaticResource AppDataGridRowHeaderStyle}"
+                              SelectionUnit="Cell"
+                              LoadingRow="DataGrid_LoadingRow"
+                              PreviewMouseRightButtonDown="DataGrid_PreviewMouseRightButtonDown"
+                              CanUserSortColumns="True"
+                              Sorting="DataGrid_Sorting">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="单据类型ID" Binding="{Binding BillTypeId}" Width="Auto" MinWidth="80">
+                                <DataGridTextColumn.HeaderTemplate>
+                                    <DataTemplate>
+                                        <DockPanel>
+                                            <TextBlock DockPanel.Dock="Top" Text="{Binding}" />
+                                            <TextBox Tag="BillTypeId" TextChanged="FilterTextBox_TextChanged" FontSize="13" FontWeight="Normal" Padding="3,1" Margin="0,2,0,0" hc:InfoElement.Placeholder="过滤" />
+                                        </DockPanel>
+                                    </DataTemplate>
+                                </DataGridTextColumn.HeaderTemplate>
+                            </DataGridTextColumn>
+                            <DataGridTextColumn Header="单据标识" Binding="{Binding BillFormId}" Width="Auto" MinWidth="80">
+                                <DataGridTextColumn.HeaderTemplate>
+                                    <DataTemplate>
+                                        <DockPanel>
+                                            <TextBlock DockPanel.Dock="Top" Text="{Binding}" />
+                                            <TextBox Tag="BillFormId" TextChanged="FilterTextBox_TextChanged" FontSize="13" FontWeight="Normal" Padding="3,1" Margin="0,2,0,0" hc:InfoElement.Placeholder="过滤" />
+                                        </DockPanel>
+                                    </DataTemplate>
+                                </DataGridTextColumn.HeaderTemplate>
+                            </DataGridTextColumn>
+                            <DataGridTextColumn Header="编号" Binding="{Binding Number}" Width="Auto" MinWidth="80">
+                                <DataGridTextColumn.HeaderTemplate>
+                                    <DataTemplate>
+                                        <DockPanel>
+                                            <TextBlock DockPanel.Dock="Top" Text="{Binding}" />
+                                            <TextBox Tag="Number" TextChanged="FilterTextBox_TextChanged" FontSize="13" FontWeight="Normal" Padding="3,1" Margin="0,2,0,0" hc:InfoElement.Placeholder="过滤" />
+                                        </DockPanel>
+                                    </DataTemplate>
+                                </DataGridTextColumn.HeaderTemplate>
+                            </DataGridTextColumn>
+                            <DataGridTextColumn Header="名称" Binding="{Binding Name}" Width="*" MinWidth="80">
+                                <DataGridTextColumn.HeaderTemplate>
+                                    <DataTemplate>
+                                        <DockPanel>
+                                            <TextBlock DockPanel.Dock="Top" Text="{Binding}" />
+                                            <TextBox Tag="Name" TextChanged="FilterTextBox_TextChanged" FontSize="13" FontWeight="Normal" Padding="3,1" Margin="0,2,0,0" hc:InfoElement.Placeholder="过滤" />
+                                        </DockPanel>
+                                    </DataTemplate>
+                                </DataGridTextColumn.HeaderTemplate>
+                            </DataGridTextColumn>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </DockPanel>
+            </Border>
+        </DataTemplate>
+
         <local:TabContentTemplateSelector x:Key="TabContentSelector"
                                           FormTemplate="{StaticResource FormTabTemplate}"
                                           EntityTemplate="{StaticResource EntityTabTemplate}"
-                                          FieldTemplate="{StaticResource FieldTabTemplate}" />
+                                          FieldTemplate="{StaticResource FieldTabTemplate}"
+                                          EnumTemplate="{StaticResource EnumTabTemplate}"
+                                          AllFieldsTemplate="{StaticResource AllFieldsTabTemplate}"
+                                          BillTypeTemplate="{StaticResource BillTypeTabTemplate}" />
 
         <ContextMenu x:Key="TabItemContextMenu">
             <ContextMenu.Template>
                 <ControlTemplate TargetType="ContextMenu">
                     <Border Background="White"
-                            CornerRadius="6"
-                            BorderBrush="#E0E4EA"
+                            CornerRadius="8"
+                            BorderBrush="#E2E8F0"
                             BorderThickness="1"
                             SnapsToDevicePixels="True">
                         <Border.Effect>
-                            <DropShadowEffect ShadowDepth="2" BlurRadius="8" Opacity="0.15" Color="#000000" />
+                            <DropShadowEffect ShadowDepth="2" BlurRadius="12" Opacity="0.12" Color="#000000" />
                         </Border.Effect>
-                        <ScrollViewer CanContentScroll="True"
-                                      VerticalScrollBarVisibility="Disabled"
-                                      HorizontalScrollBarVisibility="Disabled">
-                            <ItemsPresenter Margin="4" />
-                        </ScrollViewer>
+                        <ItemsPresenter Margin="4" />
                     </Border>
                 </ControlTemplate>
             </ContextMenu.Template>
             <ContextMenu.Resources>
                 <Style TargetType="Separator">
                     <Setter Property="Height" Value="1" />
-                    <Setter Property="Margin" Value="6,3" />
-                    <Setter Property="Background" Value="#E0E4EA" />
+                    <Setter Property="Margin" Value="8,4" />
+                    <Setter Property="Background" Value="#E2E8F0" />
                     <Setter Property="Template">
                         <Setter.Value>
                             <ControlTemplate TargetType="Separator">
@@ -468,9 +797,9 @@
                     </Setter>
                 </Style>
                 <Style TargetType="MenuItem">
-                    <Setter Property="Padding" Value="8,6" />
+                    <Setter Property="Padding" Value="10,7" />
                     <Setter Property="FontSize" Value="12" />
-                    <Setter Property="Foreground" Value="#374151" />
+                    <Setter Property="Foreground" Value="#334155" />
                     <Setter Property="Template">
                         <Setter.Value>
                             <ControlTemplate TargetType="MenuItem">
@@ -496,8 +825,8 @@
                                 </Border>
                                 <ControlTemplate.Triggers>
                                     <Trigger Property="IsHighlighted" Value="True">
-                                        <Setter TargetName="ItemBorder" Property="Background" Value="#EBF0F7" />
-                                        <Setter Property="Foreground" Value="#2D5F8A" />
+                                        <Setter TargetName="ItemBorder" Property="Background" Value="#EEF2FF" />
+                                        <Setter Property="Foreground" Value="#4F46E5" />
                                     </Trigger>
                                 </ControlTemplate.Triggers>
                             </ControlTemplate>
@@ -512,12 +841,12 @@
             </MenuItem>
             <MenuItem Header="关闭左侧" Click="ContextMenu_CloseLeft">
                 <MenuItem.Icon>
-                    <Path Data="M15.41,16.58L10.83,12L15.41,7.41L14,6L8,12L14,18L15.41,16.58Z" Width="14" Height="14" Stretch="Uniform" Fill="#6B7280" />
+                    <Path Data="M15.41,16.58L10.83,12L15.41,7.41L14,6L8,12L14,18L15.41,16.58Z" Width="14" Height="14" Stretch="Uniform" Fill="#64748B" />
                 </MenuItem.Icon>
             </MenuItem>
             <MenuItem Header="关闭右侧" Click="ContextMenu_CloseRight">
                 <MenuItem.Icon>
-                    <Path Data="M8.59,16.58L13.17,12L8.59,7.41L10,6L16,12L10,18L8.59,16.58Z" Width="14" Height="14" Stretch="Uniform" Fill="#6B7280" />
+                    <Path Data="M8.59,16.58L13.17,12L8.59,7.41L10,6L16,12L10,18L8.59,16.58Z" Width="14" Height="14" Stretch="Uniform" Fill="#64748B" />
                 </MenuItem.Icon>
             </MenuItem>
             <Separator />
@@ -527,239 +856,330 @@
                 </MenuItem.Icon>
             </MenuItem>
         </ContextMenu>
-
-        <Style x:Key="RoundedTabItemStyle" TargetType="TabItem">
-            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
-            <Setter Property="Padding" Value="14,6" />
-            <Setter Property="Foreground" Value="#6B7280" />
-            <Setter Property="Background" Value="#F0F3F7" />
-            <Setter Property="FontSize" Value="13" />
-            <Setter Property="FontWeight" Value="Bold" />
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="TabItem">
-                        <Border x:Name="Bd"
-                                Background="{TemplateBinding Background}"
-                                BorderBrush="#E0E4EA"
-                                BorderThickness="0"
-                                CornerRadius="8,8,0,0"
-                                Padding="{TemplateBinding Padding}"
-                                Margin="0,0,2,0"
-                                SnapsToDevicePixels="True">
-                            <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="Auto" />
-                                </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0"
-                                           Text="{Binding Header}"
-                                           HorizontalAlignment="Center"
-                                           VerticalAlignment="Center"
-                                           TextTrimming="CharacterEllipsis"
-                                           FontSize="12" />
-                                <Button x:Name="CloseButton" Grid.Column="1"
-                                        Width="20" Height="20"
-                                        Margin="4,0,-4,0"
-                                        Background="Transparent"
-                                        BorderThickness="0"
-                                        Cursor="Hand"
-                                        VerticalAlignment="Center"
-                                        Command="{Binding DataContext.CloseCurrentTabCommand, RelativeSource={RelativeSource AncestorType=TabControl}}"
-                                        CommandParameter="{Binding}"
-                                        Visibility="Collapsed">
-                                    <Button.Template>
-                                        <ControlTemplate TargetType="Button">
-                                            <Border x:Name="CloseBtnBorder" Background="{TemplateBinding Background}" CornerRadius="4" Width="20" Height="20">
-                                                <TextBlock x:Name="CloseBtnText" Text="✕" FontSize="11"
-                                                           Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=TabItem}}"
-                                                           HorizontalAlignment="Center" VerticalAlignment="Center" />
-                                            </Border>
-                                            <ControlTemplate.Triggers>
-                                                <Trigger Property="IsMouseOver" Value="True">
-                                                    <Setter TargetName="CloseBtnBorder" Property="Background" Value="#FEE2E2" />
-                                                    <Setter TargetName="CloseBtnText" Property="Foreground" Value="#EF4444" />
-                                                </Trigger>
-                                            </ControlTemplate.Triggers>
-                                        </ControlTemplate>
-                                    </Button.Template>
-                                </Button>
-                            </Grid>
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsSelected" Value="True">
-                                <Setter TargetName="Bd" Property="Background" Value="#326cf3" />
-                                <Setter TargetName="Bd" Property="BorderThickness" Value="0" />
-                                <Setter Property="Foreground" Value="White" />
-                                <Setter Property="FontWeight" Value="SemiBold" />
-                                <Setter TargetName="CloseButton" Property="Visibility" Value="Visible" />
-                            </Trigger>
-                            <MultiTrigger>
-                                <MultiTrigger.Conditions>
-                                    <Condition Property="IsSelected" Value="False" />
-                                    <Condition Property="IsMouseOver" Value="True" />
-                                </MultiTrigger.Conditions>
-                                <Setter TargetName="Bd" Property="Background" Value="#F0F3F7" />
-                                <Setter Property="Foreground" Value="#374151" />
-                                <Setter TargetName="CloseButton" Property="Visibility" Value="Visible" />
-                            </MultiTrigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
     </hc:Window.Resources>
 
     <Grid>
         <DockPanel>
 
-        <Border DockPanel.Dock="Top"
+            <!-- 搜索栏 -->
+            <Border DockPanel.Dock="Top"
                 Background="White"
-                CornerRadius="4"
-                Margin="4,0,0,0"
-                Padding="12,6"
-                BorderBrush="{StaticResource AppGridLineBrush}"
-                BorderThickness="1">
-            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                <TextBlock Text="表单名称"
+                CornerRadius="0"
+                Padding="16,8"
+                BorderBrush="#E2E8F0"
+                BorderThickness="0,0,0,1">
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <Border Width="28" Height="28" Background="#F1F5F9" CornerRadius="6" Margin="0,0,8,0" VerticalAlignment="Center">
+                        <Path Data="M15.5,14H14.71L14.43,13.73C15.41,12.59 16,11.11 16,9.5A6.5,6.5 0 0,0 9.5,3A6.5,6.5 0 0,0 3,9.5A6.5,6.5 0 0,0 9.5,16C11.11,16 12.59,15.41 13.73,14.43L14,14.71V15.5L19,20.5L20.5,19L15.5,14M9.5,14C7,14 5,12 5,9.5C5,7 7,5 9.5,5C12,5 14,7 14,9.5C14,12 12,14 9.5,14Z"
+                          Width="14" Height="14" Stretch="Uniform" Fill="#64748B"
+                          HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Border>
+                    <TextBlock Text="表单名称"
                            VerticalAlignment="Center"
                            FontSize="13"
-                           Foreground="#374151"
+                           Foreground="#64748B"
                            Margin="0,0,8,0" />
-                <ComboBox Width="80"
+                    <ComboBox Width="80"
                           ItemsSource="{Binding Operators}"
                           DisplayMemberPath="DisplayName"
                           SelectedValuePath="OperatorValue"
                           SelectedItem="{Binding SelectedOperator}"
                           Margin="0,0,8,0" />
-                <TextBox Width="260"
-                         Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
-                         hc:InfoElement.Placeholder="请输入条件值"
-                         KeyDown="SearchTextBox_KeyDown"
-                         Margin="0,0,12,0" />
-                <Button Content="查询"
+                    <Grid Width="260" Margin="0,0,12,0">
+                        <TextBox Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
+                                 KeyDown="SearchTextBox_KeyDown"
+                                 GotFocus="SearchTextBox_GotFocus"
+                                 LostFocus="SearchTextBox_LostFocus"
+                                 Background="Transparent" />
+                        <TextBlock Text="表单名称/标识/表名" Foreground="#9CA3AF" IsHitTestVisible="False"
+                                   VerticalAlignment="Center" Margin="6,0,0,0"
+                                   Visibility="{Binding SearchPlaceholderVisible, Converter={StaticResource BoolToVis}}" />
+                    </Grid>
+                    <Button Content="查询"
                         Command="{Binding SearchCommand}"
                         Style="{StaticResource ButtonPrimary}" />
-            </StackPanel>
-        </Border>
+                </StackPanel>
+            </Border>
 
-        <Border DockPanel.Dock="Bottom"
-                Background="{StaticResource AppStatusBgBrush}"
-                BorderBrush="{StaticResource AppGridLineBrush}"
+            <!-- 状态栏 -->
+            <Border DockPanel.Dock="Bottom"
+                Background="#F8FAFC"
+                BorderBrush="#E2E8F0"
                 BorderThickness="0,1,0,0"
-                Padding="12,4">
-            <Grid>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="Auto" />
-                </Grid.ColumnDefinitions>
-                <TextBlock Grid.Column="0" Text="{Binding StatusText}"
-                           FontSize="12"
-                           Foreground="#6B7280"
-                           VerticalAlignment="Center" />
-                <ProgressBar Grid.Column="1"
+                Padding="16,5">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                        <Ellipse Width="6" Height="6" Fill="#10B981" Margin="0,0,6,0" VerticalAlignment="Center" />
+                        <TextBlock Text="{Binding StatusText}"
+                               FontSize="12"
+                               Foreground="#64748B"
+                               VerticalAlignment="Center" />
+                    </StackPanel>
+                    <ProgressBar Grid.Column="1"
                              x:Name="RefreshProgressBar"
                              Width="200" Height="14"
                              Minimum="0" Maximum="100" Value="0"
                              Visibility="Collapsed"
                              VerticalAlignment="Center"
                              Margin="8,0,0,0"
-                             Foreground="#326cf3"
-                             Background="#E5E7EB" />
-            </Grid>
-        </Border>
+                             Foreground="#4F46E5"
+                             Background="#E2E8F0" />
+                </Grid>
+            </Border>
 
-        <Grid>
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="240" MinWidth="180" MaxWidth="360" />
-                <ColumnDefinition Width="Auto" />
-                <ColumnDefinition Width="*" />
-            </Grid.ColumnDefinitions>
+            <!-- 主内容区 -->
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="240" MinWidth="180" MaxWidth="360" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
 
-            <Border Grid.Column="0"
-                    Background="{StaticResource AppSideBarBrush}"
-                    BorderBrush="{StaticResource AppSideBarDividerBrush}"
+                <!-- 侧边栏 -->
+                <Border Grid.Column="0"
+                    Background="#F8FAFC"
+                    BorderBrush="#E2E8F0"
                     BorderThickness="0,0,1,0">
-                <DockPanel>
-                    <Border DockPanel.Dock="Top"
-                            Background="{StaticResource AppAccentBrush}"
-                            Padding="12,8">
-                        <TextBlock Text="业务模块"
-                                   Foreground="White"
-                                   FontWeight="SemiBold"
-                                   FontSize="14" />
-                    </Border>
-                    <TreeView ItemsSource="{Binding ModuleTree}"
+                    <DockPanel>
+                        <Border DockPanel.Dock="Top"
+                            Background="#2D5F8A"
+                            Padding="16,8">
+                            <StackPanel Orientation="Horizontal">
+                                <Path Data="M3,3H21V5H3V3M3,7H21V9H3V7M3,11H21V13H3V11M3,15H21V17H3V15M3,19H21V21H3V19Z"
+                                      Width="14" Height="14" Stretch="Uniform" Fill="#CCFFFFFF"
+                                      VerticalAlignment="Center" Margin="0,0,8,0" />
+                                <TextBlock Text="业务模块"
+                                       Foreground="White"
+                                       FontWeight="SemiBold"
+                                       FontSize="13"
+                                       VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Border>
+                        <TreeView ItemsSource="{Binding ModuleTree}"
                               SelectedItemChanged="TreeView_SelectedItemChanged"
                               Background="Transparent"
                               BorderThickness="0"
-                              Foreground="{StaticResource AppSideBarTextBrush}">
-                        <TreeView.Resources>
-                            <SolidColorBrush x:Key="{x:Static SystemColors.HighlightBrushKey}" Color="#2D5F8A" />
-                            <SolidColorBrush x:Key="{x:Static SystemColors.InactiveSelectionHighlightBrushKey}" Color="#2D5F8A" />
-                            <SolidColorBrush x:Key="{x:Static SystemColors.HighlightTextBrushKey}" Color="White" />
-                            <SolidColorBrush x:Key="{x:Static SystemColors.ControlTextBrushKey}" Color="#374151" />
-                        </TreeView.Resources>
-                        <TreeView.ItemContainerStyle>
-                            <Style TargetType="TreeViewItem"
+                              Foreground="#334155">
+                            <TreeView.Resources>
+                                <SolidColorBrush x:Key="{x:Static SystemColors.HighlightBrushKey}" Color="#4F46E5" />
+                                <SolidColorBrush x:Key="{x:Static SystemColors.InactiveSelectionHighlightBrushKey}" Color="#4F46E5" />
+                                <SolidColorBrush x:Key="{x:Static SystemColors.HighlightTextBrushKey}" Color="White" />
+                                <SolidColorBrush x:Key="{x:Static SystemColors.ControlTextBrushKey}" Color="#334155" />
+                            </TreeView.Resources>
+                            <TreeView.ItemContainerStyle>
+                                <Style TargetType="TreeViewItem"
                                    BasedOn="{StaticResource {x:Type TreeViewItem}}">
-                                <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" />
-                                <Setter Property="IsSelected" Value="{Binding IsSelected, Mode=TwoWay}" />
-                                <Setter Property="Padding" Value="4,2" />
-                            </Style>
-                        </TreeView.ItemContainerStyle>
-                    </TreeView>
-                </DockPanel>
-            </Border>
+                                    <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" />
+                                    <Setter Property="IsSelected" Value="{Binding IsSelected, Mode=TwoWay}" />
+                                    <Setter Property="Padding" Value="4,2" />
+                                </Style>
+                            </TreeView.ItemContainerStyle>
+                        </TreeView>
+                    </DockPanel>
+                </Border>
 
-            <GridSplitter Grid.Column="1"
+                <GridSplitter Grid.Column="1"
                           Width="4"
                           HorizontalAlignment="Center"
                           VerticalAlignment="Stretch"
-                          Background="{StaticResource AppGridLineBrush}" />
+                          Background="#E2E8F0" />
 
-            <Border Grid.Column="2"
+                <!-- 内容区域 -->
+                <Border Grid.Column="2"
                     Background="White"
-                    Margin="8,8,8,8">
-                <hc:TabControl x:Name="MainTabControl"
-                               ItemsSource="{Binding OpenTabs}"
-                               SelectedItem="{Binding SelectedTab, Mode=TwoWay}"
-                               Background="Transparent"
-                               BorderThickness="0"
-                               IsScrollable="True"
-                               ShowOverflowButton="True"
-                               ShowScrollButton="True"
-                               ShowCloseButton="False"
-                               ShowContextMenu="False"
-                               IsDraggable="False"
-                               OverflowMenuDisplayMemberPath="Header"
-                               TabItemWidth="180"
-                               TabItemHeight="34"
-                               ItemContainerStyle="{StaticResource RoundedTabItemStyle}"
-                               PreviewMouseRightButtonDown="MainTabControl_PreviewMouseRightButtonDown">
-                    <hc:TabControl.ItemTemplate>
-                        <DataTemplate DataType="{x:Type model:ModuleTabItem}">
-                            <TextBlock Text="{Binding Header}"
-                                       VerticalAlignment="Center"
-                                       FontSize="12"
-                                       TextTrimming="CharacterEllipsis" />
-                        </DataTemplate>
-                    </hc:TabControl.ItemTemplate>
-                    <hc:TabControl.ContentTemplateSelector>
-                        <local:TabContentTemplateSelector FormTemplate="{StaticResource FormTabTemplate}"
-                                                         EntityTemplate="{StaticResource EntityTabTemplate}"
-                                                         FieldTemplate="{StaticResource FieldTabTemplate}" />
-                    </hc:TabControl.ContentTemplateSelector>
-                </hc:TabControl>
-            </Border>
-        </Grid>
-    </DockPanel>
-    <ScrollViewer VerticalScrollBarVisibility="Hidden"
+                    Margin="0">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+
+                        <!-- 标签头 -->
+                        <Border Grid.Row="0" Background="#F1F5F9" BorderBrush="#E2E8F0" BorderThickness="0">
+                            <DockPanel>
+                                <!-- 左侧向左按钮 -->
+                                <RepeatButton x:Name="ScrollLeftButton" Click="ScrollLeftButton_Click" DockPanel.Dock="Left"
+                                              Width="24" Cursor="Hand" ToolTip="向左滚动"
+                                              Background="Transparent" BorderThickness="0" Focusable="False"
+                                              VerticalAlignment="Stretch" Delay="200" Interval="100">
+                                    <RepeatButton.Template>
+                                        <ControlTemplate TargetType="RepeatButton">
+                                            <Border x:Name="BtnBorder" Background="Transparent" Padding="4,0" SnapsToDevicePixels="True">
+                                                <Path Data="M15.41,16.58L10.83,12L15.41,7.41L14,6L8,12L14,18L15.41,16.58Z"
+                                                      Width="10" Height="10" Stretch="Uniform" Fill="#64748B"
+                                                      HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                            </Border>
+                                            <ControlTemplate.Triggers>
+                                                <Trigger Property="IsMouseOver" Value="True">
+                                                    <Setter TargetName="BtnBorder" Property="Background" Value="#E2E8F0" />
+                                                </Trigger>
+                                            </ControlTemplate.Triggers>
+                                        </ControlTemplate>
+                                    </RepeatButton.Template>
+                                </RepeatButton>
+
+                                <!-- 右侧按钮区 -->
+                                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Stretch">
+                                    <RepeatButton x:Name="ScrollRightButton" Click="ScrollRightButton_Click"
+                                                  Width="24" Cursor="Hand" ToolTip="向右滚动"
+                                                  Background="Transparent" BorderThickness="0" Focusable="False"
+                                                  VerticalAlignment="Stretch" Delay="200" Interval="100">
+                                        <RepeatButton.Template>
+                                            <ControlTemplate TargetType="RepeatButton">
+                                                <Border x:Name="BtnBorder" Background="Transparent" Padding="4,0" SnapsToDevicePixels="True">
+                                                    <Path Data="M8.59,16.58L13.17,12L8.59,7.41L10,6L16,12L10,18L8.59,16.58Z"
+                                                          Width="10" Height="10" Stretch="Uniform" Fill="#64748B"
+                                                          HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                                </Border>
+                                                <ControlTemplate.Triggers>
+                                                    <Trigger Property="IsMouseOver" Value="True">
+                                                        <Setter TargetName="BtnBorder" Property="Background" Value="#E2E8F0" />
+                                                    </Trigger>
+                                                </ControlTemplate.Triggers>
+                                            </ControlTemplate>
+                                        </RepeatButton.Template>
+                                    </RepeatButton>
+                                    <ToggleButton x:Name="TabListButton"
+                                                  Width="28"
+                                                  Cursor="Hand"
+                                                  ToolTip="切换标签"
+                                                  Focusable="False"
+                                                  VerticalAlignment="Stretch">
+                                        <ToggleButton.Template>
+                                            <ControlTemplate TargetType="ToggleButton">
+                                                <Border x:Name="BtnBorder" Background="Transparent" Padding="6,0" SnapsToDevicePixels="True">
+                                                    <Path Data="M7,10L12,15L17,10H7Z" Width="10" Height="10" Stretch="Uniform" Fill="#64748B"
+                                                          HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                                </Border>
+                                                <ControlTemplate.Triggers>
+                                                    <Trigger Property="IsMouseOver" Value="True">
+                                                        <Setter TargetName="BtnBorder" Property="Background" Value="#E2E8F0" />
+                                                    </Trigger>
+                                                    <Trigger Property="IsChecked" Value="True">
+                                                        <Setter TargetName="BtnBorder" Property="Background" Value="#E2E8F0" />
+                                                    </Trigger>
+                                                </ControlTemplate.Triggers>
+                                            </ControlTemplate>
+                                        </ToggleButton.Template>
+                                    </ToggleButton>
+                                </StackPanel>
+
+                                <!-- 标签列表（由 code-behind 动态填充） -->
+                                <ScrollViewer x:Name="TabScrollViewer"
+                                              HorizontalScrollBarVisibility="Hidden"
+                                              VerticalScrollBarVisibility="Disabled"
+                                              CanContentScroll="False"
+                                              PreviewMouseWheel="TabScrollViewer_PreviewMouseWheel" Height="32">
+                                    <Grid x:Name="TabListContainer" HorizontalAlignment="Left" VerticalAlignment="Stretch">
+                                    </Grid>
+                                </ScrollViewer>
+                            </DockPanel>
+                        </Border>
+
+                        <!-- 标签下拉弹出列表 -->
+                        <Popup x:Name="TabListPopup"
+                           PlacementTarget="{Binding ElementName=TabListButton}"
+                           Placement="Bottom"
+                           IsOpen="{Binding IsChecked, ElementName=TabListButton, Mode=TwoWay}"
+                           StaysOpen="False"
+                           AllowsTransparency="True"
+                           PopupAnimation="Slide">
+                            <Border Background="White" CornerRadius="8" BorderBrush="#E2E8F0" BorderThickness="1"
+                                MinWidth="220" MaxHeight="400"
+                                Margin="0,0,8,0">
+                                <Border.Effect>
+                                    <DropShadowEffect ShadowDepth="2" BlurRadius="16" Opacity="0.15" Color="#000000" />
+                                </Border.Effect>
+                                <DockPanel>
+                                    <TextBlock DockPanel.Dock="Top" Text="打开的标签" FontSize="12" Foreground="#94A3B8"
+                                           Margin="12,10,12,6" FontWeight="Medium" />
+                                    <ListBox ItemsSource="{Binding OpenTabs}"
+                                         SelectedItem="{Binding SelectedTab, Mode=TwoWay}"
+                                         SelectionChanged="TabListPopup_SelectionChanged"
+                                         BorderThickness="0"
+                                         Background="Transparent"
+                                         MaxHeight="360"
+                                         Padding="4">
+                                        <ListBox.ItemTemplate>
+                                            <DataTemplate DataType="{x:Type model:ModuleTabItem}">
+                                                <StackPanel Orientation="Horizontal" Margin="6,3">
+                                                    <Border Width="10" Height="10" CornerRadius="5" Margin="0,0,10,0" VerticalAlignment="Center">
+                                                        <Border.Style>
+                                                            <Style TargetType="Border">
+                                                                <Setter Property="Background" Value="#94A3B8" />
+                                                                <Style.Triggers>
+                                                                    <DataTrigger Binding="{Binding TabType}" Value="Form">
+                                                                        <Setter Property="Background" Value="#4F46E5" />
+                                                                    </DataTrigger>
+                                                                    <DataTrigger Binding="{Binding TabType}" Value="Entity">
+                                                                        <Setter Property="Background" Value="#059669" />
+                                                                    </DataTrigger>
+                                                                    <DataTrigger Binding="{Binding TabType}" Value="Field">
+                                                                        <Setter Property="Background" Value="#D97706" />
+                                                                    </DataTrigger>
+                                                                    <DataTrigger Binding="{Binding TabType}" Value="Enum">
+                                                                        <Setter Property="Background" Value="#7C3AED" />
+                                                                    </DataTrigger>
+                                                                    <DataTrigger Binding="{Binding TabType}" Value="AllFields">
+                                                                        <Setter Property="Background" Value="#2563EB" />
+                                                                    </DataTrigger>
+                                                                    <DataTrigger Binding="{Binding TabType}" Value="BillType">
+                                                                        <Setter Property="Background" Value="#B45309" />
+                                                                    </DataTrigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </Border.Style>
+                                                    </Border>
+                                                    <TextBlock Text="{Binding Header}" FontSize="14" Foreground="#334155"
+                                                           TextTrimming="CharacterEllipsis" MaxWidth="240" VerticalAlignment="Center" />
+                                                </StackPanel>
+                                            </DataTemplate>
+                                        </ListBox.ItemTemplate>
+                                        <ListBox.ItemContainerStyle>
+                                            <Style TargetType="ListBoxItem">
+                                                <Setter Property="Padding" Value="4,2" />
+                                                <Setter Property="Cursor" Value="Hand" />
+                                                <Setter Property="Template">
+                                                    <Setter.Value>
+                                                        <ControlTemplate TargetType="ListBoxItem">
+                                                            <Border x:Name="ItemBorder" Background="Transparent" Padding="{TemplateBinding Padding}" CornerRadius="4" SnapsToDevicePixels="True">
+                                                                <ContentPresenter />
+                                                            </Border>
+                                                            <ControlTemplate.Triggers>
+                                                                <Trigger Property="IsMouseOver" Value="True">
+                                                                    <Setter TargetName="ItemBorder" Property="Background" Value="#F1F5F9" />
+                                                                </Trigger>
+                                                                <Trigger Property="IsSelected" Value="True">
+                                                                    <Setter TargetName="ItemBorder" Property="Background" Value="#EEF2FF" />
+                                                                </Trigger>
+                                                            </ControlTemplate.Triggers>
+                                                        </ControlTemplate>
+                                                    </Setter.Value>
+                                                </Setter>
+                                            </Style>
+                                        </ListBox.ItemContainerStyle>
+                                    </ListBox>
+                                </DockPanel>
+                            </Border>
+                        </Popup>
+
+                        <!-- 内容区域 -->
+                        <Grid x:Name="TabContentPanel" Grid.Row="1" Grid.ColumnSpan="2" />
+                    </Grid>
+                </Border>
+            </Grid>
+        </DockPanel>
+        <ScrollViewer VerticalScrollBarVisibility="Hidden"
                   HorizontalAlignment="Right"
                   VerticalAlignment="Top"
                   IsHitTestVisible="False">
-        <StackPanel hc:Growl.GrowlParent="True"
+            <StackPanel hc:Growl.GrowlParent="True"
                     VerticalAlignment="Top"
                     Margin="0,10,10,10" />
-    </ScrollViewer>
+        </ScrollViewer>
     </Grid>
 </hc:Window>

@@ -9,6 +9,9 @@ namespace K3CloudDataDictionary
         public DataTemplate FormTemplate { get; set; }
         public DataTemplate EntityTemplate { get; set; }
         public DataTemplate FieldTemplate { get; set; }
+        public DataTemplate EnumTemplate { get; set; }
+        public DataTemplate AllFieldsTemplate { get; set; }
+        public DataTemplate BillTypeTemplate { get; set; }
 
         public override DataTemplate SelectTemplate(object item, DependencyObject container)
         {
@@ -19,6 +22,9 @@ namespace K3CloudDataDictionary
                     case TabType.Form: return FormTemplate;
                     case TabType.Entity: return EntityTemplate;
                     case TabType.Field: return FieldTemplate;
+                    case TabType.Enum: return EnumTemplate;
+                    case TabType.AllFields: return AllFieldsTemplate;
+                    case TabType.BillType: return BillTypeTemplate;
                 }
             }
             return null;

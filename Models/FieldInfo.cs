@@ -12,6 +12,10 @@ namespace K3CloudDataDictionary.Models
         private string _elementTypeName;
         private string _suffix;
         private string _splitDescription;
+        private string _lookUpObjectID;
+        private string _enumType;
+        private string _lookUpObjectDisplay;
+        private string _enumTypeDisplay;
 
         public string Key
         {
@@ -53,6 +57,30 @@ namespace K3CloudDataDictionary.Models
         {
             get => _splitDescription;
             set { _splitDescription = value; OnPropertyChanged(); }
+        }
+
+        public string LookUpObjectID
+        {
+            get => _lookUpObjectID;
+            set { _lookUpObjectID = value; OnPropertyChanged(); }
+        }
+
+        public string EnumType
+        {
+            get => _enumType;
+            set { _enumType = value; OnPropertyChanged(); }
+        }
+
+        public string LookUpObjectDisplay
+        {
+            get => _lookUpObjectDisplay;
+            set { _lookUpObjectDisplay = value; OnPropertyChanged(); }
+        }
+
+        public string EnumTypeDisplay
+        {
+            get => _enumTypeDisplay;
+            set { _enumTypeDisplay = value; OnPropertyChanged(); }
         }
 
         public event PropertyChangedEventHandler PropertyChanged;

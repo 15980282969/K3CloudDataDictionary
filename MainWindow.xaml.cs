@@ -24,6 +24,9 @@ namespace K3CloudDataDictionary
         private TextBox _pendingFilterTextBox;
         private int _isRefreshing; // 0=false, 1=true，用于 Interlocked 原子操作
 
+        private TabContentTemplateSelector _templateSelector;
+        private Dictionary<ModuleTabItem, FrameworkElement> _tabContentMap = new Dictionary<ModuleTabItem, FrameworkElement>();
+
         public MainWindow()
         {
             InitializeComponent();
@@ -36,7 +39,15 @@ namespace K3CloudDataDictionary
             if (vm != null)
             {
                 vm.SelectedTabChanged += OnSelectedTabChanged;
+                vm.OpenTabs.CollectionChanged += OpenTabs_CollectionChanged;
+                vm.PropertyChanged += (s, args) =>
+                {
+                    if (args.PropertyName == nameof(MainViewModel.SelectedTab))
+                        UpdateTabIsSelected();
+                };
             }
+
+            _templateSelector = FindResource("TabContentSelector") as TabContentTemplateSelector;
 
             var localDbPath = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "data", "metadata.db");
 
@@ -56,18 +67,268 @@ namespace K3CloudDataDictionary
             }
         }
 
+        private void OpenTabs_CollectionChanged(object sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
+        {
+            if (e.NewItems != null)
+            {
+                foreach (ModuleTabItem tab in e.NewItems)
+                {
+                    AddTabContent(tab);
+                }
+            }
+            if (e.OldItems != null)
+            {
+                foreach (ModuleTabItem tab in e.OldItems)
+                {
+                    RemoveTabContent(tab);
+                }
+            }
+            UpdateTabVisibility();
+            RebuildTabHeaders();
+        }
+
+        private void RebuildTabHeaders()
+        {
+            if (TabListContainer == null) return;
+            var vm = DataContext as MainViewModel;
+            if (vm == null) return;
+
+            TabListContainer.Children.Clear();
+            TabListContainer.ColumnDefinitions.Clear();
+
+            int count = vm.OpenTabs.Count;
+            if (count == 0) return;
+
+            // 每个标签固定宽度 180
+            for (int i = 0; i < count; i++)
+                TabListContainer.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(180) });
+
+            for (int i = 0; i < count; i++)
+            {
+                var tab = vm.OpenTabs[i];
+                var card = CreateTabCard(tab);
+                Grid.SetColumn(card, i);
+                TabListContainer.Children.Add(card);
+            }
+
+            UpdateTabIsSelected();
+            ScrollToSelectedTab();
+        }
+
+        private void ScrollToSelectedTab()
+        {
+            if (TabScrollViewer == null) return;
+            Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Loaded, new Action(() =>
+            {
+                if (!(DataContext is MainViewModel vm) || vm.SelectedTab == null) return;
+                for (int i = 0; i < vm.OpenTabs.Count; i++)
+                {
+                    if (vm.OpenTabs[i] == vm.SelectedTab)
+                    {
+                        var card = TabListContainer.Children[i] as FrameworkElement;
+                        if (card != null)
+                        {
+                            double offset = card.TranslatePoint(new Point(0, 0), TabScrollViewer).X;
+                            double viewportWidth = TabScrollViewer.ViewportWidth;
+                            double itemWidth = card.ActualWidth;
+
+                            if (offset < 0)
+                                TabScrollViewer.ScrollToHorizontalOffset(TabScrollViewer.HorizontalOffset + offset - 10);
+                            else if (offset + itemWidth > viewportWidth)
+                                TabScrollViewer.ScrollToHorizontalOffset(TabScrollViewer.HorizontalOffset + (offset + itemWidth - viewportWidth) + 10);
+                        }
+                        break;
+                    }
+                }
+            }));
+        }
+
+        private FrameworkElement CreateTabCard(ModuleTabItem tab)
+        {
+            // 外层：方角，#37495C 背景，右侧 2px 间隔
+            var outerCard = new Border
+            {
+                Background = new SolidColorBrush(Color.FromRgb(0x37, 0x49, 0x5C)),
+                Padding = new Thickness(0, 0, 2, 0),
+                SnapsToDevicePixels = true,
+                DataContext = tab
+            };
+
+            // 内层：圆角，白色/靛蓝背景
+            var innerCard = new Border
+            {
+                Name = "TabCard",
+                CornerRadius = new CornerRadius(6, 6, 0, 0),
+                Padding = new Thickness(10, 1, 10, 1),
+                SnapsToDevicePixels = true
+            };
+
+            // 内层选中/悬停样式
+            var style = new Style(typeof(Border));
+            style.Setters.Add(new Setter(BackgroundProperty, new SolidColorBrush(Color.FromRgb(0xF0, 0xF3, 0xF7))));
+            var isSelectedTrigger = new DataTrigger { Binding = new Binding("IsSelected"), Value = true };
+            isSelectedTrigger.Setters.Add(new Setter(BackgroundProperty, new SolidColorBrush(Color.FromRgb(0x32, 0x6C, 0xF3))));
+            style.Triggers.Add(isSelectedTrigger);
+            var isMouseOverTrigger = new MultiDataTrigger();
+            isMouseOverTrigger.Conditions.Add(new Condition { Binding = new Binding("IsMouseOver"), Value = true });
+            isMouseOverTrigger.Conditions.Add(new Condition { Binding = new Binding("IsSelected"), Value = false });
+            isMouseOverTrigger.Setters.Add(new Setter(BackgroundProperty, new SolidColorBrush(Color.FromRgb(0xEE, 0xF2, 0xFF))));
+            style.Triggers.Add(isMouseOverTrigger);
+            innerCard.Style = style;
+
+            var grid = new Grid { VerticalAlignment = VerticalAlignment.Stretch };
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+            var text = new TextBlock
+            {
+                FontSize = 14,
+                TextTrimming = TextTrimming.CharacterEllipsis,
+                VerticalAlignment = VerticalAlignment.Center,
+                HorizontalAlignment = HorizontalAlignment.Center
+            };
+            text.SetBinding(TextBlock.TextProperty, new Binding("Header"));
+
+            var textStyle = new Style(typeof(TextBlock));
+            textStyle.Setters.Add(new Setter(ForegroundProperty, new SolidColorBrush(Color.FromRgb(0x33, 0x41, 0x55))));
+            textStyle.Setters.Add(new Setter(FontWeightProperty, FontWeights.Normal));
+            var textSelectedTrigger = new DataTrigger { Binding = new Binding("IsSelected"), Value = true };
+            textSelectedTrigger.Setters.Add(new Setter(ForegroundProperty, Brushes.White));
+            textSelectedTrigger.Setters.Add(new Setter(FontWeightProperty, FontWeights.Bold));
+            textStyle.Triggers.Add(textSelectedTrigger);
+            var textHoverTrigger = new MultiDataTrigger();
+            textHoverTrigger.Conditions.Add(new Condition { Binding = new Binding("IsMouseOver"), Value = true });
+            textHoverTrigger.Conditions.Add(new Condition { Binding = new Binding("IsSelected"), Value = false });
+            textHoverTrigger.Setters.Add(new Setter(FontWeightProperty, FontWeights.SemiBold));
+            textStyle.Triggers.Add(textHoverTrigger);
+            text.Style = textStyle;
+
+            Grid.SetColumn(text, 0);
+            grid.Children.Add(text);
+
+            var closeButton = new Button
+            {
+                Width = 18,
+                Height = 18,
+                Margin = new Thickness(4, 0, -2, 0),
+                Cursor = System.Windows.Input.Cursors.Hand,
+                VerticalAlignment = VerticalAlignment.Center,
+                Tag = tab
+            };
+            closeButton.Click += TabItemClose_Click;
+
+            var closeStyle = new Style(typeof(Button));
+            closeStyle.Setters.Add(new Setter(BackgroundProperty, Brushes.Transparent));
+            closeStyle.Setters.Add(new Setter(BorderThicknessProperty, new Thickness(0)));
+            closeStyle.Setters.Add(new Setter(VisibilityProperty, Visibility.Collapsed));
+            var closeSelectedTrigger = new DataTrigger { Binding = new Binding("IsSelected"), Value = true };
+            closeSelectedTrigger.Setters.Add(new Setter(VisibilityProperty, Visibility.Visible));
+            closeStyle.Triggers.Add(closeSelectedTrigger);
+            var closeMouseOverTrigger = new MultiDataTrigger();
+            closeMouseOverTrigger.Conditions.Add(new Condition { Binding = new Binding("IsMouseOver"), Value = true });
+            closeMouseOverTrigger.Conditions.Add(new Condition { Binding = new Binding("IsSelected"), Value = false });
+            closeMouseOverTrigger.Setters.Add(new Setter(VisibilityProperty, Visibility.Visible));
+            closeStyle.Triggers.Add(closeMouseOverTrigger);
+            closeButton.Style = closeStyle;
+
+            var closeControlTemplate = new ControlTemplate(typeof(Button));
+            var closeBorder = new FrameworkElementFactory(typeof(Border), "CloseBtnBorder");
+            closeBorder.SetValue(Border.BackgroundProperty, Brushes.Transparent);
+            closeBorder.SetValue(Border.CornerRadiusProperty, new CornerRadius(4));
+            closeBorder.SetValue(Border.WidthProperty, 18.0);
+            closeBorder.SetValue(Border.HeightProperty, 18.0);
+            var closeText = new FrameworkElementFactory(typeof(TextBlock), "CloseBtnText");
+            closeText.SetValue(TextBlock.TextProperty, "✕");
+            closeText.SetValue(TextBlock.FontSizeProperty, 10.0);
+            closeText.SetValue(TextBlock.ForegroundProperty, new SolidColorBrush(Color.FromRgb(0x94, 0xA3, 0xB8)));
+            closeText.SetValue(TextBlock.HorizontalAlignmentProperty, HorizontalAlignment.Center);
+            closeText.SetValue(TextBlock.VerticalAlignmentProperty, VerticalAlignment.Center);
+            closeBorder.AppendChild(closeText);
+            closeControlTemplate.VisualTree = closeBorder;
+            var closeHoverTrigger = new Trigger { Property = UIElement.IsMouseOverProperty, Value = true };
+            closeHoverTrigger.Setters.Add(new Setter(Border.BackgroundProperty, new SolidColorBrush(Color.FromRgb(0xFE, 0xE2, 0xE2)), "CloseBtnBorder"));
+            closeHoverTrigger.Setters.Add(new Setter(TextBlock.ForegroundProperty, new SolidColorBrush(Color.FromRgb(0xEF, 0x44, 0x44)), "CloseBtnText"));
+            closeControlTemplate.Triggers.Add(closeHoverTrigger);
+            closeButton.Template = closeControlTemplate;
+
+            Grid.SetColumn(closeButton, 1);
+            grid.Children.Add(closeButton);
+
+            innerCard.Child = grid;
+            outerCard.Child = innerCard;
+
+            // 鼠标事件绑定到外层
+            var vm = DataContext as MainViewModel;
+            outerCard.MouseLeftButtonUp += (s, e) =>
+            {
+                if (vm != null) vm.SelectedTab = tab;
+            };
+            outerCard.MouseEnter += (s, e) => tab.IsMouseOver = true;
+            outerCard.MouseLeave += (s, e) => tab.IsMouseOver = false;
+            outerCard.MouseRightButtonUp += (s, e) =>
+            {
+                _contextMenuTab = tab;
+                if (vm != null) vm.SelectedTab = tab;
+                var menu = FindResource("TabItemContextMenu") as ContextMenu;
+                if (menu != null)
+                {
+                    menu.PlacementTarget = outerCard;
+                    menu.IsOpen = true;
+                }
+            };
+
+            return outerCard;
+        }
+
+        private void AddTabContent(ModuleTabItem tab)
+        {
+            if (_templateSelector == null || TabContentPanel == null) return;
+
+            var template = _templateSelector.SelectTemplate(tab, null);
+            if (template == null) return;
+
+            var content = template.LoadContent() as FrameworkElement;
+            if (content == null) return;
+
+            content.DataContext = tab;
+            content.Visibility = Visibility.Collapsed;
+
+            TabContentPanel.Children.Add(content);
+            _tabContentMap[tab] = content;
+        }
+
+        private void RemoveTabContent(ModuleTabItem tab)
+        {
+            if (_tabContentMap.TryGetValue(tab, out var content))
+            {
+                TabContentPanel.Children.Remove(content);
+                _tabContentMap.Remove(tab);
+            }
+        }
+
+        private void UpdateTabVisibility()
+        {
+            var vm = DataContext as MainViewModel;
+            if (vm == null) return;
+
+            foreach (var kvp in _tabContentMap)
+            {
+                kvp.Value.Visibility = (kvp.Key == vm.SelectedTab) ? Visibility.Visible : Visibility.Collapsed;
+            }
+        }
+
         private void OnSelectedTabChanged()
         {
-            if (MainTabControl != null && DataContext is MainViewModel vm && vm.SelectedTab != null)
+            UpdateTabVisibility();
+            UpdateTabIsSelected();
+        }
+
+        private void UpdateTabIsSelected()
+        {
+            if (!(DataContext is MainViewModel vm)) return;
+            foreach (var tab in vm.OpenTabs)
             {
-                Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Loaded, new Action(() =>
-                {
-                    var container = MainTabControl.ItemContainerGenerator.ContainerFromItem(vm.SelectedTab);
-                    if (container is FrameworkElement fe)
-                    {
-                        fe.BringIntoView();
-                    }
-                }));
+                tab.IsSelected = (tab == vm.SelectedTab);
             }
         }
 
@@ -334,27 +595,49 @@ namespace K3CloudDataDictionary
             }
         }
 
-        private void MainTabControl_PreviewMouseRightButtonDown(object sender, MouseButtonEventArgs e)
+        private void SearchTextBox_GotFocus(object sender, RoutedEventArgs e)
         {
-            var dep = (DependencyObject)e.OriginalSource;
-            while (dep != null && !(dep is System.Windows.Controls.TabItem))
+            var vm = DataContext as MainViewModel;
+            if (vm != null) vm.IsSearchFocused = true;
+        }
+
+        private void SearchTextBox_LostFocus(object sender, RoutedEventArgs e)
+        {
+            var vm = DataContext as MainViewModel;
+            if (vm != null) vm.IsSearchFocused = false;
+        }
+
+        private async void ShowAllFields_Click(object sender, RoutedEventArgs e)
+        {
+            var btn = sender as FrameworkElement;
+            if (btn == null) return;
+
+            // 向上查找 DataContext 为 ModuleTabItem 的元素
+            var dep = btn as DependencyObject;
+            while (dep != null && !(dep is FrameworkElement fe && fe.DataContext is ModuleTabItem))
                 dep = VisualTreeHelper.GetParent(dep);
 
-            if (dep is System.Windows.Controls.TabItem tabItem)
+            if (dep is FrameworkElement element && element.DataContext is ModuleTabItem tab)
             {
-                var dataItem = MainTabControl.ItemContainerGenerator.ItemFromContainer(tabItem);
-                if (dataItem is ModuleTabItem tab)
+                // 从 FormEntities 中获取 FormId
+                if (tab.FormEntities.Count > 0)
                 {
-                    _contextMenuTab = tab;
-                    tabItem.IsSelected = true;
-                    var menu = FindResource("TabItemContextMenu") as ContextMenu;
-                    if (menu != null)
+                    var firstEntity = tab.FormEntities[0];
+                    var vm = DataContext as MainViewModel;
+                    if (vm != null)
                     {
-                        menu.PlacementTarget = tabItem;
-                        menu.IsOpen = true;
-                        e.Handled = true;
+                        await vm.OpenAllFieldsTabAsync(firstEntity.FormId, firstEntity.FormName);
                     }
                 }
+            }
+        }
+
+        private void TabItemClose_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is FrameworkElement fe && fe.Tag is ModuleTabItem tab)
+            {
+                var vm = DataContext as MainViewModel;
+                vm?.CloseCurrentTabCommand.Execute(tab);
             }
         }
 
@@ -412,7 +695,7 @@ namespace K3CloudDataDictionary
         {
             var dataGrid = (DataGrid)sender;
             var view = CollectionViewSource.GetDefaultView(dataGrid.ItemsSource);
-            if (view == null || view.SortDescriptions.Count == 0) return;
+            if (view == null) return;
 
             var currentSort = view.SortDescriptions.FirstOrDefault(s => s.PropertyName == e.Column.SortMemberPath);
             if (currentSort.PropertyName == e.Column.SortMemberPath && currentSort.Direction == System.ComponentModel.ListSortDirection.Descending)
@@ -484,6 +767,125 @@ namespace K3CloudDataDictionary
                 if (vm != null)
                 {
                     await vm.OpenFieldDetailTabAsync(entity);
+                }
+            }
+        }
+
+        private async void FieldDataGrid_MouseDoubleClick(object sender, MouseButtonEventArgs e)
+        {
+            if (e.ChangedButton != MouseButton.Left) return;
+
+            // 判断双击的是哪个单元格
+            var dep = (DependencyObject)e.OriginalSource;
+            while (dep != null && !(dep is DataGridCell))
+                dep = VisualTreeHelper.GetParent(dep);
+
+            if (!(dep is DataGridCell cell)) return;
+
+            // 获取点击的列
+            var column = cell.Column;
+            if (column == null) return;
+
+            // 获取行数据
+            var dataGrid = (DataGrid)sender;
+            DependencyObject rowDep = cell;
+            while (rowDep != null && !(rowDep is DataGridRow))
+                rowDep = VisualTreeHelper.GetParent(rowDep);
+
+            if (!(rowDep is DataGridRow dataRow)) return;
+            var rowItem = dataGrid.ItemContainerGenerator.ItemFromContainer(dataRow);
+            if (!(rowItem is Models.FieldInfo field)) return;
+
+            var vm = DataContext as MainViewModel;
+            if (vm == null) return;
+
+            // 根据列判断联查类型
+            string header = column.Header?.ToString() ?? "";
+            if (header == "引用对象" && !string.IsNullOrWhiteSpace(field.LookUpObjectID))
+            {
+                await vm.OpenLookupEntityTabAsync(field);
+            }
+            else if (header == "枚举类型" && !string.IsNullOrWhiteSpace(field.EnumType))
+            {
+                await vm.OpenEnumDetailTabAsync(field);
+            }
+            else if (header == "元素类型" && field.ElementTypeName == "单据类型")
+            {
+                // 从当前标签获取 formId，再查找 FFORMIDENTIFIER
+                var currentTab = vm.SelectedTab;
+                if (currentTab != null && currentTab.ModuleId.StartsWith("field_"))
+                {
+                    var parts = currentTab.ModuleId.Split('_');
+                    if (parts.Length >= 2)
+                    {
+                        var formId = parts[1];
+                        var formIdentifier = vm.GetFormIdentifierByFormId(formId);
+                        if (!string.IsNullOrWhiteSpace(formIdentifier))
+                        {
+                            await vm.OpenBillTypeTabAsync(formIdentifier);
+                        }
+                    }
+                }
+            }
+        }
+
+        private async void AllFieldsDataGrid_MouseDoubleClick(object sender, MouseButtonEventArgs e)
+        {
+            if (e.ChangedButton != MouseButton.Left) return;
+
+            var dep = (DependencyObject)e.OriginalSource;
+            while (dep != null && !(dep is DataGridCell))
+                dep = VisualTreeHelper.GetParent(dep);
+
+            if (!(dep is DataGridCell cell)) return;
+
+            var column = cell.Column;
+            if (column == null) return;
+
+            var dataGrid = (DataGrid)sender;
+            DependencyObject rowDep = cell;
+            while (rowDep != null && !(rowDep is DataGridRow))
+                rowDep = VisualTreeHelper.GetParent(rowDep);
+
+            if (!(rowDep is DataGridRow dataRow)) return;
+            var rowItem = dataGrid.ItemContainerGenerator.ItemFromContainer(dataRow);
+            if (!(rowItem is Models.AllFieldInfo allField)) return;
+
+            var vm = DataContext as MainViewModel;
+            if (vm == null) return;
+
+            string header = column.Header?.ToString() ?? "";
+            if (header == "引用对象" && !string.IsNullOrWhiteSpace(allField.LookUpObjectID))
+            {
+                // 构造 FieldInfo 用于联查
+                var fieldInfo = new Models.FieldInfo
+                {
+                    LookUpObjectID = allField.LookUpObjectID,
+                    LookUpObjectDisplay = allField.LookUpObjectDisplay
+                };
+                await vm.OpenLookupEntityTabAsync(fieldInfo);
+            }
+            else if (header == "枚举类型" && !string.IsNullOrWhiteSpace(allField.EnumType))
+            {
+                var fieldInfo = new Models.FieldInfo
+                {
+                    EnumType = allField.EnumType,
+                    EnumTypeDisplay = allField.EnumTypeDisplay
+                };
+                await vm.OpenEnumDetailTabAsync(fieldInfo);
+            }
+            else if (header == "元素类型" && allField.ElementTypeName == "单据类型")
+            {
+                // 从当前标签获取 formId，再查找 FFORMIDENTIFIER
+                var currentTab = vm.SelectedTab;
+                if (currentTab != null && currentTab.ModuleId.StartsWith("allfields_"))
+                {
+                    var formId = currentTab.ModuleId.Substring("allfields_".Length);
+                    var formIdentifier = vm.GetFormIdentifierByFormId(formId);
+                    if (!string.IsNullOrWhiteSpace(formIdentifier))
+                    {
+                        await vm.OpenBillTypeTabAsync(formIdentifier);
+                    }
                 }
             }
         }
@@ -594,6 +996,36 @@ namespace K3CloudDataDictionary
                 var vm = DataContext as MainViewModel;
                 vm?.CloseRightTabsCommand.Execute(_contextMenuTab);
             }
+        }
+
+        private void TabListPopup_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            TabListButton.IsChecked = false;
+            ScrollToSelectedTab();
+        }
+
+        private void ScrollLeftButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (TabScrollViewer != null)
+                TabScrollViewer.ScrollToHorizontalOffset(TabScrollViewer.HorizontalOffset - 150);
+        }
+
+        private void ScrollRightButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (TabScrollViewer != null)
+                TabScrollViewer.ScrollToHorizontalOffset(TabScrollViewer.HorizontalOffset + 150);
+        }
+
+        private void TabScrollViewer_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
+        {
+            if (TabScrollViewer == null) return;
+
+            if (e.Delta > 0)
+                TabScrollViewer.ScrollToHorizontalOffset(TabScrollViewer.HorizontalOffset - 150);
+            else
+                TabScrollViewer.ScrollToHorizontalOffset(TabScrollViewer.HorizontalOffset + 150);
+
+            e.Handled = true;
         }
 
         private void ContextMenu_CloseOther(object sender, RoutedEventArgs e)

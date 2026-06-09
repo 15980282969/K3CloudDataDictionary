@@ -16,11 +16,13 @@ namespace K3CloudDataDictionary.Views
         public string EntityKey { get; set; } = "";
         public string Suffix { get; set; } = "";
         public string TagName { get; set; } = "";
+        public string LookUpObjectID { get; set; } = "";
+        public string EnumType { get; set; } = "";
         public string Action { get; set; } = "";
 
         public override string ToString()
         {
-            return $"[{TagName}] Oid={Oid}, ElementType={ElementType}, Id={Id}, Key={Key}, Name={Name}, FieldName={FieldName}, PropertyName={PropertyName}, EntityKey={EntityKey}, Suffix={Suffix}";
+            return $"[{TagName}] Oid={Oid}, ElementType={ElementType}, Id={Id}, Key={Key}, Name={Name}, FieldName={FieldName}, PropertyName={PropertyName}, EntityKey={EntityKey}, Suffix={Suffix}, LookUpObjectID={LookUpObjectID}, EnumType={EnumType}";
         }
 
         public MetadataFieldInfo Clone()
@@ -37,6 +39,8 @@ namespace K3CloudDataDictionary.Views
                 EntityKey = EntityKey,
                 Suffix = Suffix,
                 TagName = TagName,
+                LookUpObjectID = LookUpObjectID,
+                EnumType = EnumType,
                 Action = Action
             };
         }
@@ -80,7 +84,9 @@ namespace K3CloudDataDictionary.Views
                     FieldName = element.Element("FieldName")?.Value ?? "",
                     PropertyName = element.Element("PropertyName")?.Value ?? "",
                     EntityKey = element.Element("EntityKey")?.Value ?? "",
-                    Suffix = element.Element("Suffix")?.Value ?? ""
+                    Suffix = element.Element("Suffix")?.Value ?? "",
+                    LookUpObjectID = element.Element("LookUpObjectID")?.Value ?? "",
+                    EnumType = element.Element("EnumType")?.Value ?? ""
                 };
 
                 if (!string.IsNullOrEmpty(info.Oid))

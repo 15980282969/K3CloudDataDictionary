@@ -4,7 +4,7 @@ using System.Runtime.CompilerServices;
 
 namespace K3CloudDataDictionary.Models
 {
-    public enum TabType { Form, Entity, Field }
+    public enum TabType { Form, Entity, Field, Enum, AllFields, BillType }
 
     public class ModuleTabItem : INotifyPropertyChanged
     {
@@ -14,6 +14,9 @@ namespace K3CloudDataDictionary.Models
         private ObservableCollection<FormInfo> _forms;
         private ObservableCollection<FormEntityInfo> _formEntities;
         private ObservableCollection<FieldInfo> _fields;
+        private ObservableCollection<EnumItemInfo> _enumItems;
+        private ObservableCollection<AllFieldInfo> _allFields;
+        private ObservableCollection<BillTypeInfo> _billTypes;
 
         public string Header
         {
@@ -51,15 +54,53 @@ namespace K3CloudDataDictionary.Models
             set { _fields = value; OnPropertyChanged(); }
         }
 
+        public ObservableCollection<EnumItemInfo> EnumItems
+        {
+            get => _enumItems;
+            set { _enumItems = value; OnPropertyChanged(); }
+        }
+
+        public ObservableCollection<AllFieldInfo> AllFields
+        {
+            get => _allFields;
+            set { _allFields = value; OnPropertyChanged(); }
+        }
+
+        public ObservableCollection<BillTypeInfo> BillTypes
+        {
+            get => _billTypes;
+            set { _billTypes = value; OnPropertyChanged(); }
+        }
+
         public bool IsFormTab => TabType == TabType.Form;
         public bool IsEntityTab => TabType == TabType.Entity;
         public bool IsFieldTab => TabType == TabType.Field;
+        public bool IsEnumTab => TabType == TabType.Enum;
+        public bool IsAllFieldsTab => TabType == TabType.AllFields;
+        public bool IsBillTypeTab => TabType == TabType.BillType;
+
+        private bool _isSelected;
+        public bool IsSelected
+        {
+            get => _isSelected;
+            set { _isSelected = value; OnPropertyChanged(); }
+        }
+
+        private bool _isMouseOver;
+        public bool IsMouseOver
+        {
+            get => _isMouseOver;
+            set { _isMouseOver = value; OnPropertyChanged(); }
+        }
 
         public ModuleTabItem()
         {
             Forms = new ObservableCollection<FormInfo>();
             FormEntities = new ObservableCollection<FormEntityInfo>();
             Fields = new ObservableCollection<FieldInfo>();
+            EnumItems = new ObservableCollection<EnumItemInfo>();
+            AllFields = new ObservableCollection<AllFieldInfo>();
+            BillTypes = new ObservableCollection<BillTypeInfo>();
             TabType = TabType.Form;
         }
 

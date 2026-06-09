@@ -62,6 +62,8 @@ namespace K3CloudDataDictionary.Views
 
         private void CreateTables()
         {
+            ExecuteNonQuery("DROP TABLE IF EXISTS T_META_FORMENUM");
+            ExecuteNonQuery("DROP TABLE IF EXISTS T_Meta_LookupClass");
             ExecuteNonQuery("DROP TABLE IF EXISTS T_FIELD");
             ExecuteNonQuery("DROP TABLE IF EXISTS T_ENTITYSPLIT");
             ExecuteNonQuery("DROP TABLE IF EXISTS T_ENTITY");
@@ -69,6 +71,7 @@ namespace K3CloudDataDictionary.Views
             ExecuteNonQuery("DROP TABLE IF EXISTS T_MDL_ELEMENTTYPE_L");
             ExecuteNonQuery("DROP TABLE IF EXISTS T_META_SUBSYSTEM");
             ExecuteNonQuery("DROP TABLE IF EXISTS T_META_TOPCLASS_L");
+            ExecuteNonQuery("DROP TABLE IF EXISTS T_BAS_BILLTYPE");
 
             ExecuteNonQuery(@"CREATE TABLE T_FORM (
                 FID             INTEGER NOT NULL PRIMARY KEY,
@@ -109,7 +112,9 @@ namespace K3CloudDataDictionary.Views
                 FName          TEXT,
                 FFieldName     TEXT,
                 FPropertyName  TEXT,
-                FElementType   TEXT)");
+                FElementType   TEXT,
+                FLookUpObjectID TEXT,
+                FEnumType       TEXT)");
             ExecuteNonQuery("CREATE INDEX IDX_T_FIELD_FORMID ON T_FIELD(FFORMID)");
             ExecuteNonQuery("CREATE INDEX IDX_T_FIELD_ENTITYID ON T_FIELD(FENTITYID)");
             ExecuteNonQuery("CREATE INDEX IDX_T_FIELD_ENTITYSPLITID ON T_FIELD(FENTITYSPLITID)");
@@ -134,6 +139,30 @@ namespace K3CloudDataDictionary.Views
                 FSEQ        INTEGER,
                 FNAME       TEXT,
                 FDESCRIPTION TEXT)");
+
+            ExecuteNonQuery(@"CREATE TABLE T_META_FORMENUM (
+                FID       TEXT NOT NULL,
+                FNAME     TEXT,
+                FVALUE    TEXT,
+                FENUMID   TEXT NOT NULL,
+                FCAPTION  TEXT,
+                PRIMARY KEY (FID, FENUMID))");
+            ExecuteNonQuery("CREATE INDEX IDX_T_META_FORMENUM_ID ON T_META_FORMENUM(FID)");
+
+            ExecuteNonQuery(@"CREATE TABLE T_Meta_LookupClass (
+                FID           TEXT NOT NULL PRIMARY KEY,
+                FFORMID       TEXT,
+                FTABLENAME    TEXT,
+                FPKFIELDNAME  TEXT,
+                FORGFIELDNAME TEXT)");
+            ExecuteNonQuery("CREATE INDEX IDX_T_META_LOOKUPCLASS_FORMID ON T_Meta_LookupClass(FFORMID)");
+
+            ExecuteNonQuery(@"CREATE TABLE T_BAS_BILLTYPE (
+                FBILLTYPEID   TEXT NOT NULL PRIMARY KEY,
+                FBILLFORMID   TEXT,
+                FNUMBER       TEXT,
+                FNAME         TEXT)");
+            ExecuteNonQuery("CREATE INDEX IDX_T_BAS_BILLTYPE_FORMID ON T_BAS_BILLTYPE(FBILLFORMID)");
         }
 
         public void WriteLookupTables(string sqlServerConnectionString)
@@ -145,6 +174,9 @@ namespace K3CloudDataDictionary.Views
                 WriteElementTypeL(sqlConn);
                 WriteTopClassL(sqlConn);
                 WriteSubsystem(sqlConn);
+                WriteFormEnum(sqlConn);
+                WriteLookupClass(sqlConn);
+                WriteBillType(sqlConn);
             }
         }
 
@@ -255,6 +287,79 @@ namespace K3CloudDataDictionary.Views
             }
         }
 
+        private void WriteFormEnum(System.Data.SqlClient.SqlConnection sqlConn)
+        {
+            string sql = "SELECT t1.FID, t2.FNAME, t3.FVALUE, t3.FENUMID, t4.FCAPTION " +
+                         "FROM T_META_FORMENUM t1 " +
+                         "INNER JOIN T_META_FORMENUM_L t2 ON t1.FID = t2.FID AND t2.FLOCALEID = 2052 " +
+                         "INNER JOIN T_META_FORMENUMITEM t3 ON t1.FID = t3.FID " +
+                         "INNER JOIN T_META_FORMENUMITEM_L t4 ON t3.FENUMID = t4.FENUMID AND t4.FLOCALEID = 2052";
+            using (var cmd = new System.Data.SqlClient.SqlCommand(sql, sqlConn))
+            using (var reader = cmd.ExecuteReader())
+            {
+                while (reader.Read())
+                {
+                    var fid = reader["FID"]?.ToString() ?? "";
+                    var fname = reader["FNAME"]?.ToString() ?? "";
+                    var fvalue = reader["FVALUE"]?.ToString() ?? "";
+                    var fenumid = reader["FENUMID"]?.ToString() ?? "";
+                    var fcaption = reader["FCAPTION"]?.ToString() ?? "";
+                    ExecuteNonQuery("INSERT INTO T_META_FORMENUM (FID, FNAME, FVALUE, FENUMID, FCAPTION) VALUES (@FID, @FNAME, @FVALUE, @FENUMID, @FCAPTION)",
+                        new SQLiteParameter("@FID", fid ?? (object)DBNull.Value),
+                        new SQLiteParameter("@FNAME", fname ?? (object)DBNull.Value),
+                        new SQLiteParameter("@FVALUE", fvalue),
+                        new SQLiteParameter("@FENUMID", fenumid ?? (object)DBNull.Value),
+                        new SQLiteParameter("@FCAPTION", fcaption ?? (object)DBNull.Value));
+                }
+            }
+        }
+
+        private void WriteLookupClass(System.Data.SqlClient.SqlConnection sqlConn)
+        {
+            string sql = "SELECT FID, FFORMID, FTABLENAME, FPKFIELDNAME, FORGFIELDNAME FROM T_Meta_LookupClass";
+            using (var cmd = new System.Data.SqlClient.SqlCommand(sql, sqlConn))
+            using (var reader = cmd.ExecuteReader())
+            {
+                while (reader.Read())
+                {
+                    var fid = reader["FID"]?.ToString() ?? "";
+                    var fformid = reader["FFORMID"]?.ToString() ?? "";
+                    var ftablename = reader["FTABLENAME"]?.ToString() ?? "";
+                    var fpkfieldname = reader["FPKFIELDNAME"]?.ToString() ?? "";
+                    var forgfieldname = reader["FORGFIELDNAME"]?.ToString() ?? "";
+                    ExecuteNonQuery("INSERT INTO T_Meta_LookupClass (FID, FFORMID, FTABLENAME, FPKFIELDNAME, FORGFIELDNAME) VALUES (@FID, @FFORMID, @FTABLENAME, @FPKFIELDNAME, @FORGFIELDNAME)",
+                        new SQLiteParameter("@FID", fid ?? (object)DBNull.Value),
+                        new SQLiteParameter("@FFORMID", fformid ?? (object)DBNull.Value),
+                        new SQLiteParameter("@FTABLENAME", ftablename ?? (object)DBNull.Value),
+                        new SQLiteParameter("@FPKFIELDNAME", fpkfieldname ?? (object)DBNull.Value),
+                        new SQLiteParameter("@FORGFIELDNAME", forgfieldname ?? (object)DBNull.Value));
+                }
+            }
+        }
+
+        private void WriteBillType(System.Data.SqlClient.SqlConnection sqlConn)
+        {
+            string sql = "SELECT a.FBILLFORMID, a.FNUMBER, b.FNAME, a.FBILLTYPEID " +
+                         "FROM T_BAS_BILLTYPE a " +
+                         "INNER JOIN T_BAS_BILLTYPE_L b ON a.FBILLTYPEID = b.FBILLTYPEID AND b.FLOCALEID = 2052";
+            using (var cmd = new System.Data.SqlClient.SqlCommand(sql, sqlConn))
+            using (var reader = cmd.ExecuteReader())
+            {
+                while (reader.Read())
+                {
+                    var fbillformid = reader["FBILLFORMID"]?.ToString() ?? "";
+                    var fnumber = reader["FNUMBER"]?.ToString() ?? "";
+                    var fname = reader["FNAME"]?.ToString() ?? "";
+                    var fbilltypeid = reader["FBILLTYPEID"]?.ToString() ?? "";
+                    ExecuteNonQuery("INSERT INTO T_BAS_BILLTYPE (FBILLTYPEID, FBILLFORMID, FNUMBER, FNAME) VALUES (@FBILLTYPEID, @FBILLFORMID, @FNUMBER, @FNAME)",
+                        new SQLiteParameter("@FBILLTYPEID", fbilltypeid ?? (object)DBNull.Value),
+                        new SQLiteParameter("@FBILLFORMID", fbillformid ?? (object)DBNull.Value),
+                        new SQLiteParameter("@FNUMBER", fnumber ?? (object)DBNull.Value),
+                        new SQLiteParameter("@FNAME", fname ?? (object)DBNull.Value));
+                }
+            }
+        }
+
         public void Write(MetadataResult result)
         {
             var objInfo = result.ObjInfo;
@@ -353,7 +458,7 @@ namespace K3CloudDataDictionary.Views
                     }
                 }
 
-                ExecuteNonQuery("INSERT INTO T_FIELD (FID, FFORMID, FENTITYID, FENTITYSPLITID, FKey, FName, FFieldName, FPropertyName, FElementType) VALUES (@FID, @FFORMID, @FENTITYID, @FENTITYSPLITID, @FKey, @FName, @FFieldName, @FPropertyName, @FElementType)",
+                ExecuteNonQuery("INSERT INTO T_FIELD (FID, FFORMID, FENTITYID, FENTITYSPLITID, FKey, FName, FFieldName, FPropertyName, FElementType, FLookUpObjectID, FEnumType) VALUES (@FID, @FFORMID, @FENTITYID, @FENTITYSPLITID, @FKey, @FName, @FFieldName, @FPropertyName, @FElementType, @FLookUpObjectID, @FEnumType)",
                     new SQLiteParameter("@FID", tmpFieldId),
                     new SQLiteParameter("@FFORMID", currentFormId),
                     new SQLiteParameter("@FENTITYID", fieldEntityId),
@@ -362,7 +467,9 @@ namespace K3CloudDataDictionary.Views
                     new SQLiteParameter("@FName", field.Name ?? (object)DBNull.Value),
                     new SQLiteParameter("@FFieldName", field.FieldName ?? (object)DBNull.Value),
                     new SQLiteParameter("@FPropertyName", field.PropertyName ?? (object)DBNull.Value),
-                    new SQLiteParameter("@FElementType", field.ElementType ?? (object)DBNull.Value));
+                    new SQLiteParameter("@FElementType", field.ElementType ?? (object)DBNull.Value),
+                    new SQLiteParameter("@FLookUpObjectID", field.LookUpObjectID ?? (object)DBNull.Value),
+                    new SQLiteParameter("@FEnumType", field.EnumType ?? (object)DBNull.Value));
                 tmpFieldId++;
             }
             _fieldId += allFields.Count;

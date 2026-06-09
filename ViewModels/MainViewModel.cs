@@ -22,6 +22,7 @@ namespace K3CloudDataDictionary.ViewModels
         private ObservableCollection<OperatorItem> _operators;
         private OperatorItem _selectedOperator;
         private string _searchText;
+        private bool _isSearchFocused;
         private ConnectionInfo _currentConnection;
         private bool _isConnected;
         private string _statusText;
@@ -69,8 +70,16 @@ namespace K3CloudDataDictionary.ViewModels
         public string SearchText
         {
             get => _searchText;
-            set { _searchText = value; OnPropertyChanged(); }
+            set { _searchText = value; OnPropertyChanged(); OnPropertyChanged(nameof(SearchPlaceholderVisible)); }
         }
+
+        public bool IsSearchFocused
+        {
+            get => _isSearchFocused;
+            set { _isSearchFocused = value; OnPropertyChanged(); OnPropertyChanged(nameof(SearchPlaceholderVisible)); }
+        }
+
+        public bool SearchPlaceholderVisible => string.IsNullOrEmpty(_searchText) && !_isSearchFocused;
 
         public ConnectionInfo CurrentConnection
         {
@@ -137,6 +146,15 @@ namespace K3CloudDataDictionary.ViewModels
                     break;
                 case TabType.Field:
                     StatusText = $"本地数据 | {tab.Header} - {tab.Fields.Count} 条记录";
+                    break;
+                case TabType.Enum:
+                    StatusText = $"本地数据 | {tab.Header} - {tab.EnumItems.Count} 条枚举项";
+                    break;
+                case TabType.AllFields:
+                    StatusText = $"本地数据 | {tab.Header} - {tab.AllFields.Count} 条记录";
+                    break;
+                case TabType.BillType:
+                    StatusText = $"本地数据 | {tab.Header} - {tab.BillTypes.Count} 条单据类型";
                     break;
             }
         }
@@ -338,7 +356,7 @@ namespace K3CloudDataDictionary.ViewModels
 
             var tab = new ModuleTabItem
             {
-                Header = $"{entity.EntityName} - 字段",
+                Header = $"{entity.FormName} - {entity.EntityName}",
                 ModuleId = tabKey,
                 TabType = TabType.Field
             };
@@ -347,6 +365,255 @@ namespace K3CloudDataDictionary.ViewModels
 
             OpenTabs.Add(tab);
             SelectedTab = tab;
+        }
+
+        /// <summary>
+        /// 双击引用对象列，通过 LookUpObjectID 查找 T_Meta_LookupClass.FFORMID 对应的表单实体
+        /// </summary>
+        public async Task OpenLookupEntityTabAsync(FieldInfo field)
+        {
+            if (field == null || !HasLocalData || string.IsNullOrWhiteSpace(field.LookUpObjectID)) return;
+
+            // 通过 LookUpObjectID 查找对应的 FFORMID（表单标识）
+            string lookupSql = "SELECT FFORMID FROM T_Meta_LookupClass WHERE FID = @FID";
+            var lookupRows = await Task.Run(() => ExecuteQuery(lookupSql, new[] { new SQLiteParameter("@FID", field.LookUpObjectID) }));
+            if (lookupRows.Count == 0) return;
+
+            var formIdentifier = lookupRows[0]["FFORMID"]?.ToString() ?? "";
+            if (string.IsNullOrWhiteSpace(formIdentifier)) return;
+
+            // 通过表单标识查找 T_FORM 的 FID
+            string formSql = "SELECT FID, FFORMIDENTIFIER, FNAME FROM T_FORM WHERE FFORMIDENTIFIER = @FormIdentifier";
+            var formRows = await Task.Run(() => ExecuteQuery(formSql, new[] { new SQLiteParameter("@FormIdentifier", formIdentifier) }));
+            if (formRows.Count == 0) return;
+
+            var formId = formRows[0]["FID"]?.ToString() ?? "";
+            var formName = formRows[0]["FNAME"]?.ToString() ?? formIdentifier;
+
+            string tabKey = $"entity_{formId}";
+            var existingTab = OpenTabs.FirstOrDefault(t => t.ModuleId == tabKey);
+            if (existingTab != null)
+            {
+                SelectedTab = existingTab;
+                return;
+            }
+
+            var tab = new ModuleTabItem
+            {
+                Header = formName,
+                ModuleId = tabKey,
+                TabType = TabType.Entity
+            };
+
+            await LoadEntityDataAsync(tab, formId);
+
+            OpenTabs.Add(tab);
+            SelectedTab = tab;
+        }
+
+        /// <summary>
+        /// 双击枚举类型列，通过 EnumType 查找 T_META_FORMENUM 的枚举项
+        /// </summary>
+        public async Task OpenEnumDetailTabAsync(FieldInfo field)
+        {
+            if (field == null || !HasLocalData || string.IsNullOrWhiteSpace(field.EnumType)) return;
+
+            string tabKey = $"enum_{field.EnumType}";
+            var existingTab = OpenTabs.FirstOrDefault(t => t.ModuleId == tabKey);
+            if (existingTab != null)
+            {
+                SelectedTab = existingTab;
+                return;
+            }
+
+            var tab = new ModuleTabItem
+            {
+                Header = $"{field.EnumTypeDisplay}",
+                ModuleId = tabKey,
+                TabType = TabType.Enum
+            };
+
+            string sql = "SELECT FVALUE, FCAPTION FROM T_META_FORMENUM WHERE FID = @FID ORDER BY FVALUE";
+            var rows = await Task.Run(() => ExecuteQuery(sql, new[] { new SQLiteParameter("@FID", field.EnumType) }));
+            foreach (var row in rows)
+            {
+                tab.EnumItems.Add(new EnumItemInfo
+                {
+                    FValue = row["FVALUE"]?.ToString() ?? "",
+                    FCaption = row["FCAPTION"]?.ToString() ?? ""
+                });
+            }
+
+            StatusText = $"本地数据 | {tab.Header} - {tab.EnumItems.Count} 条枚举项";
+
+            OpenTabs.Add(tab);
+            SelectedTab = tab;
+        }
+
+        /// <summary>
+        /// 显示当前表单所有实体的所有字段
+        /// </summary>
+        public async Task OpenAllFieldsTabAsync(string formId, string formName)
+        {
+            if (!HasLocalData) return;
+
+            string tabKey = $"allfields_{formId}";
+            var existingTab = OpenTabs.FirstOrDefault(t => t.ModuleId == tabKey);
+            if (existingTab != null)
+            {
+                SelectedTab = existingTab;
+                return;
+            }
+
+            var tab = new ModuleTabItem
+            {
+                Header = $"{formName} - 所有字段",
+                ModuleId = tabKey,
+                TabType = TabType.AllFields
+            };
+
+            await LoadAllFieldsDataAsync(tab, formId);
+
+            OpenTabs.Add(tab);
+            SelectedTab = tab;
+        }
+
+        /// <summary>
+        /// 双击元素类型=单据类型时，通过 FFORMIDENTIFIER 查找 T_BAS_BILLTYPE 中对应的单据类型
+        /// </summary>
+        public async Task OpenBillTypeTabAsync(string formIdentifier)
+        {
+            if (!HasLocalData || string.IsNullOrWhiteSpace(formIdentifier)) return;
+
+            string tabKey = $"billtype_{formIdentifier}";
+            var existingTab = OpenTabs.FirstOrDefault(t => t.ModuleId == tabKey);
+            if (existingTab != null)
+            {
+                SelectedTab = existingTab;
+                return;
+            }
+
+            var tab = new ModuleTabItem
+            {
+                Header = $"单据类型 - {formIdentifier}",
+                ModuleId = tabKey,
+                TabType = TabType.BillType
+            };
+
+            await LoadBillTypeDataAsync(tab, formIdentifier);
+
+            OpenTabs.Add(tab);
+            SelectedTab = tab;
+        }
+
+        /// <summary>
+        /// 通过表单数字ID查找表单标识（FFORMIDENTIFIER）
+        /// </summary>
+        public string GetFormIdentifierByFormId(string formId)
+        {
+            if (!HasLocalData || string.IsNullOrWhiteSpace(formId)) return null;
+            try
+            {
+                var rows = ExecuteQuery("SELECT FFORMIDENTIFIER FROM T_FORM WHERE FID = @FormId", new[] { new SQLiteParameter("@FormId", formId) });
+                if (rows.Count > 0) return rows[0]["FFORMIDENTIFIER"]?.ToString();
+            }
+            catch { }
+            return null;
+        }
+
+        private async Task LoadBillTypeDataAsync(ModuleTabItem tab, string formIdentifier)
+        {
+            if (!HasLocalData) return;
+
+            try
+            {
+                string sql = "SELECT FBILLTYPEID, FBILLFORMID, FNUMBER, FNAME FROM T_BAS_BILLTYPE WHERE FBILLFORMID = @FormIdentifier ORDER BY FNUMBER";
+                var rows = await Task.Run(() => ExecuteQuery(sql, new[] { new SQLiteParameter("@FormIdentifier", formIdentifier) }));
+                foreach (var row in rows)
+                {
+                    tab.BillTypes.Add(new BillTypeInfo
+                    {
+                        BillTypeId = row["FBILLTYPEID"]?.ToString() ?? "",
+                        BillFormId = row["FBILLFORMID"]?.ToString() ?? "",
+                        Number = row["FNUMBER"]?.ToString() ?? "",
+                        Name = row["FNAME"]?.ToString() ?? ""
+                    });
+                }
+
+                StatusText = $"本地数据 | {tab.Header} - {tab.BillTypes.Count} 条单据类型";
+            }
+            catch (Exception ex)
+            {
+                StatusText = $"单据类型查询失败：{ex.Message}";
+            }
+        }
+
+        private async Task LoadAllFieldsDataAsync(ModuleTabItem tab, string formId)
+        {
+            if (!HasLocalData) return;
+
+            try
+            {
+                var (sql, parameters) = BuildAllFieldsQuery(formId);
+                var rows = await Task.Run(() => ExecuteQuery(sql, parameters));
+                foreach (var row in rows)
+                {
+                    tab.AllFields.Add(new AllFieldInfo
+                    {
+                        FormName = row["FDJMC"]?.ToString() ?? "",
+                        EntityName = row["FENTITYNAME"]?.ToString() ?? "",
+                        EntityTableName = row["FTABLENAME"]?.ToString() ?? "",
+                        Key = row["FKey"]?.ToString() ?? "",
+                        Name = row["FName"]?.ToString() ?? "",
+                        FieldName = row["FFieldName"]?.ToString() ?? "",
+                        PropertyName = row["FPropertyName"]?.ToString() ?? "",
+                        ElementTypeName = row["FELEMENTTYPENAME"]?.ToString() ?? "",
+                        LookUpObjectID = row["FLookUpObjectID"]?.ToString() ?? "",
+                        EnumType = row["FEnumType"]?.ToString() ?? "",
+                        LookUpObjectDisplay = row["FLookUpObjectDisplay"]?.ToString() ?? "",
+                        EnumTypeDisplay = row["FEnumTypeDisplay"]?.ToString() ?? "",
+                        Suffix = row["FSUFFIX"]?.ToString() ?? "",
+                        SplitDescription = row["FSPLITDESCRIPTION"]?.ToString() ?? ""
+                    });
+                }
+
+                StatusText = $"本地数据 | {tab.Header} - {tab.AllFields.Count} 条记录";
+            }
+            catch (Exception ex)
+            {
+                StatusText = $"所有字段查询失败：{ex.Message}";
+            }
+        }
+
+        private (string sql, List<SQLiteParameter> parameters) BuildAllFieldsQuery(string formId)
+        {
+            string sql = "SELECT a.FNAME as FDJMC, " +
+                   "       b.FName as FENTITYNAME, " +
+                   "       b.FTableName as FTABLENAME, " +
+                   "       d.FKey as FKey, " +
+                   "       d.FName as FName, " +
+                   "       d.FFieldName as FFieldName, " +
+                   "       d.FPropertyName as FPropertyName, " +
+                   "       e.FNAME as FELEMENTTYPENAME, " +
+                   "       d.FLookUpObjectID as FLookUpObjectID, " +
+                   "       d.FEnumType as FEnumType, " +
+                   "       lk.FFORMID as FLookUpObjectDisplay, " +
+                   "       (SELECT FNAME FROM T_META_FORMENUM WHERE FID = d.FEnumType LIMIT 1) as FEnumTypeDisplay, " +
+                   "       c.FSUFFIX as FSUFFIX, " +
+                   "       c.FDESCRIPTION as FSPLITDESCRIPTION " +
+                   "FROM T_FORM a " +
+                   "INNER JOIN T_ENTITY b ON a.FID = b.FFORMID " +
+                   "INNER JOIN T_FIELD d ON b.FID = d.FENTITYID " +
+                   "LEFT JOIN T_ENTITYSPLIT c ON c.FID = d.FENTITYSPLITID AND c.FFORMID = a.FID " +
+                   "LEFT JOIN T_MDL_ELEMENTTYPE_L e ON e.FID = d.FElementType AND e.FLOCALEID = 2052 " +
+                   "LEFT JOIN T_Meta_LookupClass lk ON lk.FID = d.FLookUpObjectID " +
+                   "WHERE a.FID = @FormId " +
+                   "ORDER BY b.FID, d.FID";
+            var parameters = new List<SQLiteParameter>
+            {
+                new SQLiteParameter("@FormId", formId)
+            };
+            return (sql, parameters);
         }
 
         private void CloseCurrentTab(object parameter)
@@ -576,7 +843,11 @@ namespace K3CloudDataDictionary.ViewModels
                         PropertyName = row["FPropertyName"]?.ToString() ?? "",
                         ElementTypeName = row["FELEMENTTYPENAME"]?.ToString() ?? "",
                         Suffix = row["FSUFFIX"]?.ToString() ?? "",
-                        SplitDescription = row["FSPLITDESCRIPTION"]?.ToString() ?? ""
+                        SplitDescription = row["FSPLITDESCRIPTION"]?.ToString() ?? "",
+                        LookUpObjectID = row["FLookUpObjectID"]?.ToString() ?? "",
+                        EnumType = row["FEnumType"]?.ToString() ?? "",
+                        LookUpObjectDisplay = row["FLookUpObjectDisplay"]?.ToString() ?? "",
+                        EnumTypeDisplay = row["FEnumTypeDisplay"]?.ToString() ?? ""
                     });
                 }
 
@@ -710,12 +981,17 @@ namespace K3CloudDataDictionary.ViewModels
                    "       d.FPropertyName as FPropertyName, " +
                    "       e.FNAME as FELEMENTTYPENAME, " +
                    "       c.FSUFFIX as FSUFFIX, " +
-                   "       c.FDESCRIPTION as FSPLITDESCRIPTION " +
+                   "       c.FDESCRIPTION as FSPLITDESCRIPTION, " +
+                   "       d.FLookUpObjectID as FLookUpObjectID, " +
+                   "       d.FEnumType as FEnumType, " +
+                   "       lk.FFORMID as FLookUpObjectDisplay, " +
+                   "       (SELECT FNAME FROM T_META_FORMENUM WHERE FID = d.FEnumType LIMIT 1) as FEnumTypeDisplay " +
                    "FROM T_FORM a " +
                    "INNER JOIN T_ENTITY b ON a.FID = b.FFORMID " +
                    "INNER JOIN T_FIELD d ON b.FID = d.FENTITYID " +
                    "LEFT JOIN T_ENTITYSPLIT c ON c.FID = d.FENTITYSPLITID AND c.FFORMID = a.FID " +
                    "LEFT JOIN T_MDL_ELEMENTTYPE_L e ON e.FID = d.FElementType AND e.FLOCALEID = 2052 " +
+                   "LEFT JOIN T_Meta_LookupClass lk ON lk.FID = d.FLookUpObjectID " +
                    "WHERE a.FID = @FormId AND b.FID = @EntityId " +
                    "ORDER BY d.FID";
             var parameters = new List<SQLiteParameter>
