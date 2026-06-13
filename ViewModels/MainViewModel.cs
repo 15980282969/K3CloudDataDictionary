@@ -236,7 +236,12 @@ namespace K3CloudDataDictionary.ViewModels
             CurrentConnection = connection;
             IsConnected = true;
 
-            LocalDbPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "data", "metadata.db");
+            // 切换连接时清空旧数据
+            OpenTabs.Clear();
+            SelectedTab = null;
+            ModuleTree.Clear();
+
+            UpdateLocalDbPath();
 
             if (HasLocalData)
             {
@@ -255,6 +260,21 @@ namespace K3CloudDataDictionary.ViewModels
             OpenTabs.Clear();
             StatusText = $"已连接：{CurrentConnection?.DisplayName}（本地数据）";
             await LoadTreeDataAsync();
+        }
+
+        /// <summary>
+        /// 根据当前连接更新本地数据文件路径
+        /// </summary>
+        public void UpdateLocalDbPath()
+        {
+            if (CurrentConnection != null)
+            {
+                LocalDbPath = SQLiteHelper.GetLocalDbPath(CurrentConnection);
+            }
+            else
+            {
+                LocalDbPath = null;
+            }
         }
 
         private List<Dictionary<string, object>> ExecuteQuery(string sql, IEnumerable<SQLiteParameter> parameters = null)
@@ -557,6 +577,61 @@ namespace K3CloudDataDictionary.ViewModels
             {
                 StatusText = $"单据类型查询失败：{ex.Message}";
             }
+        }
+
+        /// <summary>
+        /// 双击单选辅助资料字段，通过 LookUpObjectID 联查 T_BAS_ASSISTANTDATA
+        /// </summary>
+        public async Task OpenAssistantDataTabAsync(string lookUpObjectId, string fieldDisplayName)
+        {
+            if (!HasLocalData || string.IsNullOrWhiteSpace(lookUpObjectId)) return;
+
+            string tabKey = $"assistant_{lookUpObjectId}";
+            var existingTab = OpenTabs.FirstOrDefault(t => t.ModuleId == tabKey);
+            if (existingTab != null)
+            {
+                SelectedTab = existingTab;
+                return;
+            }
+
+            // 先查询辅助资料名称
+            string nameSql = @"SELECT FNAME FROM T_BAS_ASSISTANTDATA WHERE FID = @FID LIMIT 1";
+            var nameRows = await Task.Run(() => ExecuteQuery(nameSql, new[] { new SQLiteParameter("@FID", lookUpObjectId) }));
+            var assistantName = nameRows.Count > 0 ? nameRows[0]["FNAME"]?.ToString() : lookUpObjectId;
+
+            var tab = new ModuleTabItem
+            {
+                Header = !string.IsNullOrEmpty(fieldDisplayName) ? fieldDisplayName : assistantName,
+                ModuleId = tabKey,
+                TabType = TabType.AssistantData
+            };
+
+            try
+            {
+                string sql = @"SELECT FID, FNUMBER, FNAME, FENTRYID, FENTRYNUMBER, FDATAVALUE FROM T_BAS_ASSISTANTDATA WHERE FID = @FID ORDER BY FENTRYNUMBER";
+                var rows = await Task.Run(() => ExecuteQuery(sql, new[] { new SQLiteParameter("@FID", lookUpObjectId) }));
+                foreach (var row in rows)
+                {
+                    tab.AssistantDataItems.Add(new AssistantDataItem
+                    {
+                        FId = row["FID"]?.ToString() ?? "",
+                        FNumber = row["FNUMBER"]?.ToString() ?? "",
+                        FName = row["FNAME"]?.ToString() ?? "",
+                        FEntryId = row["FENTRYID"]?.ToString() ?? "",
+                        FEntryNumber = row["FENTRYNUMBER"]?.ToString() ?? "",
+                        FDataValue = row["FDATAVALUE"]?.ToString() ?? ""
+                    });
+                }
+
+                StatusText = $"本地数据 | {assistantName} - {tab.AssistantDataItems.Count} 条辅助资料项";
+            }
+            catch (Exception ex)
+            {
+                StatusText = $"辅助资料查询失败：{ex.Message}";
+            }
+
+            OpenTabs.Add(tab);
+            SelectedTab = tab;
         }
 
         private async Task LoadAllFieldsDataAsync(ModuleTabItem tab, string formId)

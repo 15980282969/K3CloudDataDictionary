@@ -72,6 +72,7 @@ namespace K3CloudDataDictionary.Views
             ExecuteNonQuery("DROP TABLE IF EXISTS T_META_SUBSYSTEM");
             ExecuteNonQuery("DROP TABLE IF EXISTS T_META_TOPCLASS_L");
             ExecuteNonQuery("DROP TABLE IF EXISTS T_BAS_BILLTYPE");
+            ExecuteNonQuery("DROP TABLE IF EXISTS T_BAS_ASSISTANTDATA");
 
             ExecuteNonQuery(@"CREATE TABLE T_FORM (
                 FID             INTEGER NOT NULL PRIMARY KEY,
@@ -163,6 +164,16 @@ namespace K3CloudDataDictionary.Views
                 FNUMBER       TEXT,
                 FNAME         TEXT)");
             ExecuteNonQuery("CREATE INDEX IDX_T_BAS_BILLTYPE_FORMID ON T_BAS_BILLTYPE(FBILLFORMID)");
+
+            ExecuteNonQuery(@"CREATE TABLE T_BAS_ASSISTANTDATA (
+                FID             TEXT NOT NULL,
+                FNUMBER         TEXT,
+                FNAME           TEXT,
+                FENTRYID        TEXT NOT NULL,
+                FENTRYNUMBER    TEXT,
+                FDATAVALUE      TEXT,
+                PRIMARY KEY (FID, FENTRYID))");
+            ExecuteNonQuery("CREATE INDEX IDX_T_BAS_ASSISTANTDATA_FID ON T_BAS_ASSISTANTDATA(FID)");
         }
 
         public void WriteLookupTables(string sqlServerConnectionString)
@@ -177,6 +188,7 @@ namespace K3CloudDataDictionary.Views
                 WriteFormEnum(sqlConn);
                 WriteLookupClass(sqlConn);
                 WriteBillType(sqlConn);
+                WriteAssistantData(sqlConn);
             }
         }
 
@@ -356,6 +368,35 @@ namespace K3CloudDataDictionary.Views
                         new SQLiteParameter("@FBILLFORMID", fbillformid ?? (object)DBNull.Value),
                         new SQLiteParameter("@FNUMBER", fnumber ?? (object)DBNull.Value),
                         new SQLiteParameter("@FNAME", fname ?? (object)DBNull.Value));
+                }
+            }
+        }
+
+        private void WriteAssistantData(System.Data.SqlClient.SqlConnection sqlConn)
+        {
+            string sql = @"SELECT a.FID, a.FNUMBER, b.FNAME, c.FENTRYID, c.FNUMBER AS FENTRYNUMBER, d.FDATAVALUE
+FROM T_BAS_ASSISTANTDATA a
+INNER JOIN T_BAS_ASSISTANTDATA_L b ON a.FID = b.FID AND b.FLOCALEID = 2052
+INNER JOIN T_BAS_ASSISTANTDATAENTRY c ON a.FID = c.FID
+INNER JOIN T_BAS_ASSISTANTDATAENTRY_L d ON c.FENTRYID = d.FENTRYID AND d.FLOCALEID = 2052";
+            using (var cmd = new System.Data.SqlClient.SqlCommand(sql, sqlConn))
+            using (var reader = cmd.ExecuteReader())
+            {
+                while (reader.Read())
+                {
+                    var fid = reader["FID"]?.ToString() ?? "";
+                    var fnumber = reader["FNUMBER"]?.ToString() ?? "";
+                    var fname = reader["FNAME"]?.ToString() ?? "";
+                    var fentryid = reader["FENTRYID"]?.ToString() ?? "";
+                    var fentrynumber = reader["FENTRYNUMBER"]?.ToString() ?? "";
+                    var fdatavalue = reader["FDATAVALUE"]?.ToString() ?? "";
+                    ExecuteNonQuery("INSERT INTO T_BAS_ASSISTANTDATA (FID, FNUMBER, FNAME, FENTRYID, FENTRYNUMBER, FDATAVALUE) VALUES (@FID, @FNUMBER, @FNAME, @FENTRYID, @FENTRYNUMBER, @FDATAVALUE)",
+                        new SQLiteParameter("@FID", fid ?? (object)DBNull.Value),
+                        new SQLiteParameter("@FNUMBER", fnumber ?? (object)DBNull.Value),
+                        new SQLiteParameter("@FNAME", fname ?? (object)DBNull.Value),
+                        new SQLiteParameter("@FENTRYID", fentryid ?? (object)DBNull.Value),
+                        new SQLiteParameter("@FENTRYNUMBER", fentrynumber ?? (object)DBNull.Value),
+                        new SQLiteParameter("@FDATAVALUE", fdatavalue ?? (object)DBNull.Value));
                 }
             }
         }

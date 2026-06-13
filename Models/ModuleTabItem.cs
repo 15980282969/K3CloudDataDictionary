@@ -4,7 +4,7 @@ using System.Runtime.CompilerServices;
 
 namespace K3CloudDataDictionary.Models
 {
-    public enum TabType { Form, Entity, Field, Enum, AllFields, BillType }
+    public enum TabType { Form, Entity, Field, Enum, AllFields, BillType, AssistantData }
 
     public class ModuleTabItem : INotifyPropertyChanged
     {
@@ -17,6 +17,7 @@ namespace K3CloudDataDictionary.Models
         private ObservableCollection<EnumItemInfo> _enumItems;
         private ObservableCollection<AllFieldInfo> _allFields;
         private ObservableCollection<BillTypeInfo> _billTypes;
+        private ObservableCollection<AssistantDataItem> _assistantDataItems;
 
         public string Header
         {
@@ -72,12 +73,19 @@ namespace K3CloudDataDictionary.Models
             set { _billTypes = value; OnPropertyChanged(); }
         }
 
+        public ObservableCollection<AssistantDataItem> AssistantDataItems
+        {
+            get => _assistantDataItems;
+            set { _assistantDataItems = value; OnPropertyChanged(); }
+        }
+
         public bool IsFormTab => TabType == TabType.Form;
         public bool IsEntityTab => TabType == TabType.Entity;
         public bool IsFieldTab => TabType == TabType.Field;
         public bool IsEnumTab => TabType == TabType.Enum;
         public bool IsAllFieldsTab => TabType == TabType.AllFields;
         public bool IsBillTypeTab => TabType == TabType.BillType;
+        public bool IsAssistantDataTab => TabType == TabType.AssistantData;
 
         private bool _isSelected;
         public bool IsSelected
@@ -101,6 +109,7 @@ namespace K3CloudDataDictionary.Models
             EnumItems = new ObservableCollection<EnumItemInfo>();
             AllFields = new ObservableCollection<AllFieldInfo>();
             BillTypes = new ObservableCollection<BillTypeInfo>();
+            AssistantDataItems = new ObservableCollection<AssistantDataItem>();
             TabType = TabType.Form;
         }
 

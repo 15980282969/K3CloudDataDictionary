@@ -758,13 +758,105 @@
             </Border>
         </DataTemplate>
 
+        <DataTemplate x:Key="AssistantDataTabTemplate" DataType="{x:Type model:ModuleTabItem}">
+            <Border Background="White" Padding="0">
+                <DockPanel>
+                    <Border DockPanel.Dock="Top" Background="#FFFFFF" Padding="14,6" BorderBrush="#E2E8F0" BorderThickness="0,0,0,1">
+                        <StackPanel Orientation="Horizontal">
+                            <Border Width="22" Height="22" Background="#DBEAFE" CornerRadius="5" Margin="0,0,10,0" VerticalAlignment="Center">
+                                <Path Data="M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M16.2,16.2L11,13V7H12.5V12.2L17,14.9L16.2,16.2Z"
+                                      Width="12" Height="12" Stretch="Uniform" Fill="#2563EB"
+                                      HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            </Border>
+                            <TextBlock Text="{Binding Header}"
+                                       FontWeight="SemiBold" FontSize="14"
+                                       Foreground="#2D5F8A"
+                                       VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Border>
+                    <DataGrid ItemsSource="{Binding AssistantDataItems}"
+                              Style="{StaticResource AppDataGridStyle}"
+                              RowHeaderStyle="{StaticResource AppDataGridRowHeaderStyle}"
+                              SelectionUnit="Cell"
+                              LoadingRow="DataGrid_LoadingRow"
+                              PreviewMouseRightButtonDown="DataGrid_PreviewMouseRightButtonDown"
+                              CanUserSortColumns="True"
+                              Sorting="DataGrid_Sorting">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="辅助资料ID" Binding="{Binding FId}" Width="Auto" MinWidth="80">
+                                <DataGridTextColumn.HeaderTemplate>
+                                    <DataTemplate>
+                                        <DockPanel>
+                                            <TextBlock DockPanel.Dock="Top" Text="{Binding}" />
+                                            <TextBox Tag="FId" TextChanged="FilterTextBox_TextChanged" FontSize="13" FontWeight="Normal" Padding="3,1" Margin="0,2,0,0" hc:InfoElement.Placeholder="过滤" />
+                                        </DockPanel>
+                                    </DataTemplate>
+                                </DataGridTextColumn.HeaderTemplate>
+                            </DataGridTextColumn>
+                            <DataGridTextColumn Header="编号" Binding="{Binding FNumber}" Width="Auto" MinWidth="80">
+                                <DataGridTextColumn.HeaderTemplate>
+                                    <DataTemplate>
+                                        <DockPanel>
+                                            <TextBlock DockPanel.Dock="Top" Text="{Binding}" />
+                                            <TextBox Tag="FNumber" TextChanged="FilterTextBox_TextChanged" FontSize="13" FontWeight="Normal" Padding="3,1" Margin="0,2,0,0" hc:InfoElement.Placeholder="过滤" />
+                                        </DockPanel>
+                                    </DataTemplate>
+                                </DataGridTextColumn.HeaderTemplate>
+                            </DataGridTextColumn>
+                            <DataGridTextColumn Header="名称" Binding="{Binding FName}" Width="Auto" MinWidth="100">
+                                <DataGridTextColumn.HeaderTemplate>
+                                    <DataTemplate>
+                                        <DockPanel>
+                                            <TextBlock DockPanel.Dock="Top" Text="{Binding}" />
+                                            <TextBox Tag="FName" TextChanged="FilterTextBox_TextChanged" FontSize="13" FontWeight="Normal" Padding="3,1" Margin="0,2,0,0" hc:InfoElement.Placeholder="过滤" />
+                                        </DockPanel>
+                                    </DataTemplate>
+                                </DataGridTextColumn.HeaderTemplate>
+                            </DataGridTextColumn>
+                            <DataGridTextColumn Header="明细ID" Binding="{Binding FEntryId}" Width="Auto" MinWidth="80">
+                                <DataGridTextColumn.HeaderTemplate>
+                                    <DataTemplate>
+                                        <DockPanel>
+                                            <TextBlock DockPanel.Dock="Top" Text="{Binding}" />
+                                            <TextBox Tag="FEntryId" TextChanged="FilterTextBox_TextChanged" FontSize="13" FontWeight="Normal" Padding="3,1" Margin="0,2,0,0" hc:InfoElement.Placeholder="过滤" />
+                                        </DockPanel>
+                                    </DataTemplate>
+                                </DataGridTextColumn.HeaderTemplate>
+                            </DataGridTextColumn>
+                            <DataGridTextColumn Header="明细编号" Binding="{Binding FEntryNumber}" Width="Auto" MinWidth="80">
+                                <DataGridTextColumn.HeaderTemplate>
+                                    <DataTemplate>
+                                        <DockPanel>
+                                            <TextBlock DockPanel.Dock="Top" Text="{Binding}" />
+                                            <TextBox Tag="FEntryNumber" TextChanged="FilterTextBox_TextChanged" FontSize="13" FontWeight="Normal" Padding="3,1" Margin="0,2,0,0" hc:InfoElement.Placeholder="过滤" />
+                                        </DockPanel>
+                                    </DataTemplate>
+                                </DataGridTextColumn.HeaderTemplate>
+                            </DataGridTextColumn>
+                            <DataGridTextColumn Header="明细值" Binding="{Binding FDataValue}" Width="*" MinWidth="100">
+                                <DataGridTextColumn.HeaderTemplate>
+                                    <DataTemplate>
+                                        <DockPanel>
+                                            <TextBlock DockPanel.Dock="Top" Text="{Binding}" />
+                                            <TextBox Tag="FDataValue" TextChanged="FilterTextBox_TextChanged" FontSize="13" FontWeight="Normal" Padding="3,1" Margin="0,2,0,0" hc:InfoElement.Placeholder="过滤" />
+                                        </DockPanel>
+                                    </DataTemplate>
+                                </DataGridTextColumn.HeaderTemplate>
+                            </DataGridTextColumn>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </DockPanel>
+            </Border>
+        </DataTemplate>
+
         <local:TabContentTemplateSelector x:Key="TabContentSelector"
                                           FormTemplate="{StaticResource FormTabTemplate}"
                                           EntityTemplate="{StaticResource EntityTabTemplate}"
                                           FieldTemplate="{StaticResource FieldTabTemplate}"
                                           EnumTemplate="{StaticResource EnumTabTemplate}"
                                           AllFieldsTemplate="{StaticResource AllFieldsTabTemplate}"
-                                          BillTypeTemplate="{StaticResource BillTypeTabTemplate}" />
+                                          BillTypeTemplate="{StaticResource BillTypeTabTemplate}"
+                                          AssistantDataTemplate="{StaticResource AssistantDataTabTemplate}" />
 
         <ContextMenu x:Key="TabItemContextMenu">
             <ContextMenu.Template>

@@ -13,6 +13,7 @@ namespace K3CloudDataDictionary.Models
         private string _password;
         private string _database;
         private bool _isDefault;
+        private string _localDbFileName;
 
         public int Id
         {
@@ -62,6 +63,38 @@ namespace K3CloudDataDictionary.Models
             set { _isDefault = value; OnPropertyChanged(); }
         }
 
+        public string LocalDbFileName
+        {
+            get => _localDbFileName;
+            set { _localDbFileName = value; OnPropertyChanged(); }
+        }
+
+        /// <summary>
+        /// 是否为当前正在使用的连接（仅用于 UI 显示，不持久化）
+        /// </summary>
+        public bool IsCurrent
+        {
+            get => _isCurrent;
+            set { _isCurrent = value; OnPropertyChanged(); }
+        }
+
+        private bool _isCurrent;
+
+        /// <summary>
+        /// 实际使用的本地数据文件名：优先使用 LocalDbFileName，否则用数据库名生成
+        /// </summary>
+        public string EffectiveLocalDbFileName
+        {
+            get
+            {
+                if (!string.IsNullOrWhiteSpace(_localDbFileName))
+                    return _localDbFileName;
+                if (!string.IsNullOrWhiteSpace(_database))
+                    return $"{_database}.db";
+                return "metadata.db";
+            }
+        }
+
         public string ConnectionString
         {
             get
@@ -74,8 +107,12 @@ namespace K3CloudDataDictionary.Models
         {
             get
             {
+                if (!string.IsNullOrWhiteSpace(Name) && !string.IsNullOrWhiteSpace(Database))
+                    return $"{Name} ({Database})";
                 if (!string.IsNullOrWhiteSpace(Name))
                     return Name;
+                if (!string.IsNullOrWhiteSpace(Database))
+                    return $"{ServerIp},{Port} ({Database})";
                 return $"{ServerIp},{Port}";
             }
         }
@@ -91,7 +128,8 @@ namespace K3CloudDataDictionary.Models
                 UserName = this.UserName,
                 Password = this.Password,
                 Database = this.Database,
-                IsDefault = this.IsDefault
+                IsDefault = this.IsDefault,
+                LocalDbFileName = this.LocalDbFileName
             };
         }
 

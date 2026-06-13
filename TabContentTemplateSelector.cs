@@ -12,6 +12,7 @@ namespace K3CloudDataDictionary
         public DataTemplate EnumTemplate { get; set; }
         public DataTemplate AllFieldsTemplate { get; set; }
         public DataTemplate BillTypeTemplate { get; set; }
+        public DataTemplate AssistantDataTemplate { get; set; }
 
         public override DataTemplate SelectTemplate(object item, DependencyObject container)
         {
@@ -25,6 +26,7 @@ namespace K3CloudDataDictionary
                     case TabType.Enum: return EnumTemplate;
                     case TabType.AllFields: return AllFieldsTemplate;
                     case TabType.BillType: return BillTypeTemplate;
+                    case TabType.AssistantData: return AssistantDataTemplate;
                 }
             }
             return null;
