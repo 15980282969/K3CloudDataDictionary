@@ -13,6 +13,8 @@ namespace K3CloudDataDictionary
         public DataTemplate AllFieldsTemplate { get; set; }
         public DataTemplate BillTypeTemplate { get; set; }
         public DataTemplate AssistantDataTemplate { get; set; }
+        public DataTemplate EntityServiceRuleTemplate { get; set; }
+        public DataTemplate EntityServiceRuleDetailTemplate { get; set; }
 
         public override DataTemplate SelectTemplate(object item, DependencyObject container)
         {
@@ -27,6 +29,8 @@ namespace K3CloudDataDictionary
                     case TabType.AllFields: return AllFieldsTemplate;
                     case TabType.BillType: return BillTypeTemplate;
                     case TabType.AssistantData: return AssistantDataTemplate;
+                    case TabType.EntityServiceRule: return EntityServiceRuleTemplate;
+                    case TabType.EntityServiceRuleDetail: return EntityServiceRuleDetailTemplate;
                 }
             }
             return null;

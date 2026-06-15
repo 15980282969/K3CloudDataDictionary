@@ -4,7 +4,7 @@ using System.Runtime.CompilerServices;
 
 namespace K3CloudDataDictionary.Models
 {
-    public enum TabType { Form, Entity, Field, Enum, AllFields, BillType, AssistantData }
+    public enum TabType { Form, Entity, Field, Enum, AllFields, BillType, AssistantData, EntityServiceRule, EntityServiceRuleDetail }
 
     public class ModuleTabItem : INotifyPropertyChanged
     {
@@ -18,6 +18,8 @@ namespace K3CloudDataDictionary.Models
         private ObservableCollection<AllFieldInfo> _allFields;
         private ObservableCollection<BillTypeInfo> _billTypes;
         private ObservableCollection<AssistantDataItem> _assistantDataItems;
+        private ObservableCollection<EntityServiceRuleDisplayItem> _entityServiceRules;
+        private ObservableCollection<FormBusinessServiceDisplayItem> _allBusinessServices;
 
         public string Header
         {
@@ -79,6 +81,18 @@ namespace K3CloudDataDictionary.Models
             set { _assistantDataItems = value; OnPropertyChanged(); }
         }
 
+        public ObservableCollection<EntityServiceRuleDisplayItem> EntityServiceRules
+        {
+            get => _entityServiceRules;
+            set { _entityServiceRules = value; OnPropertyChanged(); }
+        }
+
+        public ObservableCollection<FormBusinessServiceDisplayItem> AllBusinessServices
+        {
+            get => _allBusinessServices;
+            set { _allBusinessServices = value; OnPropertyChanged(); }
+        }
+
         public bool IsFormTab => TabType == TabType.Form;
         public bool IsEntityTab => TabType == TabType.Entity;
         public bool IsFieldTab => TabType == TabType.Field;
@@ -86,6 +100,8 @@ namespace K3CloudDataDictionary.Models
         public bool IsAllFieldsTab => TabType == TabType.AllFields;
         public bool IsBillTypeTab => TabType == TabType.BillType;
         public bool IsAssistantDataTab => TabType == TabType.AssistantData;
+        public bool IsEntityServiceRuleTab => TabType == TabType.EntityServiceRule;
+        public bool IsEntityServiceRuleDetailTab => TabType == TabType.EntityServiceRuleDetail;
 
         private bool _isSelected;
         public bool IsSelected
@@ -110,6 +126,8 @@ namespace K3CloudDataDictionary.Models
             AllFields = new ObservableCollection<AllFieldInfo>();
             BillTypes = new ObservableCollection<BillTypeInfo>();
             AssistantDataItems = new ObservableCollection<AssistantDataItem>();
+            EntityServiceRules = new ObservableCollection<EntityServiceRuleDisplayItem>();
+            AllBusinessServices = new ObservableCollection<FormBusinessServiceDisplayItem>();
             TabType = TabType.Form;
         }
 

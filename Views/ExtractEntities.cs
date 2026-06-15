@@ -17,6 +17,7 @@ namespace K3CloudDataDictionary.Views
         public string KeyField { get; set; } = "";
         public string TagName { get; set; } = "";
         public string Action { get; set; } = "";
+        public List<EntityServiceRuleInfo> ServiceRules { get; set; } = new List<EntityServiceRuleInfo>();
 
         public override string ToString()
         {
@@ -37,7 +38,8 @@ namespace K3CloudDataDictionary.Views
                 Key = Key,
                 KeyField = KeyField,
                 TagName = TagName,
-                Action = Action
+                Action = Action,
+                ServiceRules = ServiceRules.Select(r => r.Clone()).ToList()
             };
         }
     }
@@ -61,7 +63,7 @@ namespace K3CloudDataDictionary.Views
             var withoutOid = new List<EntityInfo>();
 
             var entityElements = doc.Descendants()
-                .Where(e => e.Name.LocalName.EndsWith("Entity") && e.Name.LocalName != "LinkEntity" && e.Name.LocalName != "EntityServiceRule" && e.Parent?.Name.LocalName != "LinkEntitys");
+                .Where(e => e.Name.LocalName.EndsWith("Entity") && e.Name.LocalName != "LinkEntity" && e.Parent?.Name.LocalName != "LinkEntitys" && e.Parent?.Name.LocalName != "EntityServiceRules");
 
             foreach (var element in entityElements)
             {
@@ -80,6 +82,49 @@ namespace K3CloudDataDictionary.Views
                     KeyField = element.Element("KeyField")?.Value ?? ""
                 };
 
+                // 提取该 Entity 下的 EntityServiceRules
+                var serviceRulesElement = element.Element("EntityServiceRules");
+                if (serviceRulesElement != null)
+                {
+                    foreach (var ruleElement in serviceRulesElement.Elements("EntityServiceRule"))
+                    {
+                        var rule = new EntityServiceRuleInfo
+                        {
+                            Oid = ruleElement.Attribute("oid")?.Value ?? "",
+                            Action = ruleElement.Attribute("action")?.Value ?? "",
+                            Id = ruleElement.Element("Id")?.Value ?? "",
+                            Description = ruleElement.Element("Description")?.Value ?? "",
+                            IsEnabled = ruleElement.Element("IsEnabled")?.Value ?? "",
+                            PreCondition = ruleElement.Element("PreCondition")?.Value ?? "",
+                            PreConditionDesc = ruleElement.Element("PreConditionDesc")?.Value ?? "",
+                            Seq = ruleElement.Element("Seq")?.Value ?? "",
+                            EntityKey = info.Key
+                        };
+
+                        // 提取 WhenTrueBusinessServices（包含所有类型的服务元素）
+                        var whenTrue = ruleElement.Element("WhenTrueBusinessServices");
+                        if (whenTrue != null)
+                        {
+                            foreach (var svc in whenTrue.Elements())
+                            {
+                                rule.WhenTrueServices.Add(ParseBusinessService(svc, rule.Id, "WhenTrue"));
+                            }
+                        }
+
+                        // 提取 WhenFalseBusinessServices（包含所有类型的服务元素）
+                        var whenFalse = ruleElement.Element("WhenFalseBusinessServices");
+                        if (whenFalse != null)
+                        {
+                            foreach (var svc in whenFalse.Elements())
+                            {
+                                rule.WhenFalseServices.Add(ParseBusinessService(svc, rule.Id, "WhenFalse"));
+                            }
+                        }
+
+                        info.ServiceRules.Add(rule);
+                    }
+                }
+
                 if (!string.IsNullOrEmpty(info.Oid))
                 {
                     withOid.Add(info);
@@ -91,6 +136,22 @@ namespace K3CloudDataDictionary.Views
             }
 
             return (withOid, withoutOid);
+        }
+
+        private static FormBusinessServiceInfo ParseBusinessService(XElement svcElement, string parentRuleId, string serviceType)
+        {
+            return new FormBusinessServiceInfo
+            {
+                Oid = svcElement.Attribute("oid")?.Value ?? "",
+                Action = svcElement.Attribute("action")?.Value ?? "",
+                Id = svcElement.Element("Id")?.Value ?? "",
+                ActionId = svcElement.Element("ActionId")?.Value ?? "",
+                Description = svcElement.Element("Description")?.Value ?? "",
+                Parameters = svcElement.Element("Parameters")?.Value ?? "",
+                ParentRuleId = parentRuleId,
+                ServiceType = serviceType,
+                ServiceTypeName = svcElement.Name.LocalName
+            };
         }
     }
 }

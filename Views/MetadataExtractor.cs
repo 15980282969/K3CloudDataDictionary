@@ -352,11 +352,6 @@ namespace K3CloudDataDictionary.Views
         /// <summary>
         /// 将合并字典构建为MetadataResult，按oid有无分组
         /// </summary>
-        /// <param name="fid">对象FID</param>
-        /// <param name="entityDict">合并后的实体字典</param>
-        /// <param name="fieldDict">合并后的字段字典</param>
-        /// <param name="splits">合并后的拆分表列表</param>
-        /// <returns>构建完成的MetadataResult</returns>
         private static MetadataResult BuildResult(string fid, Dictionary<string, EntityInfo> entityDict, Dictionary<string, MetadataFieldInfo> fieldDict, List<SplitTableInfo> splits)
         {
             var result = new MetadataResult { Fid = fid };
@@ -495,11 +490,8 @@ namespace K3CloudDataDictionary.Views
         }
 
         /// <summary>
-        /// 合并两个实体信息：以父级为基础，子级非空属性覆盖父级对应属性
+        /// 合并两个实体信息：以父级为基础，子级非空属性覆盖父级对应属性，同时合并 ServiceRules
         /// </summary>
-        /// <param name="parent">父级实体信息</param>
-        /// <param name="child">子级实体信息</param>
-        /// <returns>合并后的EntityInfo</returns>
         private static EntityInfo MergeEntityInfo(EntityInfo parent, EntityInfo child)
         {
             var merged = parent.Clone();
@@ -516,7 +508,112 @@ namespace K3CloudDataDictionary.Views
             if (!string.IsNullOrEmpty(child.KeyField)) merged.KeyField = child.KeyField;
             if (!string.IsNullOrEmpty(child.TagName)) merged.TagName = child.TagName;
 
+            // 合并 ServiceRules
+            if (child.ServiceRules.Count > 0)
+            {
+                MergeServiceRules(merged.ServiceRules, child.ServiceRules);
+            }
+
             return merged;
+        }
+
+        /// <summary>
+        /// 合并实体服务规则，按继承键匹配（oid 优先，否则用 Id）：
+        /// 扩展 XML 中 EntityServiceRule 的 oid 属性 = 系统 XML 中 EntityServiceRule 的 Id 元素
+        /// action=remove则删除，已存在则覆盖，不存在则新增
+        /// 合并时对 WhenTrue/WhenFalse 中的 FormBusinessService 也按 oid 粒度合并
+        /// </summary>
+        private static void MergeServiceRules(List<EntityServiceRuleInfo> existingRules, List<EntityServiceRuleInfo> newRules)
+        {
+            foreach (var rule in newRules)
+            {
+                string ruleKey = GetRuleKey(rule);
+
+                if (rule.Action == "remove")
+                {
+                    existingRules.RemoveAll(r => GetRuleKey(r) == ruleKey);
+                    continue;
+                }
+
+                var existing = existingRules.FirstOrDefault(r => GetRuleKey(r) == ruleKey);
+                if (existing != null)
+                {
+                    if (!string.IsNullOrEmpty(rule.Id)) existing.Id = rule.Id;
+                    if (!string.IsNullOrEmpty(rule.Description)) existing.Description = rule.Description;
+                    if (!string.IsNullOrEmpty(rule.IsEnabled)) existing.IsEnabled = rule.IsEnabled;
+                    if (!string.IsNullOrEmpty(rule.PreCondition)) existing.PreCondition = rule.PreCondition;
+                    if (!string.IsNullOrEmpty(rule.PreConditionDesc)) existing.PreConditionDesc = rule.PreConditionDesc;
+                    if (!string.IsNullOrEmpty(rule.Seq)) existing.Seq = rule.Seq;
+                    if (!string.IsNullOrEmpty(rule.EntityKey)) existing.EntityKey = rule.EntityKey;
+
+                    // 按 oid 粒度合并 WhenTrueServices
+                    MergeBusinessServices(existing.WhenTrueServices, rule.WhenTrueServices);
+                    // 按 oid 粒度合并 WhenFalseServices
+                    MergeBusinessServices(existing.WhenFalseServices, rule.WhenFalseServices);
+                }
+                else
+                {
+                    existingRules.Add(rule.Clone());
+                }
+            }
+        }
+
+        /// <summary>
+        /// 获取规则的继承匹配键：oid 优先（扩展），否则用 Id（基础）
+        /// </summary>
+        private static string GetRuleKey(EntityServiceRuleInfo rule)
+        {
+            return !string.IsNullOrEmpty(rule.Oid) ? rule.Oid : rule.Id;
+        }
+
+        /// <summary>
+        /// 获取服务的继承匹配键：oid 优先（扩展），否则用 Id（基础）
+        /// </summary>
+        private static string GetServiceKey(FormBusinessServiceInfo svc)
+        {
+            return !string.IsNullOrEmpty(svc.Oid) ? svc.Oid : svc.Id;
+        }
+
+        /// <summary>
+        /// 合并 FormBusinessService 列表：
+        /// - 有继承键且 action=remove：从已有列表中删除
+        /// - 有继承键且已存在：覆盖非空属性
+        /// - 有继承键且不存在：新增
+        /// - 无继承键：追加到列表
+        /// </summary>
+        private static void MergeBusinessServices(List<FormBusinessServiceInfo> existingServices, List<FormBusinessServiceInfo> newServices)
+        {
+            foreach (var svc in newServices)
+            {
+                string svcKey = GetServiceKey(svc);
+
+                if (!string.IsNullOrEmpty(svcKey))
+                {
+                    if (svc.Action == "remove")
+                    {
+                        existingServices.RemoveAll(s => GetServiceKey(s) == svcKey);
+                        continue;
+                    }
+
+                    var existingSvc = existingServices.FirstOrDefault(s => GetServiceKey(s) == svcKey);
+                    if (existingSvc != null)
+                    {
+                        if (!string.IsNullOrEmpty(svc.Id)) existingSvc.Id = svc.Id;
+                        if (!string.IsNullOrEmpty(svc.ActionId)) existingSvc.ActionId = svc.ActionId;
+                        if (!string.IsNullOrEmpty(svc.Description)) existingSvc.Description = svc.Description;
+                        if (!string.IsNullOrEmpty(svc.Parameters)) existingSvc.Parameters = svc.Parameters;
+                    }
+                    else
+                    {
+                        existingServices.Add(svc.Clone());
+                    }
+                }
+                else
+                {
+                    // 无 oid 也无 Id 的 FormBusinessService 直接追加
+                    existingServices.Add(svc.Clone());
+                }
+            }
         }
 
         /// <summary>

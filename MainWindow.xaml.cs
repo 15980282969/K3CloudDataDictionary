@@ -693,6 +693,50 @@ namespace K3CloudDataDictionary
             }
         }
 
+        private async void ShowServiceRules_Click(object sender, RoutedEventArgs e)
+        {
+            var btn = sender as FrameworkElement;
+            if (btn == null) return;
+
+            // 向上查找 DataContext 为 ModuleTabItem 的元素
+            var dep = btn as DependencyObject;
+            while (dep != null && !(dep is FrameworkElement fe && fe.DataContext is ModuleTabItem))
+                dep = VisualTreeHelper.GetParent(dep);
+
+            if (dep is FrameworkElement element && element.DataContext is ModuleTabItem tab)
+            {
+                // 从 FormEntities 中获取 FormId
+                if (tab.FormEntities.Count > 0)
+                {
+                    var firstEntity = tab.FormEntities[0];
+                    var vm = DataContext as MainViewModel;
+                    if (vm != null)
+                    {
+                        await vm.OpenEntityServiceRuleTabAsync(firstEntity.FormId, firstEntity.FormName);
+                    }
+                }
+            }
+        }
+
+        private async void EntityServiceRuleDataGrid_MouseDoubleClick(object sender, MouseButtonEventArgs e)
+        {
+            if (sender is DataGrid grid)
+            {
+                var hit = VisualTreeHelper.HitTest(grid, e.GetPosition(grid))?.VisualHit;
+                while (hit != null && !(hit is DataGridRow))
+                    hit = VisualTreeHelper.GetParent(hit);
+
+                if (hit is DataGridRow row && row.Item is EntityServiceRuleDisplayItem rule)
+                {
+                    var vm = DataContext as MainViewModel;
+                    if (vm != null && rule.DbId > 0)
+                    {
+                        await vm.OpenEntityServiceRuleDetailAsync(rule.DbId, rule.Description);
+                    }
+                }
+            }
+        }
+
         private void TabItemClose_Click(object sender, RoutedEventArgs e)
         {
             if (sender is FrameworkElement fe && fe.Tag is ModuleTabItem tab)

@@ -156,6 +156,12 @@ namespace K3CloudDataDictionary.ViewModels
                 case TabType.BillType:
                     StatusText = $"本地数据 | {tab.Header} - {tab.BillTypes.Count} 条单据类型";
                     break;
+                case TabType.EntityServiceRule:
+                    StatusText = $"本地数据 | {tab.Header} - {tab.EntityServiceRules.Count} 条服务规则";
+                    break;
+                case TabType.EntityServiceRuleDetail:
+                    StatusText = $"本地数据 | {tab.Header} - {tab.AllBusinessServices.Count} 条服务";
+                    break;
             }
         }
 
@@ -628,6 +634,122 @@ namespace K3CloudDataDictionary.ViewModels
             catch (Exception ex)
             {
                 StatusText = $"辅助资料查询失败：{ex.Message}";
+            }
+
+            OpenTabs.Add(tab);
+            SelectedTab = tab;
+        }
+
+        /// <summary>
+        /// 双击实体行，查看该实体下的 EntityServiceRule
+        /// </summary>
+        public async Task OpenEntityServiceRuleTabAsync(string formId, string formName)
+        {
+            if (!HasLocalData) return;
+
+            string tabKey = $"servicerule_{formId}";
+            var existingTab = OpenTabs.FirstOrDefault(t => t.ModuleId == tabKey);
+            if (existingTab != null)
+            {
+                SelectedTab = existingTab;
+                return;
+            }
+
+            var tab = new ModuleTabItem
+            {
+                Header = $"{formName} - 服务规则",
+                ModuleId = tabKey,
+                TabType = TabType.EntityServiceRule
+            };
+
+            try
+            {
+                string sql = @"SELECT r.FID, r.FOID, r.FRULEID, r.FDESCRIPTION, r.FISENABLED, r.FPRECONDITION, r.FPRECONDITIONDESC, r.FSEQ, r.FENTITYKEY,
+       e.FNAME AS FENTITYNAME,
+       (SELECT GROUP_CONCAT(f.FDESCRIPTION || '(' || f.FACTIONID || ')', '; ') FROM T_FORMBUSINESSSERVICE f WHERE f.FRULEID = r.FID AND f.FSERVICETYPE = 'WhenTrue') AS FWHENTRUE,
+       (SELECT GROUP_CONCAT(f.FDESCRIPTION || '(' || f.FACTIONID || ')', '; ') FROM T_FORMBUSINESSSERVICE f WHERE f.FRULEID = r.FID AND f.FSERVICETYPE = 'WhenFalse') AS FWHENFALSE
+FROM T_ENTITYSERVICERULE r
+LEFT JOIN T_ENTITY e ON r.FENTITYID = e.FID
+WHERE r.FFORMID = @FormId
+ORDER BY r.FSEQ";
+                var rows = await Task.Run(() => ExecuteQuery(sql, new[] { new SQLiteParameter("@FormId", formId) }));
+                foreach (var row in rows)
+                {
+                    tab.EntityServiceRules.Add(new EntityServiceRuleDisplayItem
+                    {
+                        DbId = row["FID"] != null && int.TryParse(row["FID"].ToString(), out var dbId) ? dbId : 0,
+                        Oid = row["FOID"]?.ToString() ?? "",
+                        RuleId = row["FRULEID"]?.ToString() ?? "",
+                        Description = row["FDESCRIPTION"]?.ToString() ?? "",
+                        IsEnabled = row["FISENABLED"]?.ToString() ?? "",
+                        PreCondition = row["FPRECONDITION"]?.ToString() ?? "",
+                        PreConditionDesc = row["FPRECONDITIONDESC"]?.ToString() ?? "",
+                        Seq = row["FSEQ"]?.ToString() ?? "",
+                        EntityKey = row["FENTITYKEY"]?.ToString() ?? "",
+                        EntityName = row["FENTITYNAME"]?.ToString() ?? "",
+                        WhenTrueServices = row["FWHENTRUE"]?.ToString() ?? "",
+                        WhenFalseServices = row["FWHENFALSE"]?.ToString() ?? ""
+                    });
+                }
+
+                StatusText = $"本地数据 | {tab.Header} - {tab.EntityServiceRules.Count} 条服务规则";
+            }
+            catch (Exception ex)
+            {
+                StatusText = $"服务规则查询失败：{ex.Message}";
+            }
+
+            OpenTabs.Add(tab);
+            SelectedTab = tab;
+        }
+
+        /// <summary>
+        /// 双击服务规则行，查看该规则的 WhenTrue/WhenFalse 服务详情
+        /// </summary>
+        public async Task OpenEntityServiceRuleDetailAsync(int dbId, string ruleDescription)
+        {
+            if (!HasLocalData) return;
+
+            string tabKey = $"serviceruledetail_{dbId}";
+            var existingTab = OpenTabs.FirstOrDefault(t => t.ModuleId == tabKey);
+            if (existingTab != null)
+            {
+                SelectedTab = existingTab;
+                return;
+            }
+
+            var tab = new ModuleTabItem
+            {
+                Header = ruleDescription,
+                ModuleId = tabKey,
+                TabType = TabType.EntityServiceRuleDetail
+            };
+
+            try
+            {
+                // 查询所有服务，按条件分支排序（WhenTrue 在前）
+                string sql = @"SELECT s.FACTIONID, s.FDESCRIPTION, s.FPARAMETERS, s.FSERVICETYPE
+FROM T_FORMBUSINESSSERVICE s
+WHERE s.FRULEID = @DbId
+ORDER BY s.FSERVICETYPE, s.FID";
+                var rows = await Task.Run(() => ExecuteQuery(sql, new[] { new SQLiteParameter("@DbId", dbId) }));
+                foreach (var row in rows)
+                {
+                    var serviceType = row["FSERVICETYPE"]?.ToString() ?? "";
+                    tab.AllBusinessServices.Add(new FormBusinessServiceDisplayItem
+                    {
+                        ServiceType = serviceType == "WhenTrue" ? "条件为真" : "条件为假",
+                        ActionId = row["FACTIONID"]?.ToString() ?? "",
+                        Description = row["FDESCRIPTION"]?.ToString() ?? "",
+                        Parameters = row["FPARAMETERS"]?.ToString() ?? ""
+                    });
+                }
+
+                StatusText = $"本地数据 | {tab.Header} - {tab.AllBusinessServices.Count} 条服务";
+            }
+            catch (Exception ex)
+            {
+                StatusText = $"服务规则详情查询失败：{ex.Message}";
             }
 
             OpenTabs.Add(tab);
