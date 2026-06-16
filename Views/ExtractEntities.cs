@@ -138,6 +138,43 @@ namespace K3CloudDataDictionary.Views
             return (withOid, withoutOid);
         }
 
+        /// <summary>
+        /// 从XML中提取三类插件：FormPlugins、ListPlugins、WebFormBuilderPlugins
+        /// </summary>
+        public static List<PluginInfo> ExtractPlugins(string xmlContent)
+        {
+            var result = new List<PluginInfo>();
+            if (string.IsNullOrEmpty(xmlContent)) return result;
+
+            XDocument doc = XDocument.Parse(xmlContent);
+
+            string[] pluginContainers = { "FormPlugins", "ListPlugins", "WebFormBuilderPlugins" };
+
+            foreach (var containerName in pluginContainers)
+            {
+                var containers = doc.Descendants(containerName);
+                foreach (var container in containers)
+                {
+                    foreach (var pluginElement in container.Elements("PlugIn"))
+                    {
+                        var plugin = new PluginInfo
+                        {
+                            Oid = pluginElement.Attribute("oid")?.Value ?? "",
+                            Action = pluginElement.Attribute("action")?.Value ?? "",
+                            ClassName = pluginElement.Element("ClassName")?.Value ?? "",
+                            OrderId = pluginElement.Element("OrderId")?.Value ?? "",
+                            PluginType = containerName,
+                            ElementType = pluginElement.Attribute("ElementType")?.Value ?? "",
+                            ElementStyle = pluginElement.Attribute("ElementStyle")?.Value ?? ""
+                        };
+                        result.Add(plugin);
+                    }
+                }
+            }
+
+            return result;
+        }
+
         private static FormBusinessServiceInfo ParseBusinessService(XElement svcElement, string parentRuleId, string serviceType)
         {
             return new FormBusinessServiceInfo

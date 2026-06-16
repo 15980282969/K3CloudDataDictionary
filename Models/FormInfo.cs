@@ -10,6 +10,9 @@ namespace K3CloudDataDictionary.Models
         private string _formName;
         private string _modelTypeName;
         private string _subSystemName;
+        private int _formPluginCount;
+        private int _listPluginCount;
+        private int _builderPluginCount;
 
         public string FormId
         {
@@ -39,6 +42,24 @@ namespace K3CloudDataDictionary.Models
         {
             get => _subSystemName;
             set { _subSystemName = value; OnPropertyChanged(); }
+        }
+
+        public int FormPluginCount
+        {
+            get => _formPluginCount;
+            set { _formPluginCount = value; OnPropertyChanged(); }
+        }
+
+        public int ListPluginCount
+        {
+            get => _listPluginCount;
+            set { _listPluginCount = value; OnPropertyChanged(); }
+        }
+
+        public int BuilderPluginCount
+        {
+            get => _builderPluginCount;
+            set { _builderPluginCount = value; OnPropertyChanged(); }
         }
 
         public event PropertyChangedEventHandler PropertyChanged;

@@ -4,7 +4,7 @@ using System.Runtime.CompilerServices;
 
 namespace K3CloudDataDictionary.Models
 {
-    public enum TabType { Form, Entity, Field, Enum, AllFields, BillType, AssistantData, EntityServiceRule, EntityServiceRuleDetail }
+    public enum TabType { Form, Entity, Field, Enum, AllFields, BillType, AssistantData, EntityServiceRule, EntityServiceRuleDetail, Plugin }
 
     public class ModuleTabItem : INotifyPropertyChanged
     {
@@ -20,6 +20,7 @@ namespace K3CloudDataDictionary.Models
         private ObservableCollection<AssistantDataItem> _assistantDataItems;
         private ObservableCollection<EntityServiceRuleDisplayItem> _entityServiceRules;
         private ObservableCollection<FormBusinessServiceDisplayItem> _allBusinessServices;
+        private ObservableCollection<PluginDisplayItem> _plugins;
 
         public string Header
         {
@@ -93,6 +94,12 @@ namespace K3CloudDataDictionary.Models
             set { _allBusinessServices = value; OnPropertyChanged(); }
         }
 
+        public ObservableCollection<PluginDisplayItem> Plugins
+        {
+            get => _plugins;
+            set { _plugins = value; OnPropertyChanged(); }
+        }
+
         public bool IsFormTab => TabType == TabType.Form;
         public bool IsEntityTab => TabType == TabType.Entity;
         public bool IsFieldTab => TabType == TabType.Field;
@@ -102,6 +109,7 @@ namespace K3CloudDataDictionary.Models
         public bool IsAssistantDataTab => TabType == TabType.AssistantData;
         public bool IsEntityServiceRuleTab => TabType == TabType.EntityServiceRule;
         public bool IsEntityServiceRuleDetailTab => TabType == TabType.EntityServiceRuleDetail;
+        public bool IsPluginTab => TabType == TabType.Plugin;
 
         private bool _isSelected;
         public bool IsSelected
@@ -128,6 +136,7 @@ namespace K3CloudDataDictionary.Models
             AssistantDataItems = new ObservableCollection<AssistantDataItem>();
             EntityServiceRules = new ObservableCollection<EntityServiceRuleDisplayItem>();
             AllBusinessServices = new ObservableCollection<FormBusinessServiceDisplayItem>();
+            Plugins = new ObservableCollection<PluginDisplayItem>();
             TabType = TabType.Form;
         }
 

@@ -176,19 +176,26 @@
             <Border Background="White" Padding="0">
                 <DockPanel>
                     <Border DockPanel.Dock="Top" Background="#FFFFFF" Padding="14,6" BorderBrush="#E2E8F0" BorderThickness="0,0,0,1">
-                        <StackPanel Orientation="Horizontal">
-                            <Border Width="22" Height="22" Background="#EEF2FF" CornerRadius="5" Margin="0,0,10,0" VerticalAlignment="Center">
-                                <Path Data="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20Z"
-                                      Width="12" Height="12" Stretch="Uniform" Fill="#4F46E5"
-                                      HorizontalAlignment="Center" VerticalAlignment="Center" />
-                            </Border>
-                            <TextBlock Text="{Binding Header}"
-                                       FontWeight="SemiBold" FontSize="14"
-                                       Foreground="#2D5F8A"
-                                       VerticalAlignment="Center" />
-                        </StackPanel>
+                        <DockPanel>
+                            <StackPanel Orientation="Horizontal">
+                                <Border Width="22" Height="22" Background="#EEF2FF" CornerRadius="5" Margin="0,0,10,0" VerticalAlignment="Center">
+                                    <Path Data="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20Z"
+                                          Width="12" Height="12" Stretch="Uniform" Fill="#4F46E5"
+                                          HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                </Border>
+                                <TextBlock Text="{Binding Header}"
+                                           FontWeight="SemiBold" FontSize="14"
+                                           Foreground="#2D5F8A"
+                                           VerticalAlignment="Center" />
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                                <Button Content="查看插件" Click="ShowPlugins_Click"
+                                        FontSize="12" Padding="10,3"
+                                        Cursor="Hand" />
+                            </StackPanel>
+                        </DockPanel>
                     </Border>
-                    <DataGrid ItemsSource="{Binding Forms}"
+                    <DataGrid x:Name="FormDataGrid" ItemsSource="{Binding Forms}"
                               Style="{StaticResource AppDataGridStyle}"
                               RowHeaderStyle="{StaticResource AppDataGridRowHeaderStyle}"
                               SelectionUnit="CellOrRowHeader"
@@ -228,7 +235,7 @@
                                     </DataTemplate>
                                 </DataGridTextColumn.HeaderTemplate>
                             </DataGridTextColumn>
-                            <DataGridTextColumn Header="所属子系统" Binding="{Binding SubSystemName}" Width="*" MinWidth="80">
+                            <DataGridTextColumn Header="所属子系统" Binding="{Binding SubSystemName}" Width="Auto" MinWidth="80">
                                 <DataGridTextColumn.HeaderTemplate>
                                     <DataTemplate>
                                         <DockPanel>
@@ -238,6 +245,9 @@
                                     </DataTemplate>
                                 </DataGridTextColumn.HeaderTemplate>
                             </DataGridTextColumn>
+                            <DataGridTextColumn Header="表单插件" Binding="{Binding FormPluginCount}" Width="Auto" MinWidth="60" />
+                            <DataGridTextColumn Header="列表插件" Binding="{Binding ListPluginCount}" Width="Auto" MinWidth="60" />
+                            <DataGridTextColumn Header="构建插件" Binding="{Binding BuilderPluginCount}" Width="*" MinWidth="60" />
                         </DataGrid.Columns>
                     </DataGrid>
                 </DockPanel>
@@ -350,7 +360,7 @@
                                     </DataTemplate>
                                 </DataGridTextColumn.HeaderTemplate>
                             </DataGridTextColumn>
-                            <DataGridTextColumn Header="元素类型" Binding="{Binding EntityElementTypeName}" Width="*" MinWidth="80">
+                            <DataGridTextColumn Header="元素类型" Binding="{Binding EntityElementTypeName}" Width="Auto" MinWidth="80">
                                 <DataGridTextColumn.HeaderTemplate>
                                     <DataTemplate>
                                         <DockPanel>
@@ -360,6 +370,7 @@
                                     </DataTemplate>
                                 </DataGridTextColumn.HeaderTemplate>
                             </DataGridTextColumn>
+                            <DataGridTextColumn Header="服务规则" Binding="{Binding ServiceRuleCount}" Width="*" MinWidth="60" />
                         </DataGrid.Columns>
                     </DataGrid>
                 </DockPanel>
@@ -910,22 +921,23 @@
                                     </DataTemplate>
                                 </DataGridTextColumn.HeaderTemplate>
                             </DataGridTextColumn>
+
+                            <DataGridTextColumn Header="条件描述" Binding="{Binding PreConditionDesc}" Width="Auto" MinWidth="60">
+                                <DataGridTextColumn.HeaderTemplate>
+                                    <DataTemplate>
+                                        <DockPanel>
+                                            <TextBlock DockPanel.Dock="Top" Text="{Binding}" />
+                                            <TextBox Tag="PreConditionDesc" TextChanged="FilterTextBox_TextChanged" FontSize="13" FontWeight="Normal" Padding="3,1" Margin="0,2,0,0" hc:InfoElement.Placeholder="过滤" />
+                                        </DockPanel>
+                                    </DataTemplate>
+                                </DataGridTextColumn.HeaderTemplate>
+                            </DataGridTextColumn>
                             <DataGridTextColumn Header="规则条件" Binding="{Binding PreCondition}" Width="Auto" MinWidth="60">
                                 <DataGridTextColumn.HeaderTemplate>
                                     <DataTemplate>
                                         <DockPanel>
                                             <TextBlock DockPanel.Dock="Top" Text="{Binding}" />
                                             <TextBox Tag="PreCondition" TextChanged="FilterTextBox_TextChanged" FontSize="13" FontWeight="Normal" Padding="3,1" Margin="0,2,0,0" hc:InfoElement.Placeholder="过滤" />
-                                        </DockPanel>
-                                    </DataTemplate>
-                                </DataGridTextColumn.HeaderTemplate>
-                            </DataGridTextColumn>
-                            <DataGridTextColumn Header="条件描述" Binding="{Binding PreConditionDesc}" Width="*" MinWidth="60">
-                                <DataGridTextColumn.HeaderTemplate>
-                                    <DataTemplate>
-                                        <DockPanel>
-                                            <TextBlock DockPanel.Dock="Top" Text="{Binding}" />
-                                            <TextBox Tag="PreConditionDesc" TextChanged="FilterTextBox_TextChanged" FontSize="13" FontWeight="Normal" Padding="3,1" Margin="0,2,0,0" hc:InfoElement.Placeholder="过滤" />
                                         </DockPanel>
                                     </DataTemplate>
                                 </DataGridTextColumn.HeaderTemplate>
@@ -1020,6 +1032,58 @@
             </Border>
         </DataTemplate>
 
+        <DataTemplate x:Key="PluginTabTemplate" DataType="{x:Type model:ModuleTabItem}">
+            <Border Background="White" Padding="0">
+                <DockPanel>
+                    <Border DockPanel.Dock="Top" Background="#FFFFFF" Padding="14,6" BorderBrush="#E2E8F0" BorderThickness="0,0,0,1">
+                        <StackPanel Orientation="Horizontal">
+                            <Border Width="22" Height="22" Background="#E0E7FF" CornerRadius="5" Margin="0,0,10,0" VerticalAlignment="Center">
+                                <Path Data="M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M13,7H11V11H7V13H11V17H13V13H17V11H13V7Z"
+                                      Width="12" Height="12" Stretch="Uniform" Fill="#4338CA"
+                                      HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            </Border>
+                            <TextBlock Text="{Binding Header}"
+                                       FontWeight="SemiBold" FontSize="14"
+                                       Foreground="#2D5F8A"
+                                       VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Border>
+                    <DataGrid ItemsSource="{Binding Plugins}"
+                              Style="{StaticResource AppDataGridStyle}"
+                              RowHeaderStyle="{StaticResource AppDataGridRowHeaderStyle}"
+                              SelectionUnit="CellOrRowHeader"
+                              LoadingRow="DataGrid_LoadingRow"
+                              PreviewMouseRightButtonDown="DataGrid_PreviewMouseRightButtonDown"
+                              CanUserSortColumns="True"
+                              CanUserResizeColumns="True"
+                              Sorting="DataGrid_Sorting">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="插件类型" Binding="{Binding PluginTypeDisplay}" Width="Auto" MinWidth="80">
+                                <DataGridTextColumn.HeaderTemplate>
+                                    <DataTemplate>
+                                        <DockPanel>
+                                            <TextBlock DockPanel.Dock="Top" Text="{Binding}" />
+                                            <TextBox Tag="PluginTypeDisplay" TextChanged="FilterTextBox_TextChanged" FontSize="13" FontWeight="Normal" Padding="3,1" Margin="0,2,0,0" hc:InfoElement.Placeholder="过滤" />
+                                        </DockPanel>
+                                    </DataTemplate>
+                                </DataGridTextColumn.HeaderTemplate>
+                            </DataGridTextColumn>
+                            <DataGridTextColumn Header="类名" Binding="{Binding ClassName}" Width="*" MinWidth="120">
+                                <DataGridTextColumn.HeaderTemplate>
+                                    <DataTemplate>
+                                        <DockPanel>
+                                            <TextBlock DockPanel.Dock="Top" Text="{Binding}" />
+                                            <TextBox Tag="ClassName" TextChanged="FilterTextBox_TextChanged" FontSize="13" FontWeight="Normal" Padding="3,1" Margin="0,2,0,0" hc:InfoElement.Placeholder="过滤" />
+                                        </DockPanel>
+                                    </DataTemplate>
+                                </DataGridTextColumn.HeaderTemplate>
+                            </DataGridTextColumn>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </DockPanel>
+            </Border>
+        </DataTemplate>
+
         <local:TabContentTemplateSelector x:Key="TabContentSelector"
                                           FormTemplate="{StaticResource FormTabTemplate}"
                                           EntityTemplate="{StaticResource EntityTabTemplate}"
@@ -1029,7 +1093,8 @@
                                           BillTypeTemplate="{StaticResource BillTypeTabTemplate}"
                                           AssistantDataTemplate="{StaticResource AssistantDataTabTemplate}"
                                           EntityServiceRuleTemplate="{StaticResource EntityServiceRuleTabTemplate}"
-                                          EntityServiceRuleDetailTemplate="{StaticResource EntityServiceRuleDetailTabTemplate}" />
+                                          EntityServiceRuleDetailTemplate="{StaticResource EntityServiceRuleDetailTabTemplate}"
+                                          PluginTemplate="{StaticResource PluginTabTemplate}" />
 
         <ContextMenu x:Key="TabItemContextMenu">
             <ContextMenu.Template>
@@ -1400,6 +1465,9 @@
                                                                     </DataTrigger>
                                                                     <DataTrigger Binding="{Binding TabType}" Value="EntityServiceRuleDetail">
                                                                         <Setter Property="Background" Value="#DB2777" />
+                                                                    </DataTrigger>
+                                                                    <DataTrigger Binding="{Binding TabType}" Value="Plugin">
+                                                                        <Setter Property="Background" Value="#4338CA" />
                                                                     </DataTrigger>
                                                                 </Style.Triggers>
                                                             </Style>

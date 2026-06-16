@@ -24,6 +24,8 @@ namespace K3CloudDataDictionary.Views
         public List<MetadataFieldInfo> FieldsWithoutOid { get; set; } = new List<MetadataFieldInfo>();
         /// <summary>拆分表信息列表</summary>
         public List<SplitTableInfo> Splits { get; set; } = new List<SplitTableInfo>();
+        /// <summary>插件列表</summary>
+        public List<PluginInfo> Plugins { get; set; } = new List<PluginInfo>();
 
         /// <summary>
         /// 将结果输出到控制台
@@ -328,6 +330,7 @@ namespace K3CloudDataDictionary.Views
             var entityDict = new Dictionary<string, EntityInfo>();
             var fieldDict = new Dictionary<string, MetadataFieldInfo>();
             var allSplits = new List<SplitTableInfo>();
+            var allPlugins = new List<PluginInfo>();
 
             foreach (var chainFid in fullChain)
             {
@@ -341,9 +344,11 @@ namespace K3CloudDataDictionary.Views
                 MergeFields(fieldDict, fieldsWithOid, fieldsWithoutOid);
 
                 MergeSplits(allSplits, ExtractSplits.ExtractFromXml(xml));
+
+                MergePlugins(allPlugins, ExtractEntities.ExtractPlugins(xml));
             }
 
-            var result = BuildResult(fid, entityDict, fieldDict, allSplits);
+            var result = BuildResult(fid, entityDict, fieldDict, allSplits, allPlugins);
             result.ObjInfo = objInfo;
 
             return result;
@@ -352,7 +357,7 @@ namespace K3CloudDataDictionary.Views
         /// <summary>
         /// 将合并字典构建为MetadataResult，按oid有无分组
         /// </summary>
-        private static MetadataResult BuildResult(string fid, Dictionary<string, EntityInfo> entityDict, Dictionary<string, MetadataFieldInfo> fieldDict, List<SplitTableInfo> splits)
+        private static MetadataResult BuildResult(string fid, Dictionary<string, EntityInfo> entityDict, Dictionary<string, MetadataFieldInfo> fieldDict, List<SplitTableInfo> splits, List<PluginInfo> plugins)
         {
             var result = new MetadataResult { Fid = fid };
 
@@ -381,6 +386,7 @@ namespace K3CloudDataDictionary.Views
             }
 
             result.Splits = splits;
+            result.Plugins = plugins;
             return result;
         }
 
@@ -403,6 +409,46 @@ namespace K3CloudDataDictionary.Views
                     if (!string.IsNullOrEmpty(split.Description)) existing.Description = split.Description;
                 }
             }
+        }
+
+        /// <summary>
+        /// 合并插件列表，按继承键匹配（oid 优先，否则用 ClassName）：
+        /// 扩展 XML 中 PlugIn 的 oid = 系统 XML 中 PlugIn 的 ClassName
+        /// action=remove则删除，已存在则覆盖，不存在则新增
+        /// </summary>
+        private static void MergePlugins(List<PluginInfo> allPlugins, List<PluginInfo> newPlugins)
+        {
+            foreach (var plugin in newPlugins)
+            {
+                string pluginKey = GetPluginKey(plugin);
+
+                if (plugin.Action == "remove")
+                {
+                    allPlugins.RemoveAll(p => GetPluginKey(p) == pluginKey);
+                    continue;
+                }
+
+                var existing = allPlugins.FirstOrDefault(p => GetPluginKey(p) == pluginKey && p.PluginType == plugin.PluginType);
+                if (existing != null)
+                {
+                    if (!string.IsNullOrEmpty(plugin.ClassName)) existing.ClassName = plugin.ClassName;
+                    if (!string.IsNullOrEmpty(plugin.OrderId)) existing.OrderId = plugin.OrderId;
+                    if (!string.IsNullOrEmpty(plugin.ElementType)) existing.ElementType = plugin.ElementType;
+                    if (!string.IsNullOrEmpty(plugin.ElementStyle)) existing.ElementStyle = plugin.ElementStyle;
+                }
+                else
+                {
+                    allPlugins.Add(plugin.Clone());
+                }
+            }
+        }
+
+        /// <summary>
+        /// 获取插件的继承匹配键：oid 优先（扩展），否则用 ClassName（基础）
+        /// </summary>
+        private static string GetPluginKey(PluginInfo plugin)
+        {
+            return !string.IsNullOrEmpty(plugin.Oid) ? plugin.Oid : plugin.ClassName;
         }
 
         /// <summary>

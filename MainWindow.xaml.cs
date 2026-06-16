@@ -718,6 +718,66 @@ namespace K3CloudDataDictionary
             }
         }
 
+        private async void ShowPlugins_Click(object sender, RoutedEventArgs e)
+        {
+            var btn = sender as FrameworkElement;
+            if (btn == null) return;
+
+            // 向上查找 DataContext 为 ModuleTabItem 的元素
+            var dep = btn as DependencyObject;
+            while (dep != null && !(dep is FrameworkElement fe && fe.DataContext is ModuleTabItem))
+                dep = VisualTreeHelper.GetParent(dep);
+
+            if (!(dep is FrameworkElement element && element.DataContext is ModuleTabItem tab)) return;
+            var vm = DataContext as MainViewModel;
+            if (vm == null) return;
+
+            // 从 TabContent 中找到 DataGrid，获取当前选中行
+            FormInfo formInfo = null;
+            if (_tabContentMap.TryGetValue(tab, out var content))
+            {
+                var dataGrid = FindVisualChild<DataGrid>(content);
+                if (dataGrid != null)
+                {
+                    // 优先从选中单元格获取（点击单元格即可，无需选中整行）
+                    if (dataGrid.SelectedCells.Count > 0)
+                    {
+                        formInfo = dataGrid.SelectedCells[0].Item as FormInfo;
+                    }
+                    if (formInfo == null)
+                    {
+                        formInfo = dataGrid.CurrentCell.Item as FormInfo
+                            ?? dataGrid.SelectedItem as FormInfo;
+                    }
+                }
+            }
+
+            if (formInfo != null)
+            {
+                await vm.OpenPluginTabAsync(formInfo.FormId, formInfo.FormName);
+            }
+            else
+            {
+                HandyControl.Controls.Growl.Info(new HandyControl.Data.GrowlInfo
+                {
+                    Message = "请先在列表中选择一个表单",
+                    WaitTime = 2
+                });
+            }
+        }
+
+        private static T FindVisualChild<T>(DependencyObject parent) where T : DependencyObject
+        {
+            for (int i = 0; i < VisualTreeHelper.GetChildrenCount(parent); i++)
+            {
+                var child = VisualTreeHelper.GetChild(parent, i);
+                if (child is T result) return result;
+                var found = FindVisualChild<T>(child);
+                if (found != null) return found;
+            }
+            return null;
+        }
+
         private async void EntityServiceRuleDataGrid_MouseDoubleClick(object sender, MouseButtonEventArgs e)
         {
             if (sender is DataGrid grid)
@@ -851,10 +911,24 @@ namespace K3CloudDataDictionary
             if (dep is DataGridRow row && row.Item is FormInfo form)
             {
                 var vm = DataContext as MainViewModel;
-                if (vm != null)
+                if (vm == null) return;
+
+                // 判断是否双击了插件数量列
+                if (sender is DataGrid dataGrid && dataGrid.CurrentCell.Column is DataGridColumn column)
                 {
-                    await vm.OpenEntityTabAsync(form);
+                    string pluginType = null;
+                    if (column.Header?.ToString() == "表单插件") pluginType = "FormPlugins";
+                    else if (column.Header?.ToString() == "列表插件") pluginType = "ListPlugins";
+                    else if (column.Header?.ToString() == "构建插件") pluginType = "WebFormBuilderPlugins";
+
+                    if (pluginType != null)
+                    {
+                        await vm.OpenPluginTabAsync(form.FormId, form.FormName, pluginType);
+                        return;
+                    }
                 }
+
+                await vm.OpenEntityTabAsync(form);
             }
         }
 
@@ -871,6 +945,16 @@ namespace K3CloudDataDictionary
                 var vm = DataContext as MainViewModel;
                 if (vm != null)
                 {
+                    // 判断是否双击了服务规则列
+                    if (sender is DataGrid dataGrid && dataGrid.CurrentCell.Column is DataGridColumn column)
+                    {
+                        if (column.Header?.ToString() == "服务规则")
+                        {
+                            await vm.OpenEntityServiceRuleTabAsync(entity.FormId, entity.FormName, entity.EntityId);
+                            return;
+                        }
+                    }
+
                     await vm.OpenFieldDetailTabAsync(entity);
                 }
             }

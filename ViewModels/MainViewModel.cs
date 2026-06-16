@@ -162,6 +162,9 @@ namespace K3CloudDataDictionary.ViewModels
                 case TabType.EntityServiceRuleDetail:
                     StatusText = $"本地数据 | {tab.Header} - {tab.AllBusinessServices.Count} 条服务";
                     break;
+                case TabType.Plugin:
+                    StatusText = $"本地数据 | {tab.Header} - {tab.Plugins.Count} 条插件";
+                    break;
             }
         }
 
@@ -643,11 +646,11 @@ namespace K3CloudDataDictionary.ViewModels
         /// <summary>
         /// 双击实体行，查看该实体下的 EntityServiceRule
         /// </summary>
-        public async Task OpenEntityServiceRuleTabAsync(string formId, string formName)
+        public async Task OpenEntityServiceRuleTabAsync(string formId, string formName, string entityId = null)
         {
             if (!HasLocalData) return;
 
-            string tabKey = $"servicerule_{formId}";
+            string tabKey = entityId != null ? $"servicerule_{formId}_{entityId}" : $"servicerule_{formId}";
             var existingTab = OpenTabs.FirstOrDefault(t => t.ModuleId == tabKey);
             if (existingTab != null)
             {
@@ -657,14 +660,30 @@ namespace K3CloudDataDictionary.ViewModels
 
             var tab = new ModuleTabItem
             {
-                Header = $"{formName} - 服务规则",
+                Header = entityId != null ? $"{formName} - 实体服务规则" : $"{formName} - 服务规则",
                 ModuleId = tabKey,
                 TabType = TabType.EntityServiceRule
             };
 
             try
             {
-                string sql = @"SELECT r.FID, r.FOID, r.FRULEID, r.FDESCRIPTION, r.FISENABLED, r.FPRECONDITION, r.FPRECONDITIONDESC, r.FSEQ, r.FENTITYKEY,
+                string sql;
+                SQLiteParameter[] queryParams;
+                if (entityId != null)
+                {
+                    sql = @"SELECT r.FID, r.FOID, r.FRULEID, r.FDESCRIPTION, r.FISENABLED, r.FPRECONDITION, r.FPRECONDITIONDESC, r.FSEQ, r.FENTITYKEY,
+       e.FNAME AS FENTITYNAME,
+       (SELECT GROUP_CONCAT(f.FDESCRIPTION || '(' || f.FACTIONID || ')', '; ') FROM T_FORMBUSINESSSERVICE f WHERE f.FRULEID = r.FID AND f.FSERVICETYPE = 'WhenTrue') AS FWHENTRUE,
+       (SELECT GROUP_CONCAT(f.FDESCRIPTION || '(' || f.FACTIONID || ')', '; ') FROM T_FORMBUSINESSSERVICE f WHERE f.FRULEID = r.FID AND f.FSERVICETYPE = 'WhenFalse') AS FWHENFALSE
+FROM T_ENTITYSERVICERULE r
+LEFT JOIN T_ENTITY e ON r.FENTITYID = e.FID
+WHERE r.FFORMID = @FormId AND r.FENTITYID = @EntityId
+ORDER BY r.FSEQ";
+                    queryParams = new[] { new SQLiteParameter("@FormId", formId), new SQLiteParameter("@EntityId", entityId) };
+                }
+                else
+                {
+                    sql = @"SELECT r.FID, r.FOID, r.FRULEID, r.FDESCRIPTION, r.FISENABLED, r.FPRECONDITION, r.FPRECONDITIONDESC, r.FSEQ, r.FENTITYKEY,
        e.FNAME AS FENTITYNAME,
        (SELECT GROUP_CONCAT(f.FDESCRIPTION || '(' || f.FACTIONID || ')', '; ') FROM T_FORMBUSINESSSERVICE f WHERE f.FRULEID = r.FID AND f.FSERVICETYPE = 'WhenTrue') AS FWHENTRUE,
        (SELECT GROUP_CONCAT(f.FDESCRIPTION || '(' || f.FACTIONID || ')', '; ') FROM T_FORMBUSINESSSERVICE f WHERE f.FRULEID = r.FID AND f.FSERVICETYPE = 'WhenFalse') AS FWHENFALSE
@@ -672,7 +691,9 @@ FROM T_ENTITYSERVICERULE r
 LEFT JOIN T_ENTITY e ON r.FENTITYID = e.FID
 WHERE r.FFORMID = @FormId
 ORDER BY r.FSEQ";
-                var rows = await Task.Run(() => ExecuteQuery(sql, new[] { new SQLiteParameter("@FormId", formId) }));
+                    queryParams = new[] { new SQLiteParameter("@FormId", formId) };
+                }
+                var rows = await Task.Run(() => ExecuteQuery(sql, queryParams));
                 foreach (var row in rows)
                 {
                     tab.EntityServiceRules.Add(new EntityServiceRuleDisplayItem
@@ -750,6 +771,73 @@ ORDER BY s.FSERVICETYPE, s.FID";
             catch (Exception ex)
             {
                 StatusText = $"服务规则详情查询失败：{ex.Message}";
+            }
+
+            OpenTabs.Add(tab);
+            SelectedTab = tab;
+        }
+
+        /// <summary>
+        /// 查看表单的插件（FormPlugins/ListPlugins/WebFormBuilderPlugins）
+        /// </summary>
+        public async Task OpenPluginTabAsync(string formId, string formName, string pluginType = null)
+        {
+            if (!HasLocalData) return;
+
+            string tabKey = $"plugin_{formId}";
+            var existingTab = OpenTabs.FirstOrDefault(t => t.ModuleId == tabKey);
+            if (existingTab != null)
+            {
+                SelectedTab = existingTab;
+                return;
+            }
+
+            var tab = new ModuleTabItem
+            {
+                Header = $"{formName} - 插件",
+                ModuleId = tabKey,
+                TabType = TabType.Plugin
+            };
+
+            try
+            {
+                string sql;
+                SQLiteParameter[] queryParams;
+                if (!string.IsNullOrEmpty(pluginType))
+                {
+                    sql = @"SELECT FPLUGINTYPE, FCLASSNAME, FORDERID, FELEMENTTYPE, FELEMENTSTYLE
+FROM T_PLUGIN
+WHERE FFORMID = @FormId AND FPLUGINTYPE = @PluginType
+ORDER BY FORDERID";
+                    queryParams = new[] { new SQLiteParameter("@FormId", formId), new SQLiteParameter("@PluginType", pluginType) };
+                }
+                else
+                {
+                    sql = @"SELECT FPLUGINTYPE, FCLASSNAME, FORDERID, FELEMENTTYPE, FELEMENTSTYLE
+FROM T_PLUGIN
+WHERE FFORMID = @FormId
+ORDER BY FPLUGINTYPE, FORDERID";
+                    queryParams = new[] { new SQLiteParameter("@FormId", formId) };
+                }
+
+                var rows = await Task.Run(() => ExecuteQuery(sql, queryParams));
+                foreach (var row in rows)
+                {
+                    tab.Plugins.Add(new PluginDisplayItem
+                    {
+                        PluginType = row["FPLUGINTYPE"]?.ToString() ?? "",
+                        ClassName = row["FCLASSNAME"]?.ToString() ?? "",
+                        OrderId = row["FORDERID"]?.ToString() ?? "",
+                        ElementType = row["FELEMENTTYPE"]?.ToString() ?? "",
+                        ElementStyle = row["FELEMENTSTYLE"]?.ToString() ?? ""
+                    });
+                }
+
+                StatusText = $"本地数据 | {tab.Header} - {tab.Plugins.Count} 条插件";
+            }
+            catch (Exception ex)
+            {
+                StatusText = $"插件查询失败：{ex.Message}";
             }
 
             OpenTabs.Add(tab);
@@ -1001,7 +1089,10 @@ ORDER BY b.FID, d.FID";
                         FormIdentifier = row["FFORMIDENTIFIER"]?.ToString() ?? "",
                         FormName = row["FDJMC"]?.ToString() ?? "",
                         ModelTypeName = row["FELEMENTTYPENAME"]?.ToString() ?? "",
-                        SubSystemName = row["FSUBSYSTEMNAME"]?.ToString() ?? ""
+                        SubSystemName = row["FSUBSYSTEMNAME"]?.ToString() ?? "",
+                        FormPluginCount = row["FFORMPLUGINCOUNT"] != null && int.TryParse(row["FFORMPLUGINCOUNT"].ToString(), out var fpc) ? fpc : 0,
+                        ListPluginCount = row["FLISTPLUGINCOUNT"] != null && int.TryParse(row["FLISTPLUGINCOUNT"].ToString(), out var lpc) ? lpc : 0,
+                        BuilderPluginCount = row["FBUILDERPLUGINCOUNT"] != null && int.TryParse(row["FBUILDERPLUGINCOUNT"].ToString(), out var bpc) ? bpc : 0
                     });
                 }
 
@@ -1082,7 +1173,8 @@ ORDER BY b.FID, d.FID";
                 EntityName = row["FENTITYNAME"]?.ToString() ?? "",
                 EntityTableName = row["FTABLENAME"]?.ToString() ?? "",
                 EntityEntryPkFieldName = row["FENTRYPKFIELDNAME"]?.ToString() ?? "",
-                EntityElementTypeName = row["FELEMENTTYPENAME"]?.ToString() ?? ""
+                EntityElementTypeName = row["FELEMENTTYPENAME"]?.ToString() ?? "",
+                ServiceRuleCount = row["FSERVICERULECOUNT"] != null && int.TryParse(row["FSERVICERULECOUNT"].ToString(), out var src) ? src : 0
             };
         }
 
@@ -1097,7 +1189,10 @@ SELECT DISTINCT a.FID as FFORMID,
        a.FFORMIDENTIFIER as FFORMIDENTIFIER,
        a.FNAME as FDJMC,
        et.FNAME as FELEMENTTYPENAME,
-       sl.FNAME as FSUBSYSTEMNAME
+       sl.FNAME as FSUBSYSTEMNAME,
+       (SELECT COUNT(*) FROM T_PLUGIN p WHERE p.FFORMID = a.FID AND p.FPLUGINTYPE = 'FormPlugins') as FFORMPLUGINCOUNT,
+       (SELECT COUNT(*) FROM T_PLUGIN p WHERE p.FFORMID = a.FID AND p.FPLUGINTYPE = 'ListPlugins') as FLISTPLUGINCOUNT,
+       (SELECT COUNT(*) FROM T_PLUGIN p WHERE p.FFORMID = a.FID AND p.FPLUGINTYPE = 'WebFormBuilderPlugins') as FBUILDERPLUGINCOUNT
 FROM T_FORM a
 LEFT JOIN T_MDL_ELEMENTTYPE_L et ON et.FID = a.FMODELTYPEID AND et.FLOCALEID = 2052
 LEFT JOIN T_META_SUBSYSTEM sl ON sl.FID = a.FSUBSYSTEMID"
@@ -1172,7 +1267,8 @@ SELECT a.FID as FFORMID,
        b.FTableName as FTABLENAME,
        b.FEntryPkFieldName as FENTRYPKFIELDNAME,
        et.FNAME as FELEMENTTYPENAME,
-       b.FElementType as FELEMENTTYPE
+       b.FElementType as FELEMENTTYPE,
+       (SELECT COUNT(*) FROM T_ENTITYSERVICERULE r WHERE r.FENTITYID = b.FID) as FSERVICERULECOUNT
 FROM T_FORM a
 INNER JOIN T_ENTITY b ON a.FID = b.FFORMID
 LEFT JOIN T_MDL_ELEMENTTYPE_L et ON et.FID = b.FElementType AND et.FLOCALEID = 2052
@@ -1243,7 +1339,10 @@ ORDER BY d.FID";
                             FormIdentifier = row["FFORMIDENTIFIER"]?.ToString() ?? "",
                             FormName = row["FDJMC"]?.ToString() ?? "",
                             ModelTypeName = row["FELEMENTTYPENAME"]?.ToString() ?? "",
-                            SubSystemName = row["FSUBSYSTEMNAME"]?.ToString() ?? ""
+                            SubSystemName = row["FSUBSYSTEMNAME"]?.ToString() ?? "",
+                            FormPluginCount = row["FFORMPLUGINCOUNT"] != null && int.TryParse(row["FFORMPLUGINCOUNT"].ToString(), out var fpc) ? fpc : 0,
+                            ListPluginCount = row["FLISTPLUGINCOUNT"] != null && int.TryParse(row["FLISTPLUGINCOUNT"].ToString(), out var lpc) ? lpc : 0,
+                            BuilderPluginCount = row["FBUILDERPLUGINCOUNT"] != null && int.TryParse(row["FBUILDERPLUGINCOUNT"].ToString(), out var bpc) ? bpc : 0
                         });
                     }
 
@@ -1283,7 +1382,10 @@ ORDER BY d.FID";
                             FormIdentifier = row["FFORMIDENTIFIER"]?.ToString() ?? "",
                             FormName = row["FDJMC"]?.ToString() ?? "",
                             ModelTypeName = row["FELEMENTTYPENAME"]?.ToString() ?? "",
-                            SubSystemName = row["FSUBSYSTEMNAME"]?.ToString() ?? ""
+                            SubSystemName = row["FSUBSYSTEMNAME"]?.ToString() ?? "",
+                            FormPluginCount = row["FFORMPLUGINCOUNT"] != null && int.TryParse(row["FFORMPLUGINCOUNT"].ToString(), out var fpc2) ? fpc2 : 0,
+                            ListPluginCount = row["FLISTPLUGINCOUNT"] != null && int.TryParse(row["FLISTPLUGINCOUNT"].ToString(), out var lpc2) ? lpc2 : 0,
+                            BuilderPluginCount = row["FBUILDERPLUGINCOUNT"] != null && int.TryParse(row["FBUILDERPLUGINCOUNT"].ToString(), out var bpc2) ? bpc2 : 0
                         });
                     }
 
