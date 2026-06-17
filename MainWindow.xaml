@@ -188,11 +188,6 @@
                                            Foreground="#2D5F8A"
                                            VerticalAlignment="Center" />
                             </StackPanel>
-                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
-                                <Button Content="查看插件" Click="ShowPlugins_Click"
-                                        FontSize="12" Padding="10,3"
-                                        Cursor="Hand" />
-                            </StackPanel>
                         </DockPanel>
                     </Border>
                     <DataGrid x:Name="FormDataGrid" ItemsSource="{Binding Forms}"
@@ -247,7 +242,9 @@
                             </DataGridTextColumn>
                             <DataGridTextColumn Header="表单插件" Binding="{Binding FormPluginCount}" Width="Auto" MinWidth="60" />
                             <DataGridTextColumn Header="列表插件" Binding="{Binding ListPluginCount}" Width="Auto" MinWidth="60" />
-                            <DataGridTextColumn Header="构建插件" Binding="{Binding BuilderPluginCount}" Width="*" MinWidth="60" />
+                            <DataGridTextColumn Header="构建插件" Binding="{Binding BuilderPluginCount}" Width="Auto" MinWidth="60" />
+                            <DataGridTextColumn Header="值更新" Binding="{Binding UpdateActionCount}" Width="Auto" MinWidth="60" />
+                            <DataGridTextColumn Header="服务规则" Binding="{Binding ServiceRuleCount}" Width="*" MinWidth="60" />
                         </DataGrid.Columns>
                     </DataGrid>
                 </DockPanel>
@@ -271,10 +268,16 @@
                                            VerticalAlignment="Center" />
                             </StackPanel>
                             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
-                                <Button Content="查看服务规则" Click="ShowServiceRules_Click"
+                                <Button Content="所有插件" Click="ShowAllPlugins_Click"
                                         FontSize="12" Padding="10,3"
                                         Cursor="Hand" Margin="0,0,8,0" />
-                                <Button Content="显示所有字段" Click="ShowAllFields_Click"
+                                <Button Content="所有值更新" Click="ShowAllUpdateActions_Click"
+                                        FontSize="12" Padding="10,3"
+                                        Cursor="Hand" Margin="0,0,8,0" />
+                                <Button Content="所有服务规则" Click="ShowServiceRules_Click"
+                                        FontSize="12" Padding="10,3"
+                                        Cursor="Hand" Margin="0,0,8,0" />
+                                <Button Content="所有字段" Click="ShowAllFields_Click"
                                         FontSize="12" Padding="10,3"
                                         Cursor="Hand" />
                             </StackPanel>
@@ -370,7 +373,8 @@
                                     </DataTemplate>
                                 </DataGridTextColumn.HeaderTemplate>
                             </DataGridTextColumn>
-                            <DataGridTextColumn Header="服务规则" Binding="{Binding ServiceRuleCount}" Width="*" MinWidth="60" />
+                            <DataGridTextColumn Header="服务规则" Binding="{Binding ServiceRuleCount}" Width="Auto" MinWidth="60" />
+                            <DataGridTextColumn Header="值更新" Binding="{Binding UpdateActionCount}" Width="*" MinWidth="60" />
                         </DataGrid.Columns>
                     </DataGrid>
                 </DockPanel>
@@ -483,7 +487,7 @@
                                     </DataTemplate>
                                 </DataGridTextColumn.HeaderTemplate>
                             </DataGridTextColumn>
-                            <DataGridTextColumn Header="拆分说明" Binding="{Binding SplitDescription}" Width="*" MinWidth="80">
+                            <DataGridTextColumn Header="拆分说明" Binding="{Binding SplitDescription}" Width="Auto" MinWidth="80">
                                 <DataGridTextColumn.HeaderTemplate>
                                     <DataTemplate>
                                         <DockPanel>
@@ -493,6 +497,7 @@
                                     </DataTemplate>
                                 </DataGridTextColumn.HeaderTemplate>
                             </DataGridTextColumn>
+                            <DataGridTextColumn Header="值更新" Binding="{Binding UpdateActionCount}" Width="*" MinWidth="60" />
                         </DataGrid.Columns>
                     </DataGrid>
                 </DockPanel>
@@ -686,7 +691,7 @@
                                     </DataTemplate>
                                 </DataGridTextColumn.HeaderTemplate>
                             </DataGridTextColumn>
-                            <DataGridTextColumn Header="拆分说明" Binding="{Binding SplitDescription}" Width="*" MinWidth="80">
+                            <DataGridTextColumn Header="拆分说明" Binding="{Binding SplitDescription}" Width="Auto" MinWidth="80">
                                 <DataGridTextColumn.HeaderTemplate>
                                     <DataTemplate>
                                         <DockPanel>
@@ -696,6 +701,7 @@
                                     </DataTemplate>
                                 </DataGridTextColumn.HeaderTemplate>
                             </DataGridTextColumn>
+                            <DataGridTextColumn Header="值更新" Binding="{Binding UpdateActionCount}" Width="*" MinWidth="60" />
                         </DataGrid.Columns>
                     </DataGrid>
                 </DockPanel>
@@ -1078,6 +1084,99 @@
                                     </DataTemplate>
                                 </DataGridTextColumn.HeaderTemplate>
                             </DataGridTextColumn>
+                            <DataGridTextColumn Header="启用" Binding="{Binding IsEnabled}" Width="Auto" MinWidth="40" />
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </DockPanel>
+            </Border>
+        </DataTemplate>
+
+        <DataTemplate x:Key="FieldUpdateActionTabTemplate" DataType="{x:Type model:ModuleTabItem}">
+            <Border Background="White" Padding="0">
+                <DockPanel>
+                    <Border DockPanel.Dock="Top" Background="#FFFFFF" Padding="14,6" BorderBrush="#E2E8F0" BorderThickness="0,0,0,1">
+                        <StackPanel Orientation="Horizontal">
+                            <Border Width="22" Height="22" Background="#FEF3C7" CornerRadius="5" Margin="0,0,10,0" VerticalAlignment="Center">
+                                <Path Data="M13,10V3H4V21H20V10H13M12,12L15,15H13V18H11V15H9L12,12M6,7H11V9H6V7Z"
+                                      Width="12" Height="12" Stretch="Uniform" Fill="#B45309"
+                                      HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            </Border>
+                            <TextBlock Text="{Binding Header}"
+                                       FontWeight="SemiBold" FontSize="14"
+                                       Foreground="#2D5F8A"
+                                       VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Border>
+                    <DataGrid ItemsSource="{Binding FieldUpdateActions}"
+                              Style="{StaticResource AppDataGridStyle}"
+                              RowHeaderStyle="{StaticResource AppDataGridRowHeaderStyle}"
+                              SelectionUnit="CellOrRowHeader"
+                              LoadingRow="DataGrid_LoadingRow"
+                              PreviewMouseRightButtonDown="DataGrid_PreviewMouseRightButtonDown"
+                              CanUserSortColumns="True"
+                              CanUserResizeColumns="True"
+                              Sorting="DataGrid_Sorting">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="字段名称" Binding="{Binding FieldDisplayName}" Width="Auto" MinWidth="60">
+                                <DataGridTextColumn.HeaderTemplate>
+                                    <DataTemplate>
+                                        <DockPanel>
+                                            <TextBlock DockPanel.Dock="Top" Text="{Binding}" />
+                                            <TextBox Tag="FieldDisplayName" TextChanged="FilterTextBox_TextChanged" FontSize="13" FontWeight="Normal" Padding="3,1" Margin="0,2,0,0" hc:InfoElement.Placeholder="过滤" />
+                                        </DockPanel>
+                                    </DataTemplate>
+                                </DataGridTextColumn.HeaderTemplate>
+                            </DataGridTextColumn>
+                            <DataGridTextColumn Header="描述" Binding="{Binding Description}" Width="Auto" MinWidth="120">
+                                <DataGridTextColumn.HeaderTemplate>
+                                    <DataTemplate>
+                                        <DockPanel>
+                                            <TextBlock DockPanel.Dock="Top" Text="{Binding}" />
+                                            <TextBox Tag="Description" TextChanged="FilterTextBox_TextChanged" FontSize="13" FontWeight="Normal" Padding="3,1" Margin="0,2,0,0" hc:InfoElement.Placeholder="过滤" />
+                                        </DockPanel>
+                                    </DataTemplate>
+                                </DataGridTextColumn.HeaderTemplate>
+                            </DataGridTextColumn>
+                            <DataGridTextColumn Header="条件描述" Binding="{Binding PreConditionDesc}" Width="Auto" MinWidth="80">
+                                <DataGridTextColumn.HeaderTemplate>
+                                    <DataTemplate>
+                                        <DockPanel>
+                                            <TextBlock DockPanel.Dock="Top" Text="{Binding}" />
+                                            <TextBox Tag="PreConditionDesc" TextChanged="FilterTextBox_TextChanged" FontSize="13" FontWeight="Normal" Padding="3,1" Margin="0,2,0,0" hc:InfoElement.Placeholder="过滤" />
+                                        </DockPanel>
+                                    </DataTemplate>
+                                </DataGridTextColumn.HeaderTemplate>
+                            </DataGridTextColumn>
+                            <DataGridTextColumn Header="条件" Binding="{Binding PreCondition}" Width="Auto" MinWidth="80">
+                                <DataGridTextColumn.HeaderTemplate>
+                                    <DataTemplate>
+                                        <DockPanel>
+                                            <TextBlock DockPanel.Dock="Top" Text="{Binding}" />
+                                            <TextBox Tag="PreCondition" TextChanged="FilterTextBox_TextChanged" FontSize="13" FontWeight="Normal" Padding="3,1" Margin="0,2,0,0" hc:InfoElement.Placeholder="过滤" />
+                                        </DockPanel>
+                                    </DataTemplate>
+                                </DataGridTextColumn.HeaderTemplate>
+                            </DataGridTextColumn>
+                            <DataGridTextColumn Header="参数" Binding="{Binding Parameters}" Width="*" MinWidth="200">
+                                <DataGridTextColumn.HeaderTemplate>
+                                    <DataTemplate>
+                                        <DockPanel>
+                                            <TextBlock DockPanel.Dock="Top" Text="{Binding}" />
+                                            <TextBox Tag="Parameters" TextChanged="FilterTextBox_TextChanged" FontSize="13" FontWeight="Normal" Padding="3,1" Margin="0,2,0,0" hc:InfoElement.Placeholder="过滤" />
+                                        </DockPanel>
+                                    </DataTemplate>
+                                </DataGridTextColumn.HeaderTemplate>
+                            </DataGridTextColumn>
+                            <DataGridTextColumn Header="禁用" Binding="{Binding IsForbidden}" Width="Auto" MinWidth="40">
+                                <DataGridTextColumn.HeaderTemplate>
+                                    <DataTemplate>
+                                        <DockPanel>
+                                            <TextBlock DockPanel.Dock="Top" Text="{Binding}" />
+                                            <TextBox Tag="IsForbidden" TextChanged="FilterTextBox_TextChanged" FontSize="13" FontWeight="Normal" Padding="3,1" Margin="0,2,0,0" hc:InfoElement.Placeholder="过滤" />
+                                        </DockPanel>
+                                    </DataTemplate>
+                                </DataGridTextColumn.HeaderTemplate>
+                            </DataGridTextColumn>
                         </DataGrid.Columns>
                     </DataGrid>
                 </DockPanel>
@@ -1094,7 +1193,8 @@
                                           AssistantDataTemplate="{StaticResource AssistantDataTabTemplate}"
                                           EntityServiceRuleTemplate="{StaticResource EntityServiceRuleTabTemplate}"
                                           EntityServiceRuleDetailTemplate="{StaticResource EntityServiceRuleDetailTabTemplate}"
-                                          PluginTemplate="{StaticResource PluginTabTemplate}" />
+                                          PluginTemplate="{StaticResource PluginTabTemplate}"
+                                          FieldUpdateActionTemplate="{StaticResource FieldUpdateActionTabTemplate}" />
 
         <ContextMenu x:Key="TabItemContextMenu">
             <ContextMenu.Template>
@@ -1468,6 +1568,9 @@
                                                                     </DataTrigger>
                                                                     <DataTrigger Binding="{Binding TabType}" Value="Plugin">
                                                                         <Setter Property="Background" Value="#4338CA" />
+                                                                    </DataTrigger>
+                                                                    <DataTrigger Binding="{Binding TabType}" Value="FieldUpdateAction">
+                                                                        <Setter Property="Background" Value="#B45309" />
                                                                     </DataTrigger>
                                                                 </Style.Triggers>
                                                             </Style>

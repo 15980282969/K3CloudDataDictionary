@@ -18,6 +18,7 @@ namespace K3CloudDataDictionary.Models
         private string _entityEntryPkFieldName;
         private string _entityElementTypeName;
         private int _serviceRuleCount;
+        private int _updateActionCount;
 
         public bool IsSelected
         {
@@ -95,6 +96,12 @@ namespace K3CloudDataDictionary.Models
         {
             get => _serviceRuleCount;
             set { _serviceRuleCount = value; OnPropertyChanged(); }
+        }
+
+        public int UpdateActionCount
+        {
+            get => _updateActionCount;
+            set { _updateActionCount = value; OnPropertyChanged(); }
         }
 
         public event PropertyChangedEventHandler PropertyChanged;

@@ -9,6 +9,7 @@ namespace K3CloudDataDictionary.Views
         public string PluginType { get; set; } = ""; // FormPlugins / ListPlugins / WebFormBuilderPlugins
         public string ElementType { get; set; } = "";
         public string ElementStyle { get; set; } = "";
+        public string IsEnabled { get; set; } = "";
 
         public PluginInfo Clone()
         {
@@ -20,7 +21,8 @@ namespace K3CloudDataDictionary.Views
                 OrderId = OrderId,
                 PluginType = PluginType,
                 ElementType = ElementType,
-                ElementStyle = ElementStyle
+                ElementStyle = ElementStyle,
+                IsEnabled = IsEnabled
             };
         }
     }

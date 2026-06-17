@@ -165,7 +165,8 @@ namespace K3CloudDataDictionary.Views
                             OrderId = pluginElement.Element("OrderId")?.Value ?? "",
                             PluginType = containerName,
                             ElementType = pluginElement.Attribute("ElementType")?.Value ?? "",
-                            ElementStyle = pluginElement.Attribute("ElementStyle")?.Value ?? ""
+                            ElementStyle = pluginElement.Attribute("ElementStyle")?.Value ?? "",
+                            IsEnabled = pluginElement.Element("IsEnabled")?.Value ?? ""
                         };
                         result.Add(plugin);
                     }

@@ -16,6 +16,7 @@ namespace K3CloudDataDictionary
         public DataTemplate EntityServiceRuleTemplate { get; set; }
         public DataTemplate EntityServiceRuleDetailTemplate { get; set; }
         public DataTemplate PluginTemplate { get; set; }
+        public DataTemplate FieldUpdateActionTemplate { get; set; }
 
         public override DataTemplate SelectTemplate(object item, DependencyObject container)
         {
@@ -33,6 +34,7 @@ namespace K3CloudDataDictionary
                     case TabType.EntityServiceRule: return EntityServiceRuleTemplate;
                     case TabType.EntityServiceRuleDetail: return EntityServiceRuleDetailTemplate;
                     case TabType.Plugin: return PluginTemplate;
+                    case TabType.FieldUpdateAction: return FieldUpdateActionTemplate;
                 }
             }
             return null;

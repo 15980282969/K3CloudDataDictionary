@@ -19,6 +19,8 @@ namespace K3CloudDataDictionary.Models
         private string _enumTypeDisplay;
         private string _suffix;
         private string _splitDescription;
+        private int _updateActionCount;
+        private string _fieldDbId;
 
         public string FormName { get => _formName; set { _formName = value; OnPropertyChanged(); } }
         public string EntityName { get => _entityName; set { _entityName = value; OnPropertyChanged(); } }
@@ -34,6 +36,8 @@ namespace K3CloudDataDictionary.Models
         public string EnumTypeDisplay { get => _enumTypeDisplay; set { _enumTypeDisplay = value; OnPropertyChanged(); } }
         public string Suffix { get => _suffix; set { _suffix = value; OnPropertyChanged(); } }
         public string SplitDescription { get => _splitDescription; set { _splitDescription = value; OnPropertyChanged(); } }
+        public int UpdateActionCount { get => _updateActionCount; set { _updateActionCount = value; OnPropertyChanged(); } }
+        public string FieldDbId { get => _fieldDbId; set { _fieldDbId = value; OnPropertyChanged(); } }
 
         public event PropertyChangedEventHandler PropertyChanged;
         protected virtual void OnPropertyChanged([CallerMemberName] string propertyName = null)

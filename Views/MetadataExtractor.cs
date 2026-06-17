@@ -435,6 +435,7 @@ namespace K3CloudDataDictionary.Views
                     if (!string.IsNullOrEmpty(plugin.OrderId)) existing.OrderId = plugin.OrderId;
                     if (!string.IsNullOrEmpty(plugin.ElementType)) existing.ElementType = plugin.ElementType;
                     if (!string.IsNullOrEmpty(plugin.ElementStyle)) existing.ElementStyle = plugin.ElementStyle;
+                    if (!string.IsNullOrEmpty(plugin.IsEnabled)) existing.IsEnabled = plugin.IsEnabled;
                 }
                 else
                 {
@@ -684,7 +685,42 @@ namespace K3CloudDataDictionary.Views
             if (!string.IsNullOrEmpty(child.Suffix)) merged.Suffix = child.Suffix;
             if (!string.IsNullOrEmpty(child.TagName)) merged.TagName = child.TagName;
 
+            // 合并 UpdateActions：按 Id 匹配，action=remove 则删除，已存在则覆盖，不存在则新增
+            MergeFieldUpdateActions(merged.UpdateActions, child.UpdateActions);
+
             return merged;
+        }
+
+        /// <summary>
+        /// 合并字段的值更新事件：按 Id 匹配，action=remove 则删除，已存在则覆盖，不存在则新增
+        /// </summary>
+        private static void MergeFieldUpdateActions(List<FieldUpdateActionInfo> existingActions, List<FieldUpdateActionInfo> newActions)
+        {
+            foreach (var action in newActions)
+            {
+                if (action.Action == "remove")
+                {
+                    existingActions.RemoveAll(a => a.Id == action.Id);
+                    continue;
+                }
+
+                var existing = existingActions.FirstOrDefault(a => a.Id == action.Id);
+                if (existing != null)
+                {
+                    if (!string.IsNullOrEmpty(action.ActionId)) existing.ActionId = action.ActionId;
+                    if (!string.IsNullOrEmpty(action.Description)) existing.Description = action.Description;
+                    if (!string.IsNullOrEmpty(action.Parameters)) existing.Parameters = action.Parameters;
+                    if (!string.IsNullOrEmpty(action.Seq)) existing.Seq = action.Seq;
+                    if (!string.IsNullOrEmpty(action.ServiceTypeName)) existing.ServiceTypeName = action.ServiceTypeName;
+                    if (!string.IsNullOrEmpty(action.IsForbidden)) existing.IsForbidden = action.IsForbidden;
+                    if (!string.IsNullOrEmpty(action.PreCondition)) existing.PreCondition = action.PreCondition;
+                    if (!string.IsNullOrEmpty(action.PreConditionDesc)) existing.PreConditionDesc = action.PreConditionDesc;
+                }
+                else
+                {
+                    existingActions.Add(action.Clone());
+                }
+            }
         }
     }
 }

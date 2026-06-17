@@ -17,6 +17,7 @@ namespace K3CloudDataDictionary.Views
         private int _serviceRuleId = 100001;
         private int _businessServiceId = 100001;
         private int _pluginId = 100001;
+        private int _fieldUpdateActionId = 100001;
         private bool _disposed;
 
         public MetadataSqliteWriter(string dbPath) : this(dbPath, true) { }
@@ -56,6 +57,7 @@ namespace K3CloudDataDictionary.Views
             _serviceRuleId = GetMaxId("T_ENTITYSERVICERULE") + 1;
             _businessServiceId = GetMaxId("T_FORMBUSINESSSERVICE") + 1;
             _pluginId = GetMaxId("T_PLUGIN") + 1;
+            _fieldUpdateActionId = GetMaxId("T_FIELDUPDATEACTION") + 1;
         }
 
         private int GetMaxId(string tableName)
@@ -82,6 +84,7 @@ namespace K3CloudDataDictionary.Views
             ExecuteNonQuery("DROP TABLE IF EXISTS T_FORMBUSINESSSERVICE");
             ExecuteNonQuery("DROP TABLE IF EXISTS T_ENTITYSERVICERULE");
             ExecuteNonQuery("DROP TABLE IF EXISTS T_PLUGIN");
+            ExecuteNonQuery("DROP TABLE IF EXISTS T_FIELDUPDATEACTION");
 
             ExecuteNonQuery(@"CREATE TABLE T_FORM (
                 FID             INTEGER NOT NULL PRIMARY KEY,
@@ -217,8 +220,23 @@ namespace K3CloudDataDictionary.Views
                 FORDERID        TEXT,
                 FPLUGINTYPE     TEXT,
                 FELEMENTTYPE    TEXT,
-                FELEMENTSTYLE   TEXT)");
+                FELEMENTSTYLE   TEXT,
+                FISENABLED      TEXT)");
             ExecuteNonQuery("CREATE INDEX IDX_T_PLUGIN_FORMID ON T_PLUGIN(FFORMID)");
+
+            ExecuteNonQuery(@"CREATE TABLE T_FIELDUPDATEACTION (
+                FID             INTEGER NOT NULL PRIMARY KEY,
+                FFIELDID        INTEGER NOT NULL,
+                FSERVICETYPENAME TEXT,
+                FACTIONID       TEXT,
+                FDESCRIPTION    TEXT,
+                FPARAMETERS     TEXT,
+                FSEQ            TEXT,
+                FSERVICEID      TEXT,
+                FISFORBIDDEN    TEXT,
+                FPRECONDITION   TEXT,
+                FPRECONDITIONDESC TEXT)");
+            ExecuteNonQuery("CREATE INDEX IDX_T_FIELDUPDATEACTION_FIELDID ON T_FIELDUPDATEACTION(FFIELDID)");
         }
 
         public void WriteLookupTables(string sqlServerConnectionString)
@@ -264,7 +282,7 @@ namespace K3CloudDataDictionary.Views
 
             if (formIds.Count == 0) return;
 
-            // 级联删除：T_PLUGIN → T_FORMBUSINESSSERVICE → T_ENTITYSERVICERULE → T_FIELD → T_ENTITYSPLIT → T_ENTITY → T_FORM
+            // 级联删除：T_PLUGIN → T_FORMBUSINESSSERVICE → T_ENTITYSERVICERULE → T_FIELDUPDATEACTION → T_FIELD → T_ENTITYSPLIT → T_ENTITY → T_FORM
             var formIdParams = formIds.Select((id, i) => new SQLiteParameter($"@FID{i}", id)).ToArray();
             string fidPlaceholders = string.Join(",", formIds.Select((_, i) => $"@FID{i}"));
 
@@ -272,6 +290,7 @@ namespace K3CloudDataDictionary.Views
             // 先删除 FormBusinessService（通过 RuleID 关联 EntityServiceRule）
             ExecuteNonQuery($"DELETE FROM T_FORMBUSINESSSERVICE WHERE FRULEID IN (SELECT FID FROM T_ENTITYSERVICERULE WHERE FFORMID IN ({fidPlaceholders}))", formIdParams);
             ExecuteNonQuery($"DELETE FROM T_ENTITYSERVICERULE WHERE FFORMID IN ({fidPlaceholders})", formIdParams);
+            ExecuteNonQuery($"DELETE FROM T_FIELDUPDATEACTION WHERE FFIELDID IN (SELECT FID FROM T_FIELD WHERE FFORMID IN ({fidPlaceholders}))", formIdParams);
             ExecuteNonQuery($"DELETE FROM T_FIELD WHERE FFORMID IN ({fidPlaceholders})", formIdParams);
             ExecuteNonQuery($"DELETE FROM T_ENTITYSPLIT WHERE FFORMID IN ({fidPlaceholders})", formIdParams);
             ExecuteNonQuery($"DELETE FROM T_ENTITY WHERE FFORMID IN ({fidPlaceholders})", formIdParams);
@@ -560,6 +579,25 @@ INNER JOIN T_BAS_ASSISTANTDATAENTRY_L d ON c.FENTRYID = d.FENTRYID AND d.FLOCALE
                     new SQLiteParameter("@FElementType", field.ElementType ?? (object)DBNull.Value),
                     new SQLiteParameter("@FLookUpObjectID", field.LookUpObjectID ?? (object)DBNull.Value),
                     new SQLiteParameter("@FEnumType", field.EnumType ?? (object)DBNull.Value));
+
+                // 写入字段的 UpdateActions（值更新事件）
+                foreach (var updateAction in field.UpdateActions)
+                {
+                    var actionDbId = _fieldUpdateActionId;
+                    _fieldUpdateActionId++;
+                    ExecuteNonQuery("INSERT INTO T_FIELDUPDATEACTION (FID, FFIELDID, FSERVICETYPENAME, FACTIONID, FDESCRIPTION, FPARAMETERS, FSEQ, FSERVICEID, FISFORBIDDEN, FPRECONDITION, FPRECONDITIONDESC) VALUES (@FID, @FFIELDID, @FSERVICETYPENAME, @FACTIONID, @FDESCRIPTION, @FPARAMETERS, @FSEQ, @FSERVICEID, @FISFORBIDDEN, @FPRECONDITION, @FPRECONDITIONDESC)",
+                        new SQLiteParameter("@FID", actionDbId),
+                        new SQLiteParameter("@FFIELDID", tmpFieldId),
+                        new SQLiteParameter("@FSERVICETYPENAME", updateAction.ServiceTypeName ?? (object)DBNull.Value),
+                        new SQLiteParameter("@FACTIONID", updateAction.ActionId ?? (object)DBNull.Value),
+                        new SQLiteParameter("@FDESCRIPTION", updateAction.Description ?? (object)DBNull.Value),
+                        new SQLiteParameter("@FPARAMETERS", updateAction.Parameters ?? (object)DBNull.Value),
+                        new SQLiteParameter("@FSEQ", updateAction.Seq ?? (object)DBNull.Value),
+                        new SQLiteParameter("@FSERVICEID", updateAction.Id ?? (object)DBNull.Value),
+                        new SQLiteParameter("@FISFORBIDDEN", updateAction.IsForbidden ?? (object)DBNull.Value),
+                        new SQLiteParameter("@FPRECONDITION", updateAction.PreCondition ?? (object)DBNull.Value),
+                        new SQLiteParameter("@FPRECONDITIONDESC", updateAction.PreConditionDesc ?? (object)DBNull.Value));
+                }
                 tmpFieldId++;
             }
             _fieldId += allFields.Count;
@@ -632,7 +670,7 @@ INNER JOIN T_BAS_ASSISTANTDATAENTRY_L d ON c.FENTRYID = d.FENTRYID AND d.FLOCALE
             {
                 var pluginDbId = _pluginId;
                 _pluginId++;
-                ExecuteNonQuery("INSERT INTO T_PLUGIN (FID, FFORMID, FOID, FCLASSNAME, FORDERID, FPLUGINTYPE, FELEMENTTYPE, FELEMENTSTYLE) VALUES (@FID, @FFORMID, @FOID, @FCLASSNAME, @FORDERID, @FPLUGINTYPE, @FELEMENTTYPE, @FELEMENTSTYLE)",
+                ExecuteNonQuery("INSERT INTO T_PLUGIN (FID, FFORMID, FOID, FCLASSNAME, FORDERID, FPLUGINTYPE, FELEMENTTYPE, FELEMENTSTYLE, FISENABLED) VALUES (@FID, @FFORMID, @FOID, @FCLASSNAME, @FORDERID, @FPLUGINTYPE, @FELEMENTTYPE, @FELEMENTSTYLE, @FISENABLED)",
                     new SQLiteParameter("@FID", pluginDbId),
                     new SQLiteParameter("@FFORMID", currentFormId),
                     new SQLiteParameter("@FOID", plugin.Oid ?? (object)DBNull.Value),
@@ -640,7 +678,8 @@ INNER JOIN T_BAS_ASSISTANTDATAENTRY_L d ON c.FENTRYID = d.FENTRYID AND d.FLOCALE
                     new SQLiteParameter("@FORDERID", plugin.OrderId ?? (object)DBNull.Value),
                     new SQLiteParameter("@FPLUGINTYPE", plugin.PluginType ?? (object)DBNull.Value),
                     new SQLiteParameter("@FELEMENTTYPE", plugin.ElementType ?? (object)DBNull.Value),
-                    new SQLiteParameter("@FELEMENTSTYLE", plugin.ElementStyle ?? (object)DBNull.Value));
+                    new SQLiteParameter("@FELEMENTSTYLE", plugin.ElementStyle ?? (object)DBNull.Value),
+                    new SQLiteParameter("@FISENABLED", plugin.IsEnabled ?? (object)DBNull.Value));
             }
         }
 

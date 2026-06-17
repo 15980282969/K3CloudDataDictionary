@@ -705,7 +705,6 @@ namespace K3CloudDataDictionary
 
             if (dep is FrameworkElement element && element.DataContext is ModuleTabItem tab)
             {
-                // 从 FormEntities 中获取 FormId
                 if (tab.FormEntities.Count > 0)
                 {
                     var firstEntity = tab.FormEntities[0];
@@ -713,6 +712,52 @@ namespace K3CloudDataDictionary
                     if (vm != null)
                     {
                         await vm.OpenEntityServiceRuleTabAsync(firstEntity.FormId, firstEntity.FormName);
+                    }
+                }
+            }
+        }
+
+        private async void ShowAllPlugins_Click(object sender, RoutedEventArgs e)
+        {
+            var btn = sender as FrameworkElement;
+            if (btn == null) return;
+
+            var dep = btn as DependencyObject;
+            while (dep != null && !(dep is FrameworkElement fe && fe.DataContext is ModuleTabItem))
+                dep = VisualTreeHelper.GetParent(dep);
+
+            if (dep is FrameworkElement element && element.DataContext is ModuleTabItem tab)
+            {
+                if (tab.FormEntities.Count > 0)
+                {
+                    var firstEntity = tab.FormEntities[0];
+                    var vm = DataContext as MainViewModel;
+                    if (vm != null)
+                    {
+                        await vm.OpenPluginTabAsync(firstEntity.FormId, firstEntity.FormName);
+                    }
+                }
+            }
+        }
+
+        private async void ShowAllUpdateActions_Click(object sender, RoutedEventArgs e)
+        {
+            var btn = sender as FrameworkElement;
+            if (btn == null) return;
+
+            var dep = btn as DependencyObject;
+            while (dep != null && !(dep is FrameworkElement fe && fe.DataContext is ModuleTabItem))
+                dep = VisualTreeHelper.GetParent(dep);
+
+            if (dep is FrameworkElement element && element.DataContext is ModuleTabItem tab)
+            {
+                if (tab.FormEntities.Count > 0)
+                {
+                    var firstEntity = tab.FormEntities[0];
+                    var vm = DataContext as MainViewModel;
+                    if (vm != null)
+                    {
+                        await vm.OpenFormUpdateActionTabAsync(firstEntity.FormId, firstEntity.FormName);
                     }
                 }
             }
@@ -926,6 +971,18 @@ namespace K3CloudDataDictionary
                         await vm.OpenPluginTabAsync(form.FormId, form.FormName, pluginType);
                         return;
                     }
+
+                    if (column.Header?.ToString() == "值更新")
+                    {
+                        await vm.OpenFormUpdateActionTabAsync(form.FormId, form.FormName);
+                        return;
+                    }
+
+                    if (column.Header?.ToString() == "服务规则")
+                    {
+                        await vm.OpenEntityServiceRuleTabAsync(form.FormId, form.FormName);
+                        return;
+                    }
                 }
 
                 await vm.OpenEntityTabAsync(form);
@@ -953,6 +1010,11 @@ namespace K3CloudDataDictionary
                             await vm.OpenEntityServiceRuleTabAsync(entity.FormId, entity.FormName, entity.EntityId);
                             return;
                         }
+                        if (column.Header?.ToString() == "值更新")
+                        {
+                            await vm.OpenEntityUpdateActionTabAsync(entity.FormId, entity.FormName, entity.EntityId);
+                            return;
+                        }
                     }
 
                     await vm.OpenFieldDetailTabAsync(entity);
@@ -975,6 +1037,23 @@ namespace K3CloudDataDictionary
 
             var vm = DataContext as MainViewModel;
             if (vm == null) return;
+
+            // 判断是否双击了值更新列
+            if (dataGrid.CurrentCell.Column is DataGridColumn column && column.Header?.ToString() == "值更新")
+            {
+                var currentTab = vm.SelectedTab;
+                if (currentTab != null && currentTab.ModuleId.StartsWith("field_"))
+                {
+                    var parts = currentTab.ModuleId.Split('_');
+                    if (parts.Length >= 2)
+                    {
+                        var formId = parts[1];
+                        var formName = currentTab.Header.Split(new[] { " - " }, StringSplitOptions.None).FirstOrDefault() ?? "";
+                        await vm.OpenFieldUpdateActionTabAsync(formId, formName, field.FieldDbId, field.Key);
+                        return;
+                    }
+                }
+            }
 
             // 根据行数据自动判断联查类型
             if (field.ElementTypeName == "单选辅助资料列表" && !string.IsNullOrWhiteSpace(field.LookUpObjectID))
@@ -1023,6 +1102,19 @@ namespace K3CloudDataDictionary
 
             var vm = DataContext as MainViewModel;
             if (vm == null) return;
+
+            // 判断是否双击了值更新列
+            if (dataGrid.CurrentCell.Column is DataGridColumn column && column.Header?.ToString() == "值更新")
+            {
+                var currentTab = vm.SelectedTab;
+                if (currentTab != null && currentTab.ModuleId.StartsWith("allfields_"))
+                {
+                    var formId = currentTab.ModuleId.Substring("allfields_".Length);
+                    var formName = currentTab.Header.Split(new[] { " - " }, StringSplitOptions.None).FirstOrDefault() ?? "";
+                    await vm.OpenFieldUpdateActionTabAsync(formId, formName, allField.FieldDbId, allField.Key);
+                    return;
+                }
+            }
 
             // 根据行数据自动判断联查类型
             if (allField.ElementTypeName == "单选辅助资料列表" && !string.IsNullOrWhiteSpace(allField.LookUpObjectID))

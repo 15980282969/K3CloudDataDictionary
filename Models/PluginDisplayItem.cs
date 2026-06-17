@@ -10,6 +10,7 @@ namespace K3CloudDataDictionary.Models
         private string _orderId;
         private string _elementType;
         private string _elementStyle;
+        private string _isEnabled;
 
         public string PluginType
         {
@@ -39,6 +40,12 @@ namespace K3CloudDataDictionary.Models
         {
             get => _elementStyle;
             set { _elementStyle = value; OnPropertyChanged(); }
+        }
+
+        public string IsEnabled
+        {
+            get => _isEnabled;
+            set { _isEnabled = value; OnPropertyChanged(); }
         }
 
         public string PluginTypeDisplay

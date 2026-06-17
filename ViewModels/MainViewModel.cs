@@ -165,6 +165,9 @@ namespace K3CloudDataDictionary.ViewModels
                 case TabType.Plugin:
                     StatusText = $"本地数据 | {tab.Header} - {tab.Plugins.Count} 条插件";
                     break;
+                case TabType.FieldUpdateAction:
+                    StatusText = $"本地数据 | {tab.Header} - {tab.FieldUpdateActions.Count} 条值更新";
+                    break;
             }
         }
 
@@ -805,7 +808,7 @@ ORDER BY s.FSERVICETYPE, s.FID";
                 SQLiteParameter[] queryParams;
                 if (!string.IsNullOrEmpty(pluginType))
                 {
-                    sql = @"SELECT FPLUGINTYPE, FCLASSNAME, FORDERID, FELEMENTTYPE, FELEMENTSTYLE
+                    sql = @"SELECT FPLUGINTYPE, FCLASSNAME, FORDERID, FELEMENTTYPE, FELEMENTSTYLE, FISENABLED
 FROM T_PLUGIN
 WHERE FFORMID = @FormId AND FPLUGINTYPE = @PluginType
 ORDER BY FORDERID";
@@ -813,7 +816,7 @@ ORDER BY FORDERID";
                 }
                 else
                 {
-                    sql = @"SELECT FPLUGINTYPE, FCLASSNAME, FORDERID, FELEMENTTYPE, FELEMENTSTYLE
+                    sql = @"SELECT FPLUGINTYPE, FCLASSNAME, FORDERID, FELEMENTTYPE, FELEMENTSTYLE, FISENABLED
 FROM T_PLUGIN
 WHERE FFORMID = @FormId
 ORDER BY FPLUGINTYPE, FORDERID";
@@ -829,7 +832,8 @@ ORDER BY FPLUGINTYPE, FORDERID";
                         ClassName = row["FCLASSNAME"]?.ToString() ?? "",
                         OrderId = row["FORDERID"]?.ToString() ?? "",
                         ElementType = row["FELEMENTTYPE"]?.ToString() ?? "",
-                        ElementStyle = row["FELEMENTSTYLE"]?.ToString() ?? ""
+                        ElementStyle = row["FELEMENTSTYLE"]?.ToString() ?? "",
+                        IsEnabled = row["FISENABLED"]?.ToString() ?? ""
                     });
                 }
 
@@ -838,6 +842,177 @@ ORDER BY FPLUGINTYPE, FORDERID";
             catch (Exception ex)
             {
                 StatusText = $"插件查询失败：{ex.Message}";
+            }
+
+            OpenTabs.Add(tab);
+            SelectedTab = tab;
+        }
+
+        /// <summary>
+        /// 查看字段的值更新事件
+        /// </summary>
+        public async Task OpenFieldUpdateActionTabAsync(string formId, string formName, string fieldDbId, string fieldKey)
+        {
+            if (!HasLocalData) return;
+
+            string tabKey = $"fieldupdate_{formId}_{fieldDbId}";
+            var existingTab = OpenTabs.FirstOrDefault(t => t.ModuleId == tabKey);
+            if (existingTab != null)
+            {
+                SelectedTab = existingTab;
+                return;
+            }
+
+            var tab = new ModuleTabItem
+            {
+                Header = $"{formName} - {fieldKey} - 值更新",
+                ModuleId = tabKey,
+                TabType = TabType.FieldUpdateAction
+            };
+
+            try
+            {
+                string sql = @"SELECT ua.FSERVICETYPENAME, ua.FACTIONID, ua.FDESCRIPTION, ua.FPARAMETERS, ua.FSEQ, ua.FISFORBIDDEN, ua.FPRECONDITION, ua.FPRECONDITIONDESC,
+f.FName as FFIELDNAME
+FROM T_FIELDUPDATEACTION ua
+INNER JOIN T_FIELD f ON ua.FFIELDID = f.FID
+WHERE ua.FFIELDID = @FieldDbId
+ORDER BY ua.FSEQ";
+                var rows = await Task.Run(() => ExecuteQuery(sql, new[] { new SQLiteParameter("@FieldDbId", fieldDbId) }));
+                foreach (var row in rows)
+                {
+                    tab.FieldUpdateActions.Add(new FieldUpdateActionDisplayItem
+                    {
+                        ServiceTypeName = row["FSERVICETYPENAME"]?.ToString() ?? "",
+                        ActionId = row["FACTIONID"]?.ToString() ?? "",
+                        Description = row["FDESCRIPTION"]?.ToString() ?? "",
+                        Parameters = row["FPARAMETERS"]?.ToString() ?? "",
+                        Seq = row["FSEQ"]?.ToString() ?? "",
+                        IsForbidden = row["FISFORBIDDEN"]?.ToString() ?? "",
+                        PreCondition = row["FPRECONDITION"]?.ToString() ?? "",
+                        PreConditionDesc = row["FPRECONDITIONDESC"]?.ToString() ?? "",
+                        FieldDisplayName = row["FFIELDNAME"]?.ToString() ?? ""
+                    });
+                }
+
+                StatusText = $"本地数据 | {tab.Header} - {tab.FieldUpdateActions.Count} 条值更新";
+            }
+            catch (Exception ex)
+            {
+                StatusText = $"值更新查询失败：{ex.Message}";
+            }
+
+            OpenTabs.Add(tab);
+            SelectedTab = tab;
+        }
+
+        public async Task OpenFormUpdateActionTabAsync(string formId, string formName)
+        {
+            if (!HasLocalData) return;
+
+            string tabKey = $"formupdate_{formId}";
+            var existingTab = OpenTabs.FirstOrDefault(t => t.ModuleId == tabKey);
+            if (existingTab != null)
+            {
+                SelectedTab = existingTab;
+                return;
+            }
+
+            var tab = new ModuleTabItem
+            {
+                Header = $"{formName} - 值更新",
+                ModuleId = tabKey,
+                TabType = TabType.FieldUpdateAction
+            };
+
+            try
+            {
+                string sql = @"SELECT ua.FSERVICETYPENAME, ua.FACTIONID, ua.FDESCRIPTION, ua.FPARAMETERS, ua.FSEQ, ua.FISFORBIDDEN, ua.FPRECONDITION, ua.FPRECONDITIONDESC,
+f.FKey as FFIELDKEY, f.FName as FFIELDNAME
+FROM T_FIELDUPDATEACTION ua
+INNER JOIN T_FIELD f ON ua.FFIELDID = f.FID
+INNER JOIN T_ENTITY e ON f.FENTITYID = e.FID
+WHERE e.FFORMID = @FormId
+ORDER BY f.FKey, ua.FSEQ";
+                var rows = await Task.Run(() => ExecuteQuery(sql, new[] { new SQLiteParameter("@FormId", formId) }));
+                foreach (var row in rows)
+                {
+                    tab.FieldUpdateActions.Add(new FieldUpdateActionDisplayItem
+                    {
+                        ServiceTypeName = row["FSERVICETYPENAME"]?.ToString() ?? "",
+                        ActionId = row["FACTIONID"]?.ToString() ?? "",
+                        Description = row["FDESCRIPTION"]?.ToString() ?? "",
+                        Parameters = row["FPARAMETERS"]?.ToString() ?? "",
+                        Seq = row["FSEQ"]?.ToString() ?? "",
+                        IsForbidden = row["FISFORBIDDEN"]?.ToString() ?? "",
+                        PreCondition = row["FPRECONDITION"]?.ToString() ?? "",
+                        PreConditionDesc = row["FPRECONDITIONDESC"]?.ToString() ?? "",
+                        FieldName = row["FFIELDKEY"]?.ToString() ?? "",
+                        FieldDisplayName = row["FFIELDNAME"]?.ToString() ?? ""
+                    });
+                }
+
+                StatusText = $"本地数据 | {tab.Header} - {tab.FieldUpdateActions.Count} 条值更新";
+            }
+            catch (Exception ex)
+            {
+                StatusText = $"值更新查询失败：{ex.Message}";
+            }
+
+            OpenTabs.Add(tab);
+            SelectedTab = tab;
+        }
+
+        public async Task OpenEntityUpdateActionTabAsync(string formId, string formName, string entityId)
+        {
+            if (!HasLocalData) return;
+
+            string tabKey = $"entityupdate_{entityId}";
+            var existingTab = OpenTabs.FirstOrDefault(t => t.ModuleId == tabKey);
+            if (existingTab != null)
+            {
+                SelectedTab = existingTab;
+                return;
+            }
+
+            var tab = new ModuleTabItem
+            {
+                Header = $"{formName} - 值更新",
+                ModuleId = tabKey,
+                TabType = TabType.FieldUpdateAction
+            };
+
+            try
+            {
+                string sql = @"SELECT ua.FSERVICETYPENAME, ua.FACTIONID, ua.FDESCRIPTION, ua.FPARAMETERS, ua.FSEQ, ua.FISFORBIDDEN, ua.FPRECONDITION, ua.FPRECONDITIONDESC,
+f.FKey as FFIELDKEY, f.FName as FFIELDNAME
+FROM T_FIELDUPDATEACTION ua
+INNER JOIN T_FIELD f ON ua.FFIELDID = f.FID
+WHERE f.FENTITYID = @EntityId
+ORDER BY f.FKey, ua.FSEQ";
+                var rows = await Task.Run(() => ExecuteQuery(sql, new[] { new SQLiteParameter("@EntityId", entityId) }));
+                foreach (var row in rows)
+                {
+                    tab.FieldUpdateActions.Add(new FieldUpdateActionDisplayItem
+                    {
+                        ServiceTypeName = row["FSERVICETYPENAME"]?.ToString() ?? "",
+                        ActionId = row["FACTIONID"]?.ToString() ?? "",
+                        Description = row["FDESCRIPTION"]?.ToString() ?? "",
+                        Parameters = row["FPARAMETERS"]?.ToString() ?? "",
+                        Seq = row["FSEQ"]?.ToString() ?? "",
+                        IsForbidden = row["FISFORBIDDEN"]?.ToString() ?? "",
+                        PreCondition = row["FPRECONDITION"]?.ToString() ?? "",
+                        PreConditionDesc = row["FPRECONDITIONDESC"]?.ToString() ?? "",
+                        FieldName = row["FFIELDKEY"]?.ToString() ?? "",
+                        FieldDisplayName = row["FFIELDNAME"]?.ToString() ?? ""
+                    });
+                }
+
+                StatusText = $"本地数据 | {tab.Header} - {tab.FieldUpdateActions.Count} 条值更新";
+            }
+            catch (Exception ex)
+            {
+                StatusText = $"值更新查询失败：{ex.Message}";
             }
 
             OpenTabs.Add(tab);
@@ -859,6 +1034,7 @@ ORDER BY FPLUGINTYPE, FORDERID";
                         FormName = row["FDJMC"]?.ToString() ?? "",
                         EntityName = row["FENTITYNAME"]?.ToString() ?? "",
                         EntityTableName = row["FTABLENAME"]?.ToString() ?? "",
+                        FieldDbId = row["FFIELDDBID"]?.ToString() ?? "",
                         Key = row["FKey"]?.ToString() ?? "",
                         Name = row["FName"]?.ToString() ?? "",
                         FieldName = row["FFieldName"]?.ToString() ?? "",
@@ -869,7 +1045,8 @@ ORDER BY FPLUGINTYPE, FORDERID";
                         LookUpObjectDisplay = row["FLookUpObjectDisplay"]?.ToString() ?? "",
                         EnumTypeDisplay = row["FEnumTypeDisplay"]?.ToString() ?? "",
                         Suffix = row["FSUFFIX"]?.ToString() ?? "",
-                        SplitDescription = row["FSPLITDESCRIPTION"]?.ToString() ?? ""
+                        SplitDescription = row["FSPLITDESCRIPTION"]?.ToString() ?? "",
+                        UpdateActionCount = row["FUPDATEACTIONCOUNT"] != null && int.TryParse(row["FUPDATEACTIONCOUNT"].ToString(), out var uac2) ? uac2 : 0
                     });
                 }
 
@@ -887,6 +1064,7 @@ ORDER BY FPLUGINTYPE, FORDERID";
 SELECT a.FNAME as FDJMC,
        b.FName as FENTITYNAME,
        b.FTableName as FTABLENAME,
+       d.FID as FFIELDDBID,
        d.FKey as FKey,
        d.FName as FName,
        d.FFieldName as FFieldName,
@@ -897,7 +1075,8 @@ SELECT a.FNAME as FDJMC,
        lk.FFORMID as FLookUpObjectDisplay,
        (SELECT FNAME FROM T_META_FORMENUM WHERE FID = d.FEnumType LIMIT 1) as FEnumTypeDisplay,
        c.FSUFFIX as FSUFFIX,
-       c.FDESCRIPTION as FSPLITDESCRIPTION
+       c.FDESCRIPTION as FSPLITDESCRIPTION,
+       (SELECT COUNT(*) FROM T_FIELDUPDATEACTION ua WHERE ua.FFIELDID = d.FID) as FUPDATEACTIONCOUNT
 FROM T_FORM a
 INNER JOIN T_ENTITY b ON a.FID = b.FFORMID
 INNER JOIN T_FIELD d ON b.FID = d.FENTITYID
@@ -1092,7 +1271,9 @@ ORDER BY b.FID, d.FID";
                         SubSystemName = row["FSUBSYSTEMNAME"]?.ToString() ?? "",
                         FormPluginCount = row["FFORMPLUGINCOUNT"] != null && int.TryParse(row["FFORMPLUGINCOUNT"].ToString(), out var fpc) ? fpc : 0,
                         ListPluginCount = row["FLISTPLUGINCOUNT"] != null && int.TryParse(row["FLISTPLUGINCOUNT"].ToString(), out var lpc) ? lpc : 0,
-                        BuilderPluginCount = row["FBUILDERPLUGINCOUNT"] != null && int.TryParse(row["FBUILDERPLUGINCOUNT"].ToString(), out var bpc) ? bpc : 0
+                        BuilderPluginCount = row["FBUILDERPLUGINCOUNT"] != null && int.TryParse(row["FBUILDERPLUGINCOUNT"].ToString(), out var bpc) ? bpc : 0,
+                        UpdateActionCount = row["FUPDATEACTIONCOUNT"] != null && int.TryParse(row["FUPDATEACTIONCOUNT"].ToString(), out var uac0) ? uac0 : 0,
+                        ServiceRuleCount = row["FSERVICERULECOUNT"] != null && int.TryParse(row["FSERVICERULECOUNT"].ToString(), out var src0) ? src0 : 0
                     });
                 }
 
@@ -1137,6 +1318,7 @@ ORDER BY b.FID, d.FID";
                 {
                     tab.Fields.Add(new FieldInfo
                     {
+                        FieldDbId = row["FFIELDDBID"]?.ToString() ?? "",
                         Key = row["FKey"]?.ToString() ?? "",
                         Name = row["FName"]?.ToString() ?? "",
                         FieldName = row["FFieldName"]?.ToString() ?? "",
@@ -1147,7 +1329,8 @@ ORDER BY b.FID, d.FID";
                         LookUpObjectID = row["FLookUpObjectID"]?.ToString() ?? "",
                         EnumType = row["FEnumType"]?.ToString() ?? "",
                         LookUpObjectDisplay = row["FLookUpObjectDisplay"]?.ToString() ?? "",
-                        EnumTypeDisplay = row["FEnumTypeDisplay"]?.ToString() ?? ""
+                        EnumTypeDisplay = row["FEnumTypeDisplay"]?.ToString() ?? "",
+                        UpdateActionCount = row["FUPDATEACTIONCOUNT"] != null && int.TryParse(row["FUPDATEACTIONCOUNT"].ToString(), out var uac) ? uac : 0
                     });
                 }
 
@@ -1174,7 +1357,8 @@ ORDER BY b.FID, d.FID";
                 EntityTableName = row["FTABLENAME"]?.ToString() ?? "",
                 EntityEntryPkFieldName = row["FENTRYPKFIELDNAME"]?.ToString() ?? "",
                 EntityElementTypeName = row["FELEMENTTYPENAME"]?.ToString() ?? "",
-                ServiceRuleCount = row["FSERVICERULECOUNT"] != null && int.TryParse(row["FSERVICERULECOUNT"].ToString(), out var src) ? src : 0
+                ServiceRuleCount = row["FSERVICERULECOUNT"] != null && int.TryParse(row["FSERVICERULECOUNT"].ToString(), out var src) ? src : 0,
+                UpdateActionCount = row["FUPDATEACTIONCOUNT"] != null && int.TryParse(row["FUPDATEACTIONCOUNT"].ToString(), out var uac1) ? uac1 : 0
             };
         }
 
@@ -1192,7 +1376,9 @@ SELECT DISTINCT a.FID as FFORMID,
        sl.FNAME as FSUBSYSTEMNAME,
        (SELECT COUNT(*) FROM T_PLUGIN p WHERE p.FFORMID = a.FID AND p.FPLUGINTYPE = 'FormPlugins') as FFORMPLUGINCOUNT,
        (SELECT COUNT(*) FROM T_PLUGIN p WHERE p.FFORMID = a.FID AND p.FPLUGINTYPE = 'ListPlugins') as FLISTPLUGINCOUNT,
-       (SELECT COUNT(*) FROM T_PLUGIN p WHERE p.FFORMID = a.FID AND p.FPLUGINTYPE = 'WebFormBuilderPlugins') as FBUILDERPLUGINCOUNT
+       (SELECT COUNT(*) FROM T_PLUGIN p WHERE p.FFORMID = a.FID AND p.FPLUGINTYPE = 'WebFormBuilderPlugins') as FBUILDERPLUGINCOUNT,
+       (SELECT COUNT(*) FROM T_FIELDUPDATEACTION ua INNER JOIN T_FIELD f ON ua.FFIELDID = f.FID INNER JOIN T_ENTITY e ON f.FENTITYID = e.FID WHERE e.FFORMID = a.FID) as FUPDATEACTIONCOUNT,
+       (SELECT COUNT(*) FROM T_ENTITYSERVICERULE r INNER JOIN T_ENTITY ent ON r.FENTITYID = ent.FID WHERE ent.FFORMID = a.FID) as FSERVICERULECOUNT
 FROM T_FORM a
 LEFT JOIN T_MDL_ELEMENTTYPE_L et ON et.FID = a.FMODELTYPEID AND et.FLOCALEID = 2052
 LEFT JOIN T_META_SUBSYSTEM sl ON sl.FID = a.FSUBSYSTEMID"
@@ -1268,7 +1454,8 @@ SELECT a.FID as FFORMID,
        b.FEntryPkFieldName as FENTRYPKFIELDNAME,
        et.FNAME as FELEMENTTYPENAME,
        b.FElementType as FELEMENTTYPE,
-       (SELECT COUNT(*) FROM T_ENTITYSERVICERULE r WHERE r.FENTITYID = b.FID) as FSERVICERULECOUNT
+       (SELECT COUNT(*) FROM T_ENTITYSERVICERULE r WHERE r.FENTITYID = b.FID) as FSERVICERULECOUNT,
+       (SELECT COUNT(*) FROM T_FIELDUPDATEACTION ua WHERE ua.FFIELDID IN (SELECT f.FID FROM T_FIELD f WHERE f.FENTITYID = b.FID)) as FUPDATEACTIONCOUNT
 FROM T_FORM a
 INNER JOIN T_ENTITY b ON a.FID = b.FFORMID
 LEFT JOIN T_MDL_ELEMENTTYPE_L et ON et.FID = b.FElementType AND et.FLOCALEID = 2052
@@ -1284,7 +1471,8 @@ ORDER BY b.FID";
         private (string sql, List<SQLiteParameter> parameters) BuildFieldQuery(string formId, string entityId)
         {
             string sql = @"
-SELECT d.FKey as FKey,
+SELECT d.FID as FFIELDDBID,
+       d.FKey as FKey,
        d.FName as FName,
        d.FFieldName as FFieldName,
        d.FPropertyName as FPropertyName,
@@ -1294,7 +1482,8 @@ SELECT d.FKey as FKey,
        d.FLookUpObjectID as FLookUpObjectID,
        d.FEnumType as FEnumType,
        lk.FFORMID as FLookUpObjectDisplay,
-       (SELECT FNAME FROM T_META_FORMENUM WHERE FID = d.FEnumType LIMIT 1) as FEnumTypeDisplay
+       (SELECT FNAME FROM T_META_FORMENUM WHERE FID = d.FEnumType LIMIT 1) as FEnumTypeDisplay,
+       (SELECT COUNT(*) FROM T_FIELDUPDATEACTION ua WHERE ua.FFIELDID = d.FID) as FUPDATEACTIONCOUNT
 FROM T_FORM a
 INNER JOIN T_ENTITY b ON a.FID = b.FFORMID
 INNER JOIN T_FIELD d ON b.FID = d.FENTITYID
@@ -1342,7 +1531,9 @@ ORDER BY d.FID";
                             SubSystemName = row["FSUBSYSTEMNAME"]?.ToString() ?? "",
                             FormPluginCount = row["FFORMPLUGINCOUNT"] != null && int.TryParse(row["FFORMPLUGINCOUNT"].ToString(), out var fpc) ? fpc : 0,
                             ListPluginCount = row["FLISTPLUGINCOUNT"] != null && int.TryParse(row["FLISTPLUGINCOUNT"].ToString(), out var lpc) ? lpc : 0,
-                            BuilderPluginCount = row["FBUILDERPLUGINCOUNT"] != null && int.TryParse(row["FBUILDERPLUGINCOUNT"].ToString(), out var bpc) ? bpc : 0
+                            BuilderPluginCount = row["FBUILDERPLUGINCOUNT"] != null && int.TryParse(row["FBUILDERPLUGINCOUNT"].ToString(), out var bpc) ? bpc : 0,
+                            UpdateActionCount = row["FUPDATEACTIONCOUNT"] != null && int.TryParse(row["FUPDATEACTIONCOUNT"].ToString(), out var uac4) ? uac4 : 0,
+                            ServiceRuleCount = row["FSERVICERULECOUNT"] != null && int.TryParse(row["FSERVICERULECOUNT"].ToString(), out var src4) ? src4 : 0
                         });
                     }
 
@@ -1385,7 +1576,9 @@ ORDER BY d.FID";
                             SubSystemName = row["FSUBSYSTEMNAME"]?.ToString() ?? "",
                             FormPluginCount = row["FFORMPLUGINCOUNT"] != null && int.TryParse(row["FFORMPLUGINCOUNT"].ToString(), out var fpc2) ? fpc2 : 0,
                             ListPluginCount = row["FLISTPLUGINCOUNT"] != null && int.TryParse(row["FLISTPLUGINCOUNT"].ToString(), out var lpc2) ? lpc2 : 0,
-                            BuilderPluginCount = row["FBUILDERPLUGINCOUNT"] != null && int.TryParse(row["FBUILDERPLUGINCOUNT"].ToString(), out var bpc2) ? bpc2 : 0
+                            BuilderPluginCount = row["FBUILDERPLUGINCOUNT"] != null && int.TryParse(row["FBUILDERPLUGINCOUNT"].ToString(), out var bpc2) ? bpc2 : 0,
+                            UpdateActionCount = row["FUPDATEACTIONCOUNT"] != null && int.TryParse(row["FUPDATEACTIONCOUNT"].ToString(), out var uac3) ? uac3 : 0,
+                            ServiceRuleCount = row["FSERVICERULECOUNT"] != null && int.TryParse(row["FSERVICERULECOUNT"].ToString(), out var src3) ? src3 : 0
                         });
                     }
 

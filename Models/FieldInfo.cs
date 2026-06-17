@@ -16,6 +16,8 @@ namespace K3CloudDataDictionary.Models
         private string _enumType;
         private string _lookUpObjectDisplay;
         private string _enumTypeDisplay;
+        private int _updateActionCount;
+        private string _fieldDbId;
 
         public string Key
         {
@@ -81,6 +83,18 @@ namespace K3CloudDataDictionary.Models
         {
             get => _enumTypeDisplay;
             set { _enumTypeDisplay = value; OnPropertyChanged(); }
+        }
+
+        public int UpdateActionCount
+        {
+            get => _updateActionCount;
+            set { _updateActionCount = value; OnPropertyChanged(); }
+        }
+
+        public string FieldDbId
+        {
+            get => _fieldDbId;
+            set { _fieldDbId = value; OnPropertyChanged(); }
         }
 
         public event PropertyChangedEventHandler PropertyChanged;

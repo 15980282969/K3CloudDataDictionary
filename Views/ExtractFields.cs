@@ -19,6 +19,7 @@ namespace K3CloudDataDictionary.Views
         public string LookUpObjectID { get; set; } = "";
         public string EnumType { get; set; } = "";
         public string Action { get; set; } = "";
+        public List<FieldUpdateActionInfo> UpdateActions { get; set; } = new List<FieldUpdateActionInfo>();
 
         public override string ToString()
         {
@@ -41,7 +42,8 @@ namespace K3CloudDataDictionary.Views
                 TagName = TagName,
                 LookUpObjectID = LookUpObjectID,
                 EnumType = EnumType,
-                Action = Action
+                Action = Action,
+                UpdateActions = new List<FieldUpdateActionInfo>(UpdateActions.ConvertAll(a => a.Clone()))
             };
         }
     }
@@ -88,6 +90,30 @@ namespace K3CloudDataDictionary.Views
                     LookUpObjectID = element.Element("LookUpObjectID")?.Value ?? "",
                     EnumType = element.Element("EnumType")?.Value ?? ""
                 };
+
+                // 提取 UpdateActions（值更新事件）
+                var updateActionsElement = element.Element("UpdateActions");
+                if (updateActionsElement != null)
+                {
+                    foreach (var svcElement in updateActionsElement.Elements())
+                    {
+                        var action = new FieldUpdateActionInfo
+                        {
+                            ServiceTypeName = svcElement.Name.LocalName,
+                            Oid = svcElement.Attribute("oid")?.Value ?? "",
+                            Action = svcElement.Attribute("action")?.Value ?? "",
+                            Id = svcElement.Element("Id")?.Value ?? "",
+                            ActionId = svcElement.Element("ActionId")?.Value ?? "",
+                            Description = svcElement.Element("Description")?.Value ?? "",
+                            Parameters = svcElement.Element("Parameters")?.Value ?? "",
+                            Seq = svcElement.Element("Seq")?.Value ?? "",
+                            IsForbidden = svcElement.Element("IsForbidden")?.Value ?? "",
+                            PreCondition = svcElement.Element("PreCondition")?.Value ?? "",
+                            PreConditionDesc = svcElement.Element("PreConditionDesc")?.Value ?? ""
+                        };
+                        info.UpdateActions.Add(action);
+                    }
+                }
 
                 if (!string.IsNullOrEmpty(info.Oid))
                 {

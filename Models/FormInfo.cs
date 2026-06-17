@@ -13,6 +13,8 @@ namespace K3CloudDataDictionary.Models
         private int _formPluginCount;
         private int _listPluginCount;
         private int _builderPluginCount;
+        private int _updateActionCount;
+        private int _serviceRuleCount;
 
         public string FormId
         {
@@ -60,6 +62,18 @@ namespace K3CloudDataDictionary.Models
         {
             get => _builderPluginCount;
             set { _builderPluginCount = value; OnPropertyChanged(); }
+        }
+
+        public int UpdateActionCount
+        {
+            get => _updateActionCount;
+            set { _updateActionCount = value; OnPropertyChanged(); }
+        }
+
+        public int ServiceRuleCount
+        {
+            get => _serviceRuleCount;
+            set { _serviceRuleCount = value; OnPropertyChanged(); }
         }
 
         public event PropertyChangedEventHandler PropertyChanged;
