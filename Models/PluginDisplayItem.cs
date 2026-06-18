@@ -7,9 +7,6 @@ namespace K3CloudDataDictionary.Models
     {
         private string _pluginType;
         private string _className;
-        private string _orderId;
-        private string _elementType;
-        private string _elementStyle;
         private string _isEnabled;
 
         public string PluginType
@@ -22,24 +19,6 @@ namespace K3CloudDataDictionary.Models
         {
             get => _className;
             set { _className = value; OnPropertyChanged(); }
-        }
-
-        public string OrderId
-        {
-            get => _orderId;
-            set { _orderId = value; OnPropertyChanged(); }
-        }
-
-        public string ElementType
-        {
-            get => _elementType;
-            set { _elementType = value; OnPropertyChanged(); }
-        }
-
-        public string ElementStyle
-        {
-            get => _elementStyle;
-            set { _elementStyle = value; OnPropertyChanged(); }
         }
 
         public string IsEnabled

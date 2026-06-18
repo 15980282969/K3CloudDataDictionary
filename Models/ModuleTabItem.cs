@@ -4,7 +4,7 @@ using System.Runtime.CompilerServices;
 
 namespace K3CloudDataDictionary.Models
 {
-    public enum TabType { Form, Entity, Field, Enum, AllFields, BillType, AssistantData, EntityServiceRule, EntityServiceRuleDetail, Plugin, FieldUpdateAction }
+    public enum TabType { Form, Entity, Field, Enum, AllFields, BillType, AssistantData, EntityServiceRule, EntityServiceRuleDetail, Plugin, FieldUpdateAction, FormOperation, Validation, FormOperationPlugin, FormOperationAppService }
 
     public class ModuleTabItem : INotifyPropertyChanged
     {
@@ -22,6 +22,10 @@ namespace K3CloudDataDictionary.Models
         private ObservableCollection<FormBusinessServiceDisplayItem> _allBusinessServices;
         private ObservableCollection<PluginDisplayItem> _plugins;
         private ObservableCollection<FieldUpdateActionDisplayItem> _fieldUpdateActions;
+        private ObservableCollection<FormOperationDisplayItem> _formOperations;
+        private ObservableCollection<ValidationDisplayItem> _validations;
+        private ObservableCollection<FormOperationPluginDisplayItem> _formOperationPlugins;
+        private ObservableCollection<FormOperationAppServiceDisplayItem> _formOperationAppServices;
 
         public string Header
         {
@@ -107,6 +111,30 @@ namespace K3CloudDataDictionary.Models
             set { _fieldUpdateActions = value; OnPropertyChanged(); }
         }
 
+        public ObservableCollection<FormOperationDisplayItem> FormOperations
+        {
+            get => _formOperations;
+            set { _formOperations = value; OnPropertyChanged(); }
+        }
+
+        public ObservableCollection<ValidationDisplayItem> Validations
+        {
+            get => _validations;
+            set { _validations = value; OnPropertyChanged(); }
+        }
+
+        public ObservableCollection<FormOperationPluginDisplayItem> FormOperationPlugins
+        {
+            get => _formOperationPlugins;
+            set { _formOperationPlugins = value; OnPropertyChanged(); }
+        }
+
+        public ObservableCollection<FormOperationAppServiceDisplayItem> FormOperationAppServices
+        {
+            get => _formOperationAppServices;
+            set { _formOperationAppServices = value; OnPropertyChanged(); }
+        }
+
         public bool IsFormTab => TabType == TabType.Form;
         public bool IsEntityTab => TabType == TabType.Entity;
         public bool IsFieldTab => TabType == TabType.Field;
@@ -118,6 +146,10 @@ namespace K3CloudDataDictionary.Models
         public bool IsEntityServiceRuleDetailTab => TabType == TabType.EntityServiceRuleDetail;
         public bool IsPluginTab => TabType == TabType.Plugin;
         public bool IsFieldUpdateActionTab => TabType == TabType.FieldUpdateAction;
+        public bool IsFormOperationTab => TabType == TabType.FormOperation;
+        public bool IsValidationTab => TabType == TabType.Validation;
+        public bool IsFormOperationPluginTab => TabType == TabType.FormOperationPlugin;
+        public bool IsFormOperationAppServiceTab => TabType == TabType.FormOperationAppService;
 
         private bool _isSelected;
         public bool IsSelected
@@ -146,6 +178,10 @@ namespace K3CloudDataDictionary.Models
             AllBusinessServices = new ObservableCollection<FormBusinessServiceDisplayItem>();
             Plugins = new ObservableCollection<PluginDisplayItem>();
             FieldUpdateActions = new ObservableCollection<FieldUpdateActionDisplayItem>();
+            FormOperations = new ObservableCollection<FormOperationDisplayItem>();
+            Validations = new ObservableCollection<ValidationDisplayItem>();
+            FormOperationPlugins = new ObservableCollection<FormOperationPluginDisplayItem>();
+            FormOperationAppServices = new ObservableCollection<FormOperationAppServiceDisplayItem>();
             TabType = TabType.Form;
         }
 

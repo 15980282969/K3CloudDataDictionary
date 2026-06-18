@@ -323,8 +323,15 @@ namespace K3CloudDataDictionary.ViewModels
         private async void OnModuleSelected(ModuleTreeItem module)
         {
             if (module == null) return;
-            module.IsExpanded = true;
-            await OpenTabForModuleAsync(module);
+            try
+            {
+                module.IsExpanded = true;
+                await OpenTabForModuleAsync(module);
+            }
+            catch (Exception ex)
+            {
+                StatusText = $"加载失败：{ex.Message}";
+            }
         }
 
         private async Task OpenTabForModuleAsync(ModuleTreeItem module)
@@ -674,26 +681,26 @@ namespace K3CloudDataDictionary.ViewModels
                 SQLiteParameter[] queryParams;
                 if (entityId != null)
                 {
-                    sql = @"SELECT r.FID, r.FOID, r.FRULEID, r.FDESCRIPTION, r.FISENABLED, r.FPRECONDITION, r.FPRECONDITIONDESC, r.FSEQ, r.FENTITYKEY,
+                    sql = @"SELECT r.FID, r.FDESCRIPTION, r.FISENABLED, r.FPRECONDITION, r.FPRECONDITIONDESC,
        e.FNAME AS FENTITYNAME,
-       (SELECT GROUP_CONCAT(f.FDESCRIPTION || '(' || f.FACTIONID || ')', '; ') FROM T_FORMBUSINESSSERVICE f WHERE f.FRULEID = r.FID AND f.FSERVICETYPE = 'WhenTrue') AS FWHENTRUE,
-       (SELECT GROUP_CONCAT(f.FDESCRIPTION || '(' || f.FACTIONID || ')', '; ') FROM T_FORMBUSINESSSERVICE f WHERE f.FRULEID = r.FID AND f.FSERVICETYPE = 'WhenFalse') AS FWHENFALSE
+       (SELECT GROUP_CONCAT(f.FDESCRIPTION || '(' || bl.FDESC || ')', '; ') FROM T_FORMBUSINESSSERVICE f LEFT JOIN T_MDL_FORMBUSINESS_L bl ON f.FACTIONID = bl.FACTIONID AND bl.FLOCALEID = 2052 WHERE f.FRULEID = r.FID AND f.FSERVICETYPE = 'WhenTrue') AS FWHENTRUE,
+       (SELECT GROUP_CONCAT(f.FDESCRIPTION || '(' || bl.FDESC || ')', '; ') FROM T_FORMBUSINESSSERVICE f LEFT JOIN T_MDL_FORMBUSINESS_L bl ON f.FACTIONID = bl.FACTIONID AND bl.FLOCALEID = 2052 WHERE f.FRULEID = r.FID AND f.FSERVICETYPE = 'WhenFalse') AS FWHENFALSE
 FROM T_ENTITYSERVICERULE r
 LEFT JOIN T_ENTITY e ON r.FENTITYID = e.FID
 WHERE r.FFORMID = @FormId AND r.FENTITYID = @EntityId
-ORDER BY r.FSEQ";
+ORDER BY r.FID";
                     queryParams = new[] { new SQLiteParameter("@FormId", formId), new SQLiteParameter("@EntityId", entityId) };
                 }
                 else
                 {
-                    sql = @"SELECT r.FID, r.FOID, r.FRULEID, r.FDESCRIPTION, r.FISENABLED, r.FPRECONDITION, r.FPRECONDITIONDESC, r.FSEQ, r.FENTITYKEY,
+                    sql = @"SELECT r.FID, r.FDESCRIPTION, r.FISENABLED, r.FPRECONDITION, r.FPRECONDITIONDESC,
        e.FNAME AS FENTITYNAME,
-       (SELECT GROUP_CONCAT(f.FDESCRIPTION || '(' || f.FACTIONID || ')', '; ') FROM T_FORMBUSINESSSERVICE f WHERE f.FRULEID = r.FID AND f.FSERVICETYPE = 'WhenTrue') AS FWHENTRUE,
-       (SELECT GROUP_CONCAT(f.FDESCRIPTION || '(' || f.FACTIONID || ')', '; ') FROM T_FORMBUSINESSSERVICE f WHERE f.FRULEID = r.FID AND f.FSERVICETYPE = 'WhenFalse') AS FWHENFALSE
+       (SELECT GROUP_CONCAT(f.FDESCRIPTION || '(' || bl.FDESC || ')', '; ') FROM T_FORMBUSINESSSERVICE f LEFT JOIN T_MDL_FORMBUSINESS_L bl ON f.FACTIONID = bl.FACTIONID AND bl.FLOCALEID = 2052 WHERE f.FRULEID = r.FID AND f.FSERVICETYPE = 'WhenTrue') AS FWHENTRUE,
+       (SELECT GROUP_CONCAT(f.FDESCRIPTION || '(' || bl.FDESC || ')', '; ') FROM T_FORMBUSINESSSERVICE f LEFT JOIN T_MDL_FORMBUSINESS_L bl ON f.FACTIONID = bl.FACTIONID AND bl.FLOCALEID = 2052 WHERE f.FRULEID = r.FID AND f.FSERVICETYPE = 'WhenFalse') AS FWHENFALSE
 FROM T_ENTITYSERVICERULE r
 LEFT JOIN T_ENTITY e ON r.FENTITYID = e.FID
 WHERE r.FFORMID = @FormId
-ORDER BY r.FSEQ";
+ORDER BY r.FID";
                     queryParams = new[] { new SQLiteParameter("@FormId", formId) };
                 }
                 var rows = await Task.Run(() => ExecuteQuery(sql, queryParams));
@@ -702,14 +709,10 @@ ORDER BY r.FSEQ";
                     tab.EntityServiceRules.Add(new EntityServiceRuleDisplayItem
                     {
                         DbId = row["FID"] != null && int.TryParse(row["FID"].ToString(), out var dbId) ? dbId : 0,
-                        Oid = row["FOID"]?.ToString() ?? "",
-                        RuleId = row["FRULEID"]?.ToString() ?? "",
                         Description = row["FDESCRIPTION"]?.ToString() ?? "",
                         IsEnabled = row["FISENABLED"]?.ToString() ?? "",
                         PreCondition = row["FPRECONDITION"]?.ToString() ?? "",
                         PreConditionDesc = row["FPRECONDITIONDESC"]?.ToString() ?? "",
-                        Seq = row["FSEQ"]?.ToString() ?? "",
-                        EntityKey = row["FENTITYKEY"]?.ToString() ?? "",
                         EntityName = row["FENTITYNAME"]?.ToString() ?? "",
                         WhenTrueServices = row["FWHENTRUE"]?.ToString() ?? "",
                         WhenFalseServices = row["FWHENFALSE"]?.ToString() ?? ""
@@ -752,8 +755,9 @@ ORDER BY r.FSEQ";
             try
             {
                 // 查询所有服务，按条件分支排序（WhenTrue 在前）
-                string sql = @"SELECT s.FACTIONID, s.FDESCRIPTION, s.FPARAMETERS, s.FSERVICETYPE
+                string sql = @"SELECT s.FACTIONID, bl.FDESC as FACTIONDESC, s.FDESCRIPTION, s.FPARAMETERS, s.FSERVICETYPE
 FROM T_FORMBUSINESSSERVICE s
+LEFT JOIN T_MDL_FORMBUSINESS_L bl ON s.FACTIONID = bl.FACTIONID AND bl.FLOCALEID = 2052
 WHERE s.FRULEID = @DbId
 ORDER BY s.FSERVICETYPE, s.FID";
                 var rows = await Task.Run(() => ExecuteQuery(sql, new[] { new SQLiteParameter("@DbId", dbId) }));
@@ -763,6 +767,7 @@ ORDER BY s.FSERVICETYPE, s.FID";
                     tab.AllBusinessServices.Add(new FormBusinessServiceDisplayItem
                     {
                         ServiceType = serviceType == "WhenTrue" ? "条件为真" : "条件为假",
+                        ServiceTypeName = row["FACTIONDESC"]?.ToString() ?? "",
                         ActionId = row["FACTIONID"]?.ToString() ?? "",
                         Description = row["FDESCRIPTION"]?.ToString() ?? "",
                         Parameters = row["FPARAMETERS"]?.ToString() ?? ""
@@ -808,18 +813,18 @@ ORDER BY s.FSERVICETYPE, s.FID";
                 SQLiteParameter[] queryParams;
                 if (!string.IsNullOrEmpty(pluginType))
                 {
-                    sql = @"SELECT FPLUGINTYPE, FCLASSNAME, FORDERID, FELEMENTTYPE, FELEMENTSTYLE, FISENABLED
+                    sql = @"SELECT FPLUGINTYPE, FCLASSNAME, FISENABLED
 FROM T_PLUGIN
 WHERE FFORMID = @FormId AND FPLUGINTYPE = @PluginType
-ORDER BY FORDERID";
+ORDER BY FID";
                     queryParams = new[] { new SQLiteParameter("@FormId", formId), new SQLiteParameter("@PluginType", pluginType) };
                 }
                 else
                 {
-                    sql = @"SELECT FPLUGINTYPE, FCLASSNAME, FORDERID, FELEMENTTYPE, FELEMENTSTYLE, FISENABLED
+                    sql = @"SELECT FPLUGINTYPE, FCLASSNAME, FISENABLED
 FROM T_PLUGIN
 WHERE FFORMID = @FormId
-ORDER BY FPLUGINTYPE, FORDERID";
+ORDER BY FPLUGINTYPE, FID";
                     queryParams = new[] { new SQLiteParameter("@FormId", formId) };
                 }
 
@@ -830,9 +835,6 @@ ORDER BY FPLUGINTYPE, FORDERID";
                     {
                         PluginType = row["FPLUGINTYPE"]?.ToString() ?? "",
                         ClassName = row["FCLASSNAME"]?.ToString() ?? "",
-                        OrderId = row["FORDERID"]?.ToString() ?? "",
-                        ElementType = row["FELEMENTTYPE"]?.ToString() ?? "",
-                        ElementStyle = row["FELEMENTSTYLE"]?.ToString() ?? "",
                         IsEnabled = row["FISENABLED"]?.ToString() ?? ""
                     });
                 }
@@ -872,22 +874,22 @@ ORDER BY FPLUGINTYPE, FORDERID";
 
             try
             {
-                string sql = @"SELECT ua.FSERVICETYPENAME, ua.FACTIONID, ua.FDESCRIPTION, ua.FPARAMETERS, ua.FSEQ, ua.FISFORBIDDEN, ua.FPRECONDITION, ua.FPRECONDITIONDESC,
+                string sql = @"SELECT ua.FACTIONID, bl.FDESC as FACTIONDESC, ua.FDESCRIPTION, ua.FPARAMETERS, ua.FISFORBIDDEN, ua.FPRECONDITION, ua.FPRECONDITIONDESC,
 f.FName as FFIELDNAME
 FROM T_FIELDUPDATEACTION ua
 INNER JOIN T_FIELD f ON ua.FFIELDID = f.FID
+LEFT JOIN T_MDL_FORMBUSINESS_L bl ON ua.FACTIONID = bl.FACTIONID AND bl.FLOCALEID = 2052
 WHERE ua.FFIELDID = @FieldDbId
-ORDER BY ua.FSEQ";
+ORDER BY ua.FID";
                 var rows = await Task.Run(() => ExecuteQuery(sql, new[] { new SQLiteParameter("@FieldDbId", fieldDbId) }));
                 foreach (var row in rows)
                 {
                     tab.FieldUpdateActions.Add(new FieldUpdateActionDisplayItem
                     {
-                        ServiceTypeName = row["FSERVICETYPENAME"]?.ToString() ?? "",
                         ActionId = row["FACTIONID"]?.ToString() ?? "",
+                        ActionDesc = row["FACTIONDESC"]?.ToString() ?? "",
                         Description = row["FDESCRIPTION"]?.ToString() ?? "",
                         Parameters = row["FPARAMETERS"]?.ToString() ?? "",
-                        Seq = row["FSEQ"]?.ToString() ?? "",
                         IsForbidden = row["FISFORBIDDEN"]?.ToString() ?? "",
                         PreCondition = row["FPRECONDITION"]?.ToString() ?? "",
                         PreConditionDesc = row["FPRECONDITIONDESC"]?.ToString() ?? "",
@@ -927,23 +929,23 @@ ORDER BY ua.FSEQ";
 
             try
             {
-                string sql = @"SELECT ua.FSERVICETYPENAME, ua.FACTIONID, ua.FDESCRIPTION, ua.FPARAMETERS, ua.FSEQ, ua.FISFORBIDDEN, ua.FPRECONDITION, ua.FPRECONDITIONDESC,
+                string sql = @"SELECT ua.FACTIONID, bl.FDESC as FACTIONDESC, ua.FDESCRIPTION, ua.FPARAMETERS, ua.FISFORBIDDEN, ua.FPRECONDITION, ua.FPRECONDITIONDESC,
 f.FKey as FFIELDKEY, f.FName as FFIELDNAME
 FROM T_FIELDUPDATEACTION ua
 INNER JOIN T_FIELD f ON ua.FFIELDID = f.FID
 INNER JOIN T_ENTITY e ON f.FENTITYID = e.FID
+LEFT JOIN T_MDL_FORMBUSINESS_L bl ON ua.FACTIONID = bl.FACTIONID AND bl.FLOCALEID = 2052
 WHERE e.FFORMID = @FormId
-ORDER BY f.FKey, ua.FSEQ";
+ORDER BY f.FKey, ua.FID";
                 var rows = await Task.Run(() => ExecuteQuery(sql, new[] { new SQLiteParameter("@FormId", formId) }));
                 foreach (var row in rows)
                 {
                     tab.FieldUpdateActions.Add(new FieldUpdateActionDisplayItem
                     {
-                        ServiceTypeName = row["FSERVICETYPENAME"]?.ToString() ?? "",
                         ActionId = row["FACTIONID"]?.ToString() ?? "",
+                        ActionDesc = row["FACTIONDESC"]?.ToString() ?? "",
                         Description = row["FDESCRIPTION"]?.ToString() ?? "",
                         Parameters = row["FPARAMETERS"]?.ToString() ?? "",
-                        Seq = row["FSEQ"]?.ToString() ?? "",
                         IsForbidden = row["FISFORBIDDEN"]?.ToString() ?? "",
                         PreCondition = row["FPRECONDITION"]?.ToString() ?? "",
                         PreConditionDesc = row["FPRECONDITIONDESC"]?.ToString() ?? "",
@@ -957,6 +959,270 @@ ORDER BY f.FKey, ua.FSEQ";
             catch (Exception ex)
             {
                 StatusText = $"值更新查询失败：{ex.Message}";
+            }
+
+            OpenTabs.Add(tab);
+            SelectedTab = tab;
+        }
+
+        /// <summary>
+        /// 查看表单的操作信息（FormOperation）
+        /// </summary>
+        public async Task OpenFormOperationTabAsync(string formId, string formName)
+        {
+            if (!HasLocalData) return;
+
+            string tabKey = $"formop_{formId}";
+            var existingTab = OpenTabs.FirstOrDefault(t => t.ModuleId == tabKey);
+            if (existingTab != null)
+            {
+                SelectedTab = existingTab;
+                return;
+            }
+
+            var tab = new ModuleTabItem
+            {
+                Header = $"{formName} - 操作",
+                ModuleId = tabKey,
+                TabType = TabType.FormOperation
+            };
+
+            try
+            {
+                string sql = @"SELECT fo.FID, fo.FOPERATION, fo.FOPERATIONNAME,
+(SELECT COUNT(*) FROM T_VALIDATION v WHERE v.FFORMOPERATIONID = fo.FID) as FVALIDATIONCOUNT,
+(SELECT COUNT(*) FROM T_FORMOPERATION_PLUGIN p WHERE p.FFORMOPERATIONID = fo.FID) as FSERVICEPLUGINCOUNT,
+(SELECT COUNT(*) FROM T_FORMOPERATION_APPSERVICE s WHERE s.FFORMOPERATIONID = fo.FID) as FAPPSERVICECOUNT
+FROM T_FORMOPERATION fo
+WHERE fo.FFORMID = @FormId
+ORDER BY fo.FID";
+                var rows = await Task.Run(() => ExecuteQuery(sql, new[] { new SQLiteParameter("@FormId", formId) }));
+                foreach (var row in rows)
+                {
+                    tab.FormOperations.Add(new FormOperationDisplayItem
+                    {
+                        FormOperationDbId = row["FID"] != null && int.TryParse(row["FID"].ToString(), out var fodbid) ? fodbid : 0,
+                        Operation = row["FOPERATION"]?.ToString() ?? "",
+                        OperationName = row["FOPERATIONNAME"]?.ToString() ?? "",
+                        ValidationCount = row["FVALIDATIONCOUNT"] != null && int.TryParse(row["FVALIDATIONCOUNT"].ToString(), out var vc) ? vc : 0,
+                        ServicePluginCount = row["FSERVICEPLUGINCOUNT"] != null && int.TryParse(row["FSERVICEPLUGINCOUNT"].ToString(), out var spc) ? spc : 0,
+                        AppServiceCount = row["FAPPSERVICECOUNT"] != null && int.TryParse(row["FAPPSERVICECOUNT"].ToString(), out var asc) ? asc : 0
+                    });
+                }
+
+                StatusText = $"本地数据 | {tab.Header} - {tab.FormOperations.Count} 条操作";
+            }
+            catch (Exception ex)
+            {
+                StatusText = $"操作查询失败：{ex.Message}";
+            }
+
+            OpenTabs.Add(tab);
+            SelectedTab = tab;
+        }
+
+        /// <summary>
+        /// 查看操作的校验规则信息
+        /// </summary>
+        public async Task OpenValidationTabAsync(string formId, string formName, int? formOperationDbId = null, string operationName = null)
+        {
+            if (!HasLocalData) return;
+
+            string tabKey = formOperationDbId.HasValue ? $"validation_{formId}_{formOperationDbId.Value}" : $"validation_{formId}";
+            var existingTab = OpenTabs.FirstOrDefault(t => t.ModuleId == tabKey);
+            if (existingTab != null)
+            {
+                SelectedTab = existingTab;
+                return;
+            }
+
+            var tab = new ModuleTabItem
+            {
+                Header = formOperationDbId.HasValue ? $"{formName} - {operationName} - 校验规则" : $"{formName} - 校验规则",
+                ModuleId = tabKey,
+                TabType = TabType.Validation
+            };
+
+            try
+            {
+                string sql;
+                SQLiteParameter[] parameters;
+                if (formOperationDbId.HasValue)
+                {
+                    sql = @"SELECT v.FERRORMESSAGE, v.FDESCRIPTION, v.FISUSED,
+fo.FOPERATIONNAME, vt.FNAME as FVALIDATIONTYPENAME
+FROM T_VALIDATION v
+INNER JOIN T_FORMOPERATION fo ON v.FFORMOPERATIONID = fo.FID
+LEFT JOIN T_MDL_FORMVALIDATIONTYPE_L vt ON v.FVALIDATIONTYPE = vt.FTYPEID AND vt.FLOCALEID = 2052
+WHERE fo.FID = @FormOpDbId
+ORDER BY v.FID";
+                    parameters = new[] { new SQLiteParameter("@FormOpDbId", formOperationDbId.Value) };
+                }
+                else
+                {
+                    sql = @"SELECT v.FERRORMESSAGE, v.FDESCRIPTION, v.FISUSED,
+fo.FOPERATIONNAME, vt.FNAME as FVALIDATIONTYPENAME
+FROM T_VALIDATION v
+INNER JOIN T_FORMOPERATION fo ON v.FFORMOPERATIONID = fo.FID
+LEFT JOIN T_MDL_FORMVALIDATIONTYPE_L vt ON v.FVALIDATIONTYPE = vt.FTYPEID AND vt.FLOCALEID = 2052
+WHERE fo.FFORMID = @FormId
+ORDER BY fo.FOPERATIONNAME, v.FID";
+                    parameters = new[] { new SQLiteParameter("@FormId", formId) };
+                }
+                var rows = await Task.Run(() => ExecuteQuery(sql, parameters));
+                foreach (var row in rows)
+                {
+                    tab.Validations.Add(new ValidationDisplayItem
+                    {
+                        ErrorMessage = row["FERRORMESSAGE"]?.ToString() ?? "",
+                        Description = row["FDESCRIPTION"]?.ToString() ?? "",
+                        IsUsed = row["FISUSED"]?.ToString() ?? "",
+                        OperationName = row["FOPERATIONNAME"]?.ToString() ?? "",
+                        ValidationTypeName = row["FVALIDATIONTYPENAME"]?.ToString() ?? ""
+                    });
+                }
+
+                StatusText = $"本地数据 | {tab.Header} - {tab.Validations.Count} 条校验规则";
+            }
+            catch (Exception ex)
+            {
+                StatusText = $"校验规则查询失败：{ex.Message}";
+            }
+
+            OpenTabs.Add(tab);
+            SelectedTab = tab;
+        }
+
+        /// <summary>
+        /// 查看操作的服务插件信息
+        /// </summary>
+        public async Task OpenFormOperationPluginTabAsync(string formId, string formName, int? formOperationDbId = null, string operationName = null)
+        {
+            if (!HasLocalData) return;
+
+            string tabKey = formOperationDbId.HasValue ? $"formopplugin_{formId}_{formOperationDbId.Value}" : $"formopplugin_{formId}";
+            var existingTab = OpenTabs.FirstOrDefault(t => t.ModuleId == tabKey);
+            if (existingTab != null)
+            {
+                SelectedTab = existingTab;
+                return;
+            }
+
+            var tab = new ModuleTabItem
+            {
+                Header = formOperationDbId.HasValue ? $"{formName} - {operationName} - 服务插件" : $"{formName} - 服务插件",
+                ModuleId = tabKey,
+                TabType = TabType.FormOperationPlugin
+            };
+
+            try
+            {
+                string sql;
+                SQLiteParameter[] parameters;
+                if (formOperationDbId.HasValue)
+                {
+                    sql = @"SELECT p.FCLASSNAME, p.FISENABLED,
+fo.FOPERATIONNAME
+FROM T_FORMOPERATION_PLUGIN p
+INNER JOIN T_FORMOPERATION fo ON p.FFORMOPERATIONID = fo.FID
+WHERE fo.FID = @FormOpDbId
+ORDER BY p.FID";
+                    parameters = new[] { new SQLiteParameter("@FormOpDbId", formOperationDbId.Value) };
+                }
+                else
+                {
+                    sql = @"SELECT p.FCLASSNAME, p.FISENABLED,
+fo.FOPERATIONNAME
+FROM T_FORMOPERATION_PLUGIN p
+INNER JOIN T_FORMOPERATION fo ON p.FFORMOPERATIONID = fo.FID
+WHERE fo.FFORMID = @FormId
+ORDER BY fo.FOPERATIONNAME, p.FID";
+                    parameters = new[] { new SQLiteParameter("@FormId", formId) };
+                }
+                var rows = await Task.Run(() => ExecuteQuery(sql, parameters));
+                foreach (var row in rows)
+                {
+                    tab.FormOperationPlugins.Add(new FormOperationPluginDisplayItem
+                    {
+                        ClassName = row["FCLASSNAME"]?.ToString() ?? "",
+                        IsEnabled = row["FISENABLED"]?.ToString() ?? "",
+                        OperationName = row["FOPERATIONNAME"]?.ToString() ?? ""
+                    });
+                }
+
+                StatusText = $"本地数据 | {tab.Header} - {tab.FormOperationPlugins.Count} 条插件";
+            }
+            catch (Exception ex)
+            {
+                StatusText = $"操作插件查询失败：{ex.Message}";
+            }
+
+            OpenTabs.Add(tab);
+            SelectedTab = tab;
+        }
+
+        /// <summary>
+        /// 查看操作的服务端服务信息
+        /// </summary>
+        public async Task OpenFormOperationAppServiceTabAsync(string formId, string formName, int? formOperationDbId = null, string operationName = null)
+        {
+            if (!HasLocalData) return;
+
+            string tabKey = formOperationDbId.HasValue ? $"formopappsvc_{formId}_{formOperationDbId.Value}" : $"formopappsvc_{formId}";
+            var existingTab = OpenTabs.FirstOrDefault(t => t.ModuleId == tabKey);
+            if (existingTab != null)
+            {
+                SelectedTab = existingTab;
+                return;
+            }
+
+            var tab = new ModuleTabItem
+            {
+                Header = formOperationDbId.HasValue ? $"{formName} - {operationName} - 服务端服务" : $"{formName} - 服务端服务",
+                ModuleId = tabKey,
+                TabType = TabType.FormOperationAppService
+            };
+
+            try
+            {
+                string sql;
+                SQLiteParameter[] parameters;
+                if (formOperationDbId.HasValue)
+                {
+                    sql = @"SELECT s.FDESCRIPTION, s.FISFORBIDDEN,
+fo.FOPERATIONNAME
+FROM T_FORMOPERATION_APPSERVICE s
+INNER JOIN T_FORMOPERATION fo ON s.FFORMOPERATIONID = fo.FID
+WHERE fo.FID = @FormOpDbId
+ORDER BY s.FID";
+                    parameters = new[] { new SQLiteParameter("@FormOpDbId", formOperationDbId.Value) };
+                }
+                else
+                {
+                    sql = @"SELECT s.FDESCRIPTION, s.FISFORBIDDEN,
+fo.FOPERATIONNAME
+FROM T_FORMOPERATION_APPSERVICE s
+INNER JOIN T_FORMOPERATION fo ON s.FFORMOPERATIONID = fo.FID
+WHERE fo.FFORMID = @FormId
+ORDER BY fo.FOPERATIONNAME, s.FID";
+                    parameters = new[] { new SQLiteParameter("@FormId", formId) };
+                }
+                var rows = await Task.Run(() => ExecuteQuery(sql, parameters));
+                foreach (var row in rows)
+                {
+                    tab.FormOperationAppServices.Add(new FormOperationAppServiceDisplayItem
+                    {
+                        Description = row["FDESCRIPTION"]?.ToString() ?? "",
+                        IsForbidden = row["FISFORBIDDEN"]?.ToString() ?? "",
+                        OperationName = row["FOPERATIONNAME"]?.ToString() ?? ""
+                    });
+                }
+
+                StatusText = $"本地数据 | {tab.Header} - {tab.FormOperationAppServices.Count} 条服务端服务";
+            }
+            catch (Exception ex)
+            {
+                StatusText = $"服务端服务查询失败：{ex.Message}";
             }
 
             OpenTabs.Add(tab);
@@ -984,22 +1250,22 @@ ORDER BY f.FKey, ua.FSEQ";
 
             try
             {
-                string sql = @"SELECT ua.FSERVICETYPENAME, ua.FACTIONID, ua.FDESCRIPTION, ua.FPARAMETERS, ua.FSEQ, ua.FISFORBIDDEN, ua.FPRECONDITION, ua.FPRECONDITIONDESC,
+                string sql = @"SELECT ua.FACTIONID, bl.FDESC as FACTIONDESC, ua.FDESCRIPTION, ua.FPARAMETERS, ua.FISFORBIDDEN, ua.FPRECONDITION, ua.FPRECONDITIONDESC,
 f.FKey as FFIELDKEY, f.FName as FFIELDNAME
 FROM T_FIELDUPDATEACTION ua
 INNER JOIN T_FIELD f ON ua.FFIELDID = f.FID
+LEFT JOIN T_MDL_FORMBUSINESS_L bl ON ua.FACTIONID = bl.FACTIONID AND bl.FLOCALEID = 2052
 WHERE f.FENTITYID = @EntityId
-ORDER BY f.FKey, ua.FSEQ";
+ORDER BY f.FKey, ua.FID";
                 var rows = await Task.Run(() => ExecuteQuery(sql, new[] { new SQLiteParameter("@EntityId", entityId) }));
                 foreach (var row in rows)
                 {
                     tab.FieldUpdateActions.Add(new FieldUpdateActionDisplayItem
                     {
-                        ServiceTypeName = row["FSERVICETYPENAME"]?.ToString() ?? "",
                         ActionId = row["FACTIONID"]?.ToString() ?? "",
+                        ActionDesc = row["FACTIONDESC"]?.ToString() ?? "",
                         Description = row["FDESCRIPTION"]?.ToString() ?? "",
                         Parameters = row["FPARAMETERS"]?.ToString() ?? "",
-                        Seq = row["FSEQ"]?.ToString() ?? "",
                         IsForbidden = row["FISFORBIDDEN"]?.ToString() ?? "",
                         PreCondition = row["FPRECONDITION"]?.ToString() ?? "",
                         PreConditionDesc = row["FPRECONDITIONDESC"]?.ToString() ?? "",
@@ -1156,17 +1422,27 @@ ORDER BY b.FID, d.FID";
         {
             if (!HasLocalData) return;
 
-            var nodeList = new List<ModuleTreeItem>();
-            var nodeDict = new Dictionary<string, ModuleTreeItem>();
-
             try
             {
+                var nodeList = new List<ModuleTreeItem>();
+                var nodeDict = new Dictionary<string, ModuleTreeItem>();
+                var parentMapping = new List<KeyValuePair<string, string>>(); // 子节点Id → 父节点Id
+
                 await Task.Run(() =>
                 {
                     LoadLevel1Nodes(nodeList, nodeDict);
-                    LoadLevel2Nodes(nodeList, nodeDict);
-                    LoadLevel3Nodes(nodeList, nodeDict);
+                    LoadLevel2Nodes(nodeList, nodeDict, parentMapping);
+                    LoadLevel3Nodes(nodeList, nodeDict, parentMapping);
                 });
+
+                // 在 UI 线程上组装 Children，避免跨线程操作 ObservableCollection
+                foreach (var mapping in parentMapping)
+                {
+                    if (nodeDict.TryGetValue(mapping.Value, out var parent) && nodeDict.TryGetValue(mapping.Key, out var child))
+                    {
+                        parent.Children.Add(child);
+                    }
+                }
 
                 ModuleTree.Clear();
                 foreach (var node in nodeList) ModuleTree.Add(node);
@@ -1179,13 +1455,14 @@ ORDER BY b.FID, d.FID";
             }
         }
 
-        private ModuleTreeItem EnsureOtherNode(List<ModuleTreeItem> nodeList, Dictionary<string, ModuleTreeItem> nodeDict, string otherId, string otherText)
+        private ModuleTreeItem EnsureOtherNode(List<ModuleTreeItem> nodeList, Dictionary<string, ModuleTreeItem> nodeDict, string otherId, string otherText, List<KeyValuePair<string, string>> parentMapping)
         {
             if (!nodeDict.ContainsKey(otherId))
             {
                 var otherNode = new ModuleTreeItem { Id = otherId, Text = otherText, ParentId = "0" };
                 nodeDict[otherId] = otherNode;
                 nodeList.Add(otherNode);
+                parentMapping.Add(new KeyValuePair<string, string>(otherId, "0"));
             }
             return nodeDict[otherId];
         }
@@ -1204,7 +1481,7 @@ ORDER BY b.FID, d.FID";
             }
         }
 
-        private void LoadLevel2Nodes(List<ModuleTreeItem> nodeList, Dictionary<string, ModuleTreeItem> nodeDict)
+        private void LoadLevel2Nodes(List<ModuleTreeItem> nodeList, Dictionary<string, ModuleTreeItem> nodeDict, List<KeyValuePair<string, string>> parentMapping)
         {
             string sql = @"SELECT 'S_' || FID as id, FNAME as text, 'T_' || FTOPCLASSID as parentid FROM T_META_SUBSYSTEM";
             var rows = ExecuteQuery(sql);
@@ -1217,18 +1494,18 @@ ORDER BY b.FID, d.FID";
                 nodeDict[id] = node;
                 if (nodeDict.ContainsKey(parentId))
                 {
-                    nodeDict[parentId].Children.Add(node);
+                    parentMapping.Add(new KeyValuePair<string, string>(id, parentId));
                 }
                 else
                 {
-                    var otherNode = EnsureOtherNode(nodeList, nodeDict, "T_OTHER", "其他");
+                    var otherNode = EnsureOtherNode(nodeList, nodeDict, "T_OTHER", "其他", parentMapping);
                     node.ParentId = otherNode.Id;
-                    otherNode.Children.Add(node);
+                    parentMapping.Add(new KeyValuePair<string, string>(id, otherNode.Id));
                 }
             }
         }
 
-        private void LoadLevel3Nodes(List<ModuleTreeItem> nodeList, Dictionary<string, ModuleTreeItem> nodeDict)
+        private void LoadLevel3Nodes(List<ModuleTreeItem> nodeList, Dictionary<string, ModuleTreeItem> nodeDict, List<KeyValuePair<string, string>> parentMapping)
         {
             string sql = @"SELECT DISTINCT FFORMIDENTIFIER as id, FNAME as text, 'S_' || FSUBSYSTEMID as parentid FROM T_FORM";
             var rows = ExecuteQuery(sql);
@@ -1241,13 +1518,13 @@ ORDER BY b.FID, d.FID";
                 nodeDict[id] = node;
                 if (nodeDict.ContainsKey(parentId))
                 {
-                    nodeDict[parentId].Children.Add(node);
+                    parentMapping.Add(new KeyValuePair<string, string>(id, parentId));
                 }
                 else
                 {
-                    var otherNode = EnsureOtherNode(nodeList, nodeDict, "S_OTHER", "其他");
+                    var otherNode = EnsureOtherNode(nodeList, nodeDict, "S_OTHER", "其他", parentMapping);
                     node.ParentId = otherNode.Id;
-                    otherNode.Children.Add(node);
+                    parentMapping.Add(new KeyValuePair<string, string>(id, otherNode.Id));
                 }
             }
         }
@@ -1273,7 +1550,8 @@ ORDER BY b.FID, d.FID";
                         ListPluginCount = row["FLISTPLUGINCOUNT"] != null && int.TryParse(row["FLISTPLUGINCOUNT"].ToString(), out var lpc) ? lpc : 0,
                         BuilderPluginCount = row["FBUILDERPLUGINCOUNT"] != null && int.TryParse(row["FBUILDERPLUGINCOUNT"].ToString(), out var bpc) ? bpc : 0,
                         UpdateActionCount = row["FUPDATEACTIONCOUNT"] != null && int.TryParse(row["FUPDATEACTIONCOUNT"].ToString(), out var uac0) ? uac0 : 0,
-                        ServiceRuleCount = row["FSERVICERULECOUNT"] != null && int.TryParse(row["FSERVICERULECOUNT"].ToString(), out var src0) ? src0 : 0
+                        ServiceRuleCount = row["FSERVICERULECOUNT"] != null && int.TryParse(row["FSERVICERULECOUNT"].ToString(), out var src0) ? src0 : 0,
+                        FormOperationCount = row["FFORMOPERATIONCOUNT"] != null && int.TryParse(row["FFORMOPERATIONCOUNT"].ToString(), out var foc0) ? foc0 : 0
                     });
                 }
 
@@ -1378,7 +1656,8 @@ SELECT DISTINCT a.FID as FFORMID,
        (SELECT COUNT(*) FROM T_PLUGIN p WHERE p.FFORMID = a.FID AND p.FPLUGINTYPE = 'ListPlugins') as FLISTPLUGINCOUNT,
        (SELECT COUNT(*) FROM T_PLUGIN p WHERE p.FFORMID = a.FID AND p.FPLUGINTYPE = 'WebFormBuilderPlugins') as FBUILDERPLUGINCOUNT,
        (SELECT COUNT(*) FROM T_FIELDUPDATEACTION ua INNER JOIN T_FIELD f ON ua.FFIELDID = f.FID INNER JOIN T_ENTITY e ON f.FENTITYID = e.FID WHERE e.FFORMID = a.FID) as FUPDATEACTIONCOUNT,
-       (SELECT COUNT(*) FROM T_ENTITYSERVICERULE r INNER JOIN T_ENTITY ent ON r.FENTITYID = ent.FID WHERE ent.FFORMID = a.FID) as FSERVICERULECOUNT
+       (SELECT COUNT(*) FROM T_ENTITYSERVICERULE r INNER JOIN T_ENTITY ent ON r.FENTITYID = ent.FID WHERE ent.FFORMID = a.FID) as FSERVICERULECOUNT,
+       (SELECT COUNT(*) FROM T_FORMOPERATION fo WHERE fo.FFORMID = a.FID) as FFORMOPERATIONCOUNT
 FROM T_FORM a
 LEFT JOIN T_MDL_ELEMENTTYPE_L et ON et.FID = a.FMODELTYPEID AND et.FLOCALEID = 2052
 LEFT JOIN T_META_SUBSYSTEM sl ON sl.FID = a.FSUBSYSTEMID"
@@ -1505,20 +1784,20 @@ ORDER BY d.FID";
             if (!HasLocalData) return;
             if (string.IsNullOrWhiteSpace(SearchText)) return;
 
-            if (SelectedTab == null || SelectedTab.TabType != TabType.Form)
+            try
             {
-                var searchTab = new ModuleTabItem
+                if (SelectedTab == null || SelectedTab.TabType != TabType.Form)
                 {
-                    Header = $"搜索: {SearchText}",
-                    ModuleId = "SEARCH_" + Guid.NewGuid().ToString("N"),
-                    TabType = TabType.Form
-                };
+                    var searchTab = new ModuleTabItem
+                    {
+                        Header = $"搜索: {SearchText}",
+                        ModuleId = "SEARCH_" + Guid.NewGuid().ToString("N"),
+                        TabType = TabType.Form
+                    };
 
-                string opValue = SelectedOperator?.OperatorValue ?? "=";
-                var (sql, queryParams) = BuildFormQuery(null, SearchText, opValue);
+                    string opValue = SelectedOperator?.OperatorValue ?? "=";
+                    var (sql, queryParams) = BuildFormQuery(null, SearchText, opValue);
 
-                try
-                {
                     var rows = await Task.Run(() => ExecuteQuery(sql, queryParams));
                     foreach (var row in rows)
                     {
@@ -1533,7 +1812,8 @@ ORDER BY d.FID";
                             ListPluginCount = row["FLISTPLUGINCOUNT"] != null && int.TryParse(row["FLISTPLUGINCOUNT"].ToString(), out var lpc) ? lpc : 0,
                             BuilderPluginCount = row["FBUILDERPLUGINCOUNT"] != null && int.TryParse(row["FBUILDERPLUGINCOUNT"].ToString(), out var bpc) ? bpc : 0,
                             UpdateActionCount = row["FUPDATEACTIONCOUNT"] != null && int.TryParse(row["FUPDATEACTIONCOUNT"].ToString(), out var uac4) ? uac4 : 0,
-                            ServiceRuleCount = row["FSERVICERULECOUNT"] != null && int.TryParse(row["FSERVICERULECOUNT"].ToString(), out var src4) ? src4 : 0
+                            ServiceRuleCount = row["FSERVICERULECOUNT"] != null && int.TryParse(row["FSERVICERULECOUNT"].ToString(), out var src4) ? src4 : 0,
+                            FormOperationCount = row["FFORMOPERATIONCOUNT"] != null && int.TryParse(row["FFORMOPERATIONCOUNT"].ToString(), out var foc4) ? foc4 : 0
                         });
                     }
 
@@ -1541,14 +1821,14 @@ ORDER BY d.FID";
                     SelectedTab = searchTab;
                     StatusText = $"本地数据 | 搜索结果：{searchTab.Forms.Count} 条表单";
                 }
-                catch (Exception ex)
+                else
                 {
-                    StatusText = $"查询失败：{ex.Message}";
+                    await SearchInTabAsync();
                 }
             }
-            else
+            catch (Exception ex)
             {
-                await SearchInTabAsync();
+                StatusText = $"查询失败：{ex.Message}";
             }
         }
 
@@ -1578,7 +1858,8 @@ ORDER BY d.FID";
                             ListPluginCount = row["FLISTPLUGINCOUNT"] != null && int.TryParse(row["FLISTPLUGINCOUNT"].ToString(), out var lpc2) ? lpc2 : 0,
                             BuilderPluginCount = row["FBUILDERPLUGINCOUNT"] != null && int.TryParse(row["FBUILDERPLUGINCOUNT"].ToString(), out var bpc2) ? bpc2 : 0,
                             UpdateActionCount = row["FUPDATEACTIONCOUNT"] != null && int.TryParse(row["FUPDATEACTIONCOUNT"].ToString(), out var uac3) ? uac3 : 0,
-                            ServiceRuleCount = row["FSERVICERULECOUNT"] != null && int.TryParse(row["FSERVICERULECOUNT"].ToString(), out var src3) ? src3 : 0
+                            ServiceRuleCount = row["FSERVICERULECOUNT"] != null && int.TryParse(row["FSERVICERULECOUNT"].ToString(), out var src3) ? src3 : 0,
+                            FormOperationCount = row["FFORMOPERATIONCOUNT"] != null && int.TryParse(row["FFORMOPERATIONCOUNT"].ToString(), out var foc3) ? foc3 : 0
                         });
                     }
 

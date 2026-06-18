@@ -176,6 +176,103 @@ namespace K3CloudDataDictionary.Views
             return result;
         }
 
+        /// <summary>
+        /// 从XML中提取FormOperations信息
+        /// </summary>
+        public static List<FormOperationInfo> ExtractFormOperations(string xmlContent)
+        {
+            var result = new List<FormOperationInfo>();
+            if (string.IsNullOrEmpty(xmlContent)) return result;
+
+            XDocument doc = XDocument.Parse(xmlContent);
+
+            var formOpsContainer = doc.Descendants("FormOperations").FirstOrDefault();
+            if (formOpsContainer == null) return result;
+
+            foreach (var opElement in formOpsContainer.Elements("FormOperation"))
+            {
+                var op = new FormOperationInfo
+                {
+                    Oid = opElement.Attribute("oid")?.Value ?? "",
+                    Action = opElement.Attribute("action")?.Value ?? "",
+                    Id = opElement.Element("Id")?.Value ?? "",
+                    Operation = opElement.Element("Operation")?.Value ?? "",
+                    OperationName = opElement.Element("OperationName")?.Value ?? ""
+                };
+
+                // 提取 Validations
+                var validationsElement = opElement.Element("Validations");
+                if (validationsElement != null)
+                {
+                    foreach (var valElement in validationsElement.Elements())
+                    {
+                        // 跳过 action=remove 的空验证标签
+                        var valAction = valElement.Attribute("action")?.Value ?? "";
+                        var val = new ValidationInfo
+                        {
+                            Oid = valElement.Attribute("oid")?.Value ?? "",
+                            Action = valAction,
+                            Id = valElement.Element("Id")?.Value ?? "",
+                            ValidationType = valElement.Attribute("ValidationType")?.Value ?? "",
+                            ValidationTypeName = valElement.Name.LocalName,
+                            ErrorMessage = valElement.Element("ErrorMessage")?.Value ?? "",
+                            Description = valElement.Element("Description")?.Value ?? "",
+                            IsUsed = valElement.Element("IsUsed")?.Value ?? ""
+                        };
+                        op.Validations.Add(val);
+                    }
+                }
+
+                // 提取 ServicePlugins
+                var servicePluginsElement = opElement.Element("ServicePlugins");
+                if (servicePluginsElement != null)
+                {
+                    foreach (var pluginElement in servicePluginsElement.Elements("PlugIn"))
+                    {
+                        var plugin = new FormOperationPluginInfo
+                        {
+                            Oid = pluginElement.Attribute("oid")?.Value ?? "",
+                            Action = pluginElement.Attribute("action")?.Value ?? "",
+                            ClassName = pluginElement.Element("ClassName")?.Value ?? "",
+                            OrderId = pluginElement.Element("OrderId")?.Value ?? "",
+                            ElementType = pluginElement.Attribute("ElementType")?.Value ?? "",
+                            ElementStyle = pluginElement.Attribute("ElementStyle")?.Value ?? "",
+                            IsEnabled = pluginElement.Element("IsEnabled")?.Value ?? ""
+                        };
+                        op.ServicePlugins.Add(plugin);
+                    }
+                }
+
+                // 提取 AppBusinessService
+                var appBizSvcElement = opElement.Element("AppBusinessService");
+                if (appBizSvcElement != null)
+                {
+                    // 检查是否 action="setnull"
+                    var appBizAction = appBizSvcElement.Attribute("action")?.Value ?? "";
+                    if (appBizAction != "setnull")
+                    {
+                        foreach (var svcElement in appBizSvcElement.Elements())
+                        {
+                            var svc = new FormOperationAppServiceInfo
+                            {
+                                Oid = svcElement.Attribute("oid")?.Value ?? "",
+                                Action = svcElement.Attribute("action")?.Value ?? "",
+                                Id = svcElement.Element("Id")?.Value ?? "",
+                                ServiceTypeName = svcElement.Name.LocalName,
+                                Description = svcElement.Element("Description")?.Value ?? "",
+                                IsForbidden = svcElement.Element("IsForbidden")?.Value ?? ""
+                            };
+                            op.AppBusinessServices.Add(svc);
+                        }
+                    }
+                }
+
+                result.Add(op);
+            }
+
+            return result;
+        }
+
         private static FormBusinessServiceInfo ParseBusinessService(XElement svcElement, string parentRuleId, string serviceType)
         {
             return new FormBusinessServiceInfo

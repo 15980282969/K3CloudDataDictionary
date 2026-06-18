@@ -36,7 +36,8 @@ namespace K3CloudDataDictionary.Models
         public string EnumTypeDisplay { get => _enumTypeDisplay; set { _enumTypeDisplay = value; OnPropertyChanged(); } }
         public string Suffix { get => _suffix; set { _suffix = value; OnPropertyChanged(); } }
         public string SplitDescription { get => _splitDescription; set { _splitDescription = value; OnPropertyChanged(); } }
-        public int UpdateActionCount { get => _updateActionCount; set { _updateActionCount = value; OnPropertyChanged(); } }
+        public int UpdateActionCount { get => _updateActionCount; set { _updateActionCount = value; OnPropertyChanged(); OnPropertyChanged(nameof(UpdateActionCountDisplay)); } }
+        public string UpdateActionCountDisplay => _updateActionCount > 0 ? _updateActionCount.ToString() : "";
         public string FieldDbId { get => _fieldDbId; set { _fieldDbId = value; OnPropertyChanged(); } }
 
         public event PropertyChangedEventHandler PropertyChanged;

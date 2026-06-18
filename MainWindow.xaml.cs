@@ -968,19 +968,32 @@ namespace K3CloudDataDictionary
 
                     if (pluginType != null)
                     {
+                        if ((pluginType == "FormPlugins" && form.FormPluginCount == 0) ||
+                            (pluginType == "ListPlugins" && form.ListPluginCount == 0) ||
+                            (pluginType == "WebFormBuilderPlugins" && form.BuilderPluginCount == 0))
+                            return;
                         await vm.OpenPluginTabAsync(form.FormId, form.FormName, pluginType);
                         return;
                     }
 
                     if (column.Header?.ToString() == "值更新")
                     {
+                        if (form.UpdateActionCount == 0) return;
                         await vm.OpenFormUpdateActionTabAsync(form.FormId, form.FormName);
                         return;
                     }
 
                     if (column.Header?.ToString() == "服务规则")
                     {
+                        if (form.ServiceRuleCount == 0) return;
                         await vm.OpenEntityServiceRuleTabAsync(form.FormId, form.FormName);
+                        return;
+                    }
+
+                    if (column.Header?.ToString() == "操作列表")
+                    {
+                        if (form.FormOperationCount == 0) return;
+                        await vm.OpenFormOperationTabAsync(form.FormId, form.FormName);
                         return;
                     }
                 }
@@ -1007,11 +1020,13 @@ namespace K3CloudDataDictionary
                     {
                         if (column.Header?.ToString() == "服务规则")
                         {
+                            if (entity.ServiceRuleCount == 0) return;
                             await vm.OpenEntityServiceRuleTabAsync(entity.FormId, entity.FormName, entity.EntityId);
                             return;
                         }
                         if (column.Header?.ToString() == "值更新")
                         {
+                            if (entity.UpdateActionCount == 0) return;
                             await vm.OpenEntityUpdateActionTabAsync(entity.FormId, entity.FormName, entity.EntityId);
                             return;
                         }
@@ -1041,6 +1056,7 @@ namespace K3CloudDataDictionary
             // 判断是否双击了值更新列
             if (dataGrid.CurrentCell.Column is DataGridColumn column && column.Header?.ToString() == "值更新")
             {
+                if (field.UpdateActionCount == 0) return;
                 var currentTab = vm.SelectedTab;
                 if (currentTab != null && currentTab.ModuleId.StartsWith("field_"))
                 {
@@ -1106,6 +1122,7 @@ namespace K3CloudDataDictionary
             // 判断是否双击了值更新列
             if (dataGrid.CurrentCell.Column is DataGridColumn column && column.Header?.ToString() == "值更新")
             {
+                if (allField.UpdateActionCount == 0) return;
                 var currentTab = vm.SelectedTab;
                 if (currentTab != null && currentTab.ModuleId.StartsWith("allfields_"))
                 {
@@ -1150,6 +1167,123 @@ namespace K3CloudDataDictionary
                     {
                         await vm.OpenBillTypeTabAsync(formIdentifier);
                     }
+                }
+            }
+        }
+
+        private async void FormOperationDataGrid_MouseDoubleClick(object sender, MouseButtonEventArgs e)
+        {
+            if (e.ChangedButton != MouseButton.Left) return;
+
+            var dep = (DependencyObject)e.OriginalSource;
+            while (dep != null && !(dep is DataGridRow))
+                dep = VisualTreeHelper.GetParent(dep);
+
+            if (!(dep is DataGridRow dataRow)) return;
+            var dataGrid = (DataGrid)sender;
+            var rowItem = dataGrid.ItemContainerGenerator.ItemFromContainer(dataRow);
+            if (!(rowItem is Models.FormOperationDisplayItem formOp)) return;
+
+            var vm = DataContext as MainViewModel;
+            if (vm == null) return;
+
+            var currentTab = vm.SelectedTab;
+            if (currentTab == null) return;
+
+            // 从 tab 的 ModuleId 提取 formId（格式：formop_{formId}）
+            var formId = currentTab.ModuleId.StartsWith("formop_") ? currentTab.ModuleId.Substring("formop_".Length) : "";
+            if (string.IsNullOrEmpty(formId)) return;
+
+            var formName = currentTab.Header.Split(new[] { " - " }, StringSplitOptions.None).FirstOrDefault() ?? "";
+
+            if (dataGrid.CurrentCell.Column is DataGridColumn column)
+            {
+                if (column.Header?.ToString() == "校验规则")
+                {
+                    if (formOp.ValidationCount == 0) return;
+                    await vm.OpenValidationTabAsync(formId, formName, formOp.FormOperationDbId, formOp.OperationName);
+                    return;
+                }
+                if (column.Header?.ToString() == "服务插件")
+                {
+                    if (formOp.ServicePluginCount == 0) return;
+                    await vm.OpenFormOperationPluginTabAsync(formId, formName, formOp.FormOperationDbId, formOp.OperationName);
+                    return;
+                }
+                if (column.Header?.ToString() == "服务端服务")
+                {
+                    if (formOp.AppServiceCount == 0) return;
+                    await vm.OpenFormOperationAppServiceTabAsync(formId, formName, formOp.FormOperationDbId, formOp.OperationName);
+                    return;
+                }
+            }
+        }
+
+        private async void ShowAllValidations_Click(object sender, RoutedEventArgs e)
+        {
+            var btn = sender as FrameworkElement;
+            if (btn == null) return;
+
+            var dep = btn as DependencyObject;
+            while (dep != null && !(dep is FrameworkElement fe && fe.DataContext is ModuleTabItem))
+                dep = VisualTreeHelper.GetParent(dep);
+
+            if (dep is FrameworkElement element && element.DataContext is ModuleTabItem tab)
+            {
+                var formId = tab.ModuleId.StartsWith("formop_") ? tab.ModuleId.Substring("formop_".Length) : "";
+                if (string.IsNullOrEmpty(formId)) return;
+
+                var formName = tab.Header.Split(new[] { " - " }, StringSplitOptions.None).FirstOrDefault() ?? "";
+                var vm = DataContext as MainViewModel;
+                if (vm != null)
+                {
+                    await vm.OpenValidationTabAsync(formId, formName);
+                }
+            }
+        }
+
+        private async void ShowAllFormOperationPlugins_Click(object sender, RoutedEventArgs e)
+        {
+            var btn = sender as FrameworkElement;
+            if (btn == null) return;
+
+            var dep = btn as DependencyObject;
+            while (dep != null && !(dep is FrameworkElement fe && fe.DataContext is ModuleTabItem))
+                dep = VisualTreeHelper.GetParent(dep);
+
+            if (dep is FrameworkElement element && element.DataContext is ModuleTabItem tab)
+            {
+                var formId = tab.ModuleId.StartsWith("formop_") ? tab.ModuleId.Substring("formop_".Length) : "";
+                if (string.IsNullOrEmpty(formId)) return;
+
+                var formName = tab.Header.Split(new[] { " - " }, StringSplitOptions.None).FirstOrDefault() ?? "";
+                var vm = DataContext as MainViewModel;
+                if (vm != null)
+                {
+                    await vm.OpenFormOperationPluginTabAsync(formId, formName);
+                }
+            }
+        }
+
+        private async void ShowAllFormOperationAppServices_Click(object sender, RoutedEventArgs e)
+        {
+            var btn = sender as FrameworkElement;
+            if (btn == null) return;
+
+            var dep = btn as DependencyObject;
+            while (dep != null && !(dep is FrameworkElement fe && fe.DataContext is ModuleTabItem))
+                dep = VisualTreeHelper.GetParent(dep);
+
+            if (dep is FrameworkElement element && element.DataContext is ModuleTabItem tab)
+            {
+                var formId = tab.ModuleId.StartsWith("formop_") ? tab.ModuleId.Substring("formop_".Length) : "";
+                if (string.IsNullOrEmpty(formId)) return;
+
+                var formName = tab.Header.Split(new[] { " - " }, StringSplitOptions.None).FirstOrDefault() ?? "";
+                var vm = DataContext as MainViewModel;
+                if (vm != null)
+                {
+                    await vm.OpenFormOperationAppServiceTabAsync(formId, formName);
                 }
             }
         }

@@ -88,8 +88,10 @@ namespace K3CloudDataDictionary.Models
         public int UpdateActionCount
         {
             get => _updateActionCount;
-            set { _updateActionCount = value; OnPropertyChanged(); }
+            set { _updateActionCount = value; OnPropertyChanged(); OnPropertyChanged(nameof(UpdateActionCountDisplay)); }
         }
+
+        public string UpdateActionCountDisplay => _updateActionCount > 0 ? _updateActionCount.ToString() : "";
 
         public string FieldDbId
         {

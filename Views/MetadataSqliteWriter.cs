@@ -18,6 +18,10 @@ namespace K3CloudDataDictionary.Views
         private int _businessServiceId = 100001;
         private int _pluginId = 100001;
         private int _fieldUpdateActionId = 100001;
+        private int _formOperationId = 100001;
+        private int _validationId = 100001;
+        private int _formOperationPluginId = 100001;
+        private int _formOperationAppServiceId = 100001;
         private bool _disposed;
 
         public MetadataSqliteWriter(string dbPath) : this(dbPath, true) { }
@@ -58,6 +62,10 @@ namespace K3CloudDataDictionary.Views
             _businessServiceId = GetMaxId("T_FORMBUSINESSSERVICE") + 1;
             _pluginId = GetMaxId("T_PLUGIN") + 1;
             _fieldUpdateActionId = GetMaxId("T_FIELDUPDATEACTION") + 1;
+            _formOperationId = GetMaxId("T_FORMOPERATION") + 1;
+            _validationId = GetMaxId("T_VALIDATION") + 1;
+            _formOperationPluginId = GetMaxId("T_FORMOPERATION_PLUGIN") + 1;
+            _formOperationAppServiceId = GetMaxId("T_FORMOPERATION_APPSERVICE") + 1;
         }
 
         private int GetMaxId(string tableName)
@@ -85,6 +93,12 @@ namespace K3CloudDataDictionary.Views
             ExecuteNonQuery("DROP TABLE IF EXISTS T_ENTITYSERVICERULE");
             ExecuteNonQuery("DROP TABLE IF EXISTS T_PLUGIN");
             ExecuteNonQuery("DROP TABLE IF EXISTS T_FIELDUPDATEACTION");
+            ExecuteNonQuery("DROP TABLE IF EXISTS T_FORMOPERATION_APPSERVICE");
+            ExecuteNonQuery("DROP TABLE IF EXISTS T_FORMOPERATION_PLUGIN");
+            ExecuteNonQuery("DROP TABLE IF EXISTS T_VALIDATION");
+            ExecuteNonQuery("DROP TABLE IF EXISTS T_FORMOPERATION");
+            ExecuteNonQuery("DROP TABLE IF EXISTS T_MDL_FORMBUSINESS_L");
+            ExecuteNonQuery("DROP TABLE IF EXISTS T_MDL_FORMVALIDATIONTYPE_L");
 
             ExecuteNonQuery(@"CREATE TABLE T_FORM (
                 FID             INTEGER NOT NULL PRIMARY KEY,
@@ -191,21 +205,15 @@ namespace K3CloudDataDictionary.Views
                 FID             INTEGER NOT NULL PRIMARY KEY,
                 FFORMID         INTEGER NOT NULL,
                 FENTITYID       INTEGER NOT NULL,
-                FOID            TEXT,
-                FRULEID         TEXT,
                 FDESCRIPTION    TEXT,
                 FISENABLED      TEXT,
                 FPRECONDITION   TEXT,
-                FPRECONDITIONDESC TEXT,
-                FSEQ            TEXT,
-                FENTITYKEY      TEXT)");
+                FPRECONDITIONDESC TEXT)");
             ExecuteNonQuery("CREATE INDEX IDX_T_ENTITYSERVICERULE_FORMID ON T_ENTITYSERVICERULE(FFORMID)");
-            ExecuteNonQuery("CREATE INDEX IDX_T_ENTITYSERVICERULE_OID ON T_ENTITYSERVICERULE(FOID)");
 
             ExecuteNonQuery(@"CREATE TABLE T_FORMBUSINESSSERVICE (
                 FID             INTEGER NOT NULL PRIMARY KEY,
                 FRULEID         INTEGER NOT NULL,
-                FSERVICEID      TEXT,
                 FACTIONID       TEXT,
                 FDESCRIPTION    TEXT,
                 FPARAMETERS     TEXT,
@@ -215,28 +223,63 @@ namespace K3CloudDataDictionary.Views
             ExecuteNonQuery(@"CREATE TABLE T_PLUGIN (
                 FID             INTEGER NOT NULL PRIMARY KEY,
                 FFORMID         INTEGER NOT NULL,
-                FOID            TEXT,
                 FCLASSNAME      TEXT,
-                FORDERID        TEXT,
                 FPLUGINTYPE     TEXT,
-                FELEMENTTYPE    TEXT,
-                FELEMENTSTYLE   TEXT,
                 FISENABLED      TEXT)");
             ExecuteNonQuery("CREATE INDEX IDX_T_PLUGIN_FORMID ON T_PLUGIN(FFORMID)");
 
             ExecuteNonQuery(@"CREATE TABLE T_FIELDUPDATEACTION (
                 FID             INTEGER NOT NULL PRIMARY KEY,
                 FFIELDID        INTEGER NOT NULL,
-                FSERVICETYPENAME TEXT,
                 FACTIONID       TEXT,
                 FDESCRIPTION    TEXT,
                 FPARAMETERS     TEXT,
-                FSEQ            TEXT,
-                FSERVICEID      TEXT,
                 FISFORBIDDEN    TEXT,
                 FPRECONDITION   TEXT,
                 FPRECONDITIONDESC TEXT)");
             ExecuteNonQuery("CREATE INDEX IDX_T_FIELDUPDATEACTION_FIELDID ON T_FIELDUPDATEACTION(FFIELDID)");
+
+            ExecuteNonQuery(@"CREATE TABLE T_FORMOPERATION (
+                FID             INTEGER NOT NULL PRIMARY KEY,
+                FFORMID         INTEGER NOT NULL,
+                FOPERATION      TEXT,
+                FOPERATIONNAME  TEXT)");
+            ExecuteNonQuery("CREATE INDEX IDX_T_FORMOPERATION_FORMID ON T_FORMOPERATION(FFORMID)");
+
+            ExecuteNonQuery(@"CREATE TABLE T_VALIDATION (
+                FID                 INTEGER NOT NULL PRIMARY KEY,
+                FFORMOPERATIONID    INTEGER NOT NULL,
+                FVALIDATIONTYPE     TEXT,
+                FERRORMESSAGE       TEXT,
+                FDESCRIPTION        TEXT,
+                FISUSED             TEXT)");
+            ExecuteNonQuery("CREATE INDEX IDX_T_VALIDATION_FORMOPERATIONID ON T_VALIDATION(FFORMOPERATIONID)");
+
+            ExecuteNonQuery(@"CREATE TABLE T_FORMOPERATION_PLUGIN (
+                FID                 INTEGER NOT NULL PRIMARY KEY,
+                FFORMOPERATIONID    INTEGER NOT NULL,
+                FCLASSNAME          TEXT,
+                FISENABLED          TEXT)");
+            ExecuteNonQuery("CREATE INDEX IDX_T_FORMOPERATION_PLUGIN_FORMOPERATIONID ON T_FORMOPERATION_PLUGIN(FFORMOPERATIONID)");
+
+            ExecuteNonQuery(@"CREATE TABLE T_FORMOPERATION_APPSERVICE (
+                FID                 INTEGER NOT NULL PRIMARY KEY,
+                FFORMOPERATIONID    INTEGER NOT NULL,
+                FDESCRIPTION        TEXT,
+                FISFORBIDDEN        TEXT)");
+            ExecuteNonQuery("CREATE INDEX IDX_T_FORMOPERATION_APPSERVICE_FORMOPERATIONID ON T_FORMOPERATION_APPSERVICE(FFORMOPERATIONID)");
+
+            ExecuteNonQuery(@"CREATE TABLE T_MDL_FORMBUSINESS_L (
+                FACTIONID       TEXT NOT NULL,
+                FLOCALEID       INTEGER NOT NULL,
+                FDESC           TEXT,
+                PRIMARY KEY (FACTIONID, FLOCALEID))");
+
+            ExecuteNonQuery(@"CREATE TABLE T_MDL_FORMVALIDATIONTYPE_L (
+                FTYPEID         TEXT NOT NULL,
+                FLOCALEID       INTEGER NOT NULL,
+                FNAME           TEXT,
+                PRIMARY KEY (FTYPEID, FLOCALEID))");
         }
 
         public void WriteLookupTables(string sqlServerConnectionString)
@@ -252,6 +295,8 @@ namespace K3CloudDataDictionary.Views
                 WriteLookupClass(sqlConn);
                 WriteBillType(sqlConn);
                 WriteAssistantData(sqlConn);
+                WriteFormBusinessL(sqlConn);
+                WriteFormValidationTypeL(sqlConn);
             }
         }
 
@@ -282,7 +327,7 @@ namespace K3CloudDataDictionary.Views
 
             if (formIds.Count == 0) return;
 
-            // 级联删除：T_PLUGIN → T_FORMBUSINESSSERVICE → T_ENTITYSERVICERULE → T_FIELDUPDATEACTION → T_FIELD → T_ENTITYSPLIT → T_ENTITY → T_FORM
+            // 级联删除：T_PLUGIN → T_FORMBUSINESSSERVICE → T_ENTITYSERVICERULE → T_FIELDUPDATEACTION → T_FORMOPERATION_APPSERVICE → T_FORMOPERATION_PLUGIN → T_VALIDATION → T_FORMOPERATION → T_FIELD → T_ENTITYSPLIT → T_ENTITY → T_FORM
             var formIdParams = formIds.Select((id, i) => new SQLiteParameter($"@FID{i}", id)).ToArray();
             string fidPlaceholders = string.Join(",", formIds.Select((_, i) => $"@FID{i}"));
 
@@ -291,6 +336,11 @@ namespace K3CloudDataDictionary.Views
             ExecuteNonQuery($"DELETE FROM T_FORMBUSINESSSERVICE WHERE FRULEID IN (SELECT FID FROM T_ENTITYSERVICERULE WHERE FFORMID IN ({fidPlaceholders}))", formIdParams);
             ExecuteNonQuery($"DELETE FROM T_ENTITYSERVICERULE WHERE FFORMID IN ({fidPlaceholders})", formIdParams);
             ExecuteNonQuery($"DELETE FROM T_FIELDUPDATEACTION WHERE FFIELDID IN (SELECT FID FROM T_FIELD WHERE FFORMID IN ({fidPlaceholders}))", formIdParams);
+            // 删除 FormOperation 相关表
+            ExecuteNonQuery($"DELETE FROM T_FORMOPERATION_APPSERVICE WHERE FFORMOPERATIONID IN (SELECT FID FROM T_FORMOPERATION WHERE FFORMID IN ({fidPlaceholders}))", formIdParams);
+            ExecuteNonQuery($"DELETE FROM T_FORMOPERATION_PLUGIN WHERE FFORMOPERATIONID IN (SELECT FID FROM T_FORMOPERATION WHERE FFORMID IN ({fidPlaceholders}))", formIdParams);
+            ExecuteNonQuery($"DELETE FROM T_VALIDATION WHERE FFORMOPERATIONID IN (SELECT FID FROM T_FORMOPERATION WHERE FFORMID IN ({fidPlaceholders}))", formIdParams);
+            ExecuteNonQuery($"DELETE FROM T_FORMOPERATION WHERE FFORMID IN ({fidPlaceholders})", formIdParams);
             ExecuteNonQuery($"DELETE FROM T_FIELD WHERE FFORMID IN ({fidPlaceholders})", formIdParams);
             ExecuteNonQuery($"DELETE FROM T_ENTITYSPLIT WHERE FFORMID IN ({fidPlaceholders})", formIdParams);
             ExecuteNonQuery($"DELETE FROM T_ENTITY WHERE FFORMID IN ({fidPlaceholders})", formIdParams);
@@ -469,6 +519,44 @@ INNER JOIN T_BAS_ASSISTANTDATAENTRY_L d ON c.FENTRYID = d.FENTRYID AND d.FLOCALE
             }
         }
 
+        private void WriteFormBusinessL(System.Data.SqlClient.SqlConnection sqlConn)
+        {
+            string sql = "SELECT FACTIONID, FLOCALEID, FDESC FROM T_MDL_FORMBUSINESS_L WHERE FLOCALEID = 2052";
+            using (var cmd = new System.Data.SqlClient.SqlCommand(sql, sqlConn))
+            using (var reader = cmd.ExecuteReader())
+            {
+                while (reader.Read())
+                {
+                    var factionid = reader["FACTIONID"]?.ToString() ?? "";
+                    var localeId = reader["FLOCALEID"]?.ToString() ?? "0";
+                    var fdesc = reader["FDESC"]?.ToString() ?? "";
+                    ExecuteNonQuery("INSERT INTO T_MDL_FORMBUSINESS_L (FACTIONID, FLOCALEID, FDESC) VALUES (@FACTIONID, @FLOCALEID, @FDESC)",
+                        new SQLiteParameter("@FACTIONID", factionid ?? (object)DBNull.Value),
+                        new SQLiteParameter("@FLOCALEID", int.TryParse(localeId, out var lid) ? lid : 0),
+                        new SQLiteParameter("@FDESC", fdesc ?? (object)DBNull.Value));
+                }
+            }
+        }
+
+        private void WriteFormValidationTypeL(System.Data.SqlClient.SqlConnection sqlConn)
+        {
+            string sql = "SELECT FTYPEID, FLOCALEID, FNAME FROM T_MDL_FORMVALIDATIONTYPE_L WHERE FLOCALEID = 2052";
+            using (var cmd = new System.Data.SqlClient.SqlCommand(sql, sqlConn))
+            using (var reader = cmd.ExecuteReader())
+            {
+                while (reader.Read())
+                {
+                    var ftypeid = reader["FTYPEID"]?.ToString() ?? "";
+                    var localeId = reader["FLOCALEID"]?.ToString() ?? "0";
+                    var fname = reader["FNAME"]?.ToString() ?? "";
+                    ExecuteNonQuery("INSERT INTO T_MDL_FORMVALIDATIONTYPE_L (FTYPEID, FLOCALEID, FNAME) VALUES (@FTYPEID, @FLOCALEID, @FNAME)",
+                        new SQLiteParameter("@FTYPEID", ftypeid ?? (object)DBNull.Value),
+                        new SQLiteParameter("@FLOCALEID", int.TryParse(localeId, out var lid) ? lid : 0),
+                        new SQLiteParameter("@FNAME", fname ?? (object)DBNull.Value));
+                }
+            }
+        }
+
         public void Write(MetadataResult result)
         {
             var objInfo = result.ObjInfo;
@@ -585,15 +673,12 @@ INNER JOIN T_BAS_ASSISTANTDATAENTRY_L d ON c.FENTRYID = d.FENTRYID AND d.FLOCALE
                 {
                     var actionDbId = _fieldUpdateActionId;
                     _fieldUpdateActionId++;
-                    ExecuteNonQuery("INSERT INTO T_FIELDUPDATEACTION (FID, FFIELDID, FSERVICETYPENAME, FACTIONID, FDESCRIPTION, FPARAMETERS, FSEQ, FSERVICEID, FISFORBIDDEN, FPRECONDITION, FPRECONDITIONDESC) VALUES (@FID, @FFIELDID, @FSERVICETYPENAME, @FACTIONID, @FDESCRIPTION, @FPARAMETERS, @FSEQ, @FSERVICEID, @FISFORBIDDEN, @FPRECONDITION, @FPRECONDITIONDESC)",
+                    ExecuteNonQuery("INSERT INTO T_FIELDUPDATEACTION (FID, FFIELDID, FACTIONID, FDESCRIPTION, FPARAMETERS, FISFORBIDDEN, FPRECONDITION, FPRECONDITIONDESC) VALUES (@FID, @FFIELDID, @FACTIONID, @FDESCRIPTION, @FPARAMETERS, @FISFORBIDDEN, @FPRECONDITION, @FPRECONDITIONDESC)",
                         new SQLiteParameter("@FID", actionDbId),
                         new SQLiteParameter("@FFIELDID", tmpFieldId),
-                        new SQLiteParameter("@FSERVICETYPENAME", updateAction.ServiceTypeName ?? (object)DBNull.Value),
                         new SQLiteParameter("@FACTIONID", updateAction.ActionId ?? (object)DBNull.Value),
                         new SQLiteParameter("@FDESCRIPTION", updateAction.Description ?? (object)DBNull.Value),
                         new SQLiteParameter("@FPARAMETERS", updateAction.Parameters ?? (object)DBNull.Value),
-                        new SQLiteParameter("@FSEQ", updateAction.Seq ?? (object)DBNull.Value),
-                        new SQLiteParameter("@FSERVICEID", updateAction.Id ?? (object)DBNull.Value),
                         new SQLiteParameter("@FISFORBIDDEN", updateAction.IsForbidden ?? (object)DBNull.Value),
                         new SQLiteParameter("@FPRECONDITION", updateAction.PreCondition ?? (object)DBNull.Value),
                         new SQLiteParameter("@FPRECONDITIONDESC", updateAction.PreConditionDesc ?? (object)DBNull.Value));
@@ -618,18 +703,14 @@ INNER JOIN T_BAS_ASSISTANTDATAENTRY_L d ON c.FENTRYID = d.FENTRYID AND d.FLOCALE
                     var ruleDbId = _serviceRuleId;
                     _serviceRuleId++;
 
-                    ExecuteNonQuery("INSERT INTO T_ENTITYSERVICERULE (FID, FFORMID, FENTITYID, FOID, FRULEID, FDESCRIPTION, FISENABLED, FPRECONDITION, FPRECONDITIONDESC, FSEQ, FENTITYKEY) VALUES (@FID, @FFORMID, @FENTITYID, @FOID, @FRULEID, @FDESCRIPTION, @FISENABLED, @FPRECONDITION, @FPRECONDITIONDESC, @FSEQ, @FENTITYKEY)",
+                    ExecuteNonQuery("INSERT INTO T_ENTITYSERVICERULE (FID, FFORMID, FENTITYID, FDESCRIPTION, FISENABLED, FPRECONDITION, FPRECONDITIONDESC) VALUES (@FID, @FFORMID, @FENTITYID, @FDESCRIPTION, @FISENABLED, @FPRECONDITION, @FPRECONDITIONDESC)",
                         new SQLiteParameter("@FID", ruleDbId),
                         new SQLiteParameter("@FFORMID", currentFormId),
                         new SQLiteParameter("@FENTITYID", ruleEntityId),
-                        new SQLiteParameter("@FOID", rule.Oid ?? (object)DBNull.Value),
-                        new SQLiteParameter("@FRULEID", rule.Id ?? (object)DBNull.Value),
                         new SQLiteParameter("@FDESCRIPTION", rule.Description ?? (object)DBNull.Value),
                         new SQLiteParameter("@FISENABLED", rule.IsEnabled ?? (object)DBNull.Value),
                         new SQLiteParameter("@FPRECONDITION", rule.PreCondition ?? (object)DBNull.Value),
-                        new SQLiteParameter("@FPRECONDITIONDESC", rule.PreConditionDesc ?? (object)DBNull.Value),
-                        new SQLiteParameter("@FSEQ", rule.Seq ?? (object)DBNull.Value),
-                        new SQLiteParameter("@FENTITYKEY", rule.EntityKey ?? (object)DBNull.Value));
+                        new SQLiteParameter("@FPRECONDITIONDESC", rule.PreConditionDesc ?? (object)DBNull.Value));
 
                     // 写入 WhenTrueBusinessServices
                     foreach (var svc in rule.WhenTrueServices)
@@ -637,10 +718,9 @@ INNER JOIN T_BAS_ASSISTANTDATAENTRY_L d ON c.FENTRYID = d.FENTRYID AND d.FLOCALE
                         var svcDbId = _businessServiceId;
                         _businessServiceId++;
 
-                        ExecuteNonQuery("INSERT INTO T_FORMBUSINESSSERVICE (FID, FRULEID, FSERVICEID, FACTIONID, FDESCRIPTION, FPARAMETERS, FSERVICETYPE) VALUES (@FID, @FRULEID, @FSERVICEID, @FACTIONID, @FDESCRIPTION, @FPARAMETERS, @FSERVICETYPE)",
+                        ExecuteNonQuery("INSERT INTO T_FORMBUSINESSSERVICE (FID, FRULEID, FACTIONID, FDESCRIPTION, FPARAMETERS, FSERVICETYPE) VALUES (@FID, @FRULEID, @FACTIONID, @FDESCRIPTION, @FPARAMETERS, @FSERVICETYPE)",
                             new SQLiteParameter("@FID", svcDbId),
                             new SQLiteParameter("@FRULEID", ruleDbId),
-                            new SQLiteParameter("@FSERVICEID", svc.Id ?? (object)DBNull.Value),
                             new SQLiteParameter("@FACTIONID", svc.ActionId ?? (object)DBNull.Value),
                             new SQLiteParameter("@FDESCRIPTION", svc.Description ?? (object)DBNull.Value),
                             new SQLiteParameter("@FPARAMETERS", svc.Parameters ?? (object)DBNull.Value),
@@ -653,10 +733,9 @@ INNER JOIN T_BAS_ASSISTANTDATAENTRY_L d ON c.FENTRYID = d.FENTRYID AND d.FLOCALE
                         var svcDbId = _businessServiceId;
                         _businessServiceId++;
 
-                        ExecuteNonQuery("INSERT INTO T_FORMBUSINESSSERVICE (FID, FRULEID, FSERVICEID, FACTIONID, FDESCRIPTION, FPARAMETERS, FSERVICETYPE) VALUES (@FID, @FRULEID, @FSERVICEID, @FACTIONID, @FDESCRIPTION, @FPARAMETERS, @FSERVICETYPE)",
+                        ExecuteNonQuery("INSERT INTO T_FORMBUSINESSSERVICE (FID, FRULEID, FACTIONID, FDESCRIPTION, FPARAMETERS, FSERVICETYPE) VALUES (@FID, @FRULEID, @FACTIONID, @FDESCRIPTION, @FPARAMETERS, @FSERVICETYPE)",
                             new SQLiteParameter("@FID", svcDbId),
                             new SQLiteParameter("@FRULEID", ruleDbId),
-                            new SQLiteParameter("@FSERVICEID", svc.Id ?? (object)DBNull.Value),
                             new SQLiteParameter("@FACTIONID", svc.ActionId ?? (object)DBNull.Value),
                             new SQLiteParameter("@FDESCRIPTION", svc.Description ?? (object)DBNull.Value),
                             new SQLiteParameter("@FPARAMETERS", svc.Parameters ?? (object)DBNull.Value),
@@ -670,16 +749,62 @@ INNER JOIN T_BAS_ASSISTANTDATAENTRY_L d ON c.FENTRYID = d.FENTRYID AND d.FLOCALE
             {
                 var pluginDbId = _pluginId;
                 _pluginId++;
-                ExecuteNonQuery("INSERT INTO T_PLUGIN (FID, FFORMID, FOID, FCLASSNAME, FORDERID, FPLUGINTYPE, FELEMENTTYPE, FELEMENTSTYLE, FISENABLED) VALUES (@FID, @FFORMID, @FOID, @FCLASSNAME, @FORDERID, @FPLUGINTYPE, @FELEMENTTYPE, @FELEMENTSTYLE, @FISENABLED)",
+                ExecuteNonQuery("INSERT INTO T_PLUGIN (FID, FFORMID, FCLASSNAME, FPLUGINTYPE, FISENABLED) VALUES (@FID, @FFORMID, @FCLASSNAME, @FPLUGINTYPE, @FISENABLED)",
                     new SQLiteParameter("@FID", pluginDbId),
                     new SQLiteParameter("@FFORMID", currentFormId),
-                    new SQLiteParameter("@FOID", plugin.Oid ?? (object)DBNull.Value),
                     new SQLiteParameter("@FCLASSNAME", plugin.ClassName ?? (object)DBNull.Value),
-                    new SQLiteParameter("@FORDERID", plugin.OrderId ?? (object)DBNull.Value),
                     new SQLiteParameter("@FPLUGINTYPE", plugin.PluginType ?? (object)DBNull.Value),
-                    new SQLiteParameter("@FELEMENTTYPE", plugin.ElementType ?? (object)DBNull.Value),
-                    new SQLiteParameter("@FELEMENTSTYLE", plugin.ElementStyle ?? (object)DBNull.Value),
                     new SQLiteParameter("@FISENABLED", plugin.IsEnabled ?? (object)DBNull.Value));
+            }
+
+            // 写入 FormOperations 及其子集合
+            foreach (var formOp in result.FormOperations)
+            {
+                var formOpDbId = _formOperationId;
+                _formOperationId++;
+                ExecuteNonQuery("INSERT INTO T_FORMOPERATION (FID, FFORMID, FOPERATION, FOPERATIONNAME) VALUES (@FID, @FFORMID, @FOPERATION, @FOPERATIONNAME)",
+                    new SQLiteParameter("@FID", formOpDbId),
+                    new SQLiteParameter("@FFORMID", currentFormId),
+                    new SQLiteParameter("@FOPERATION", formOp.Operation ?? (object)DBNull.Value),
+                    new SQLiteParameter("@FOPERATIONNAME", formOp.OperationName ?? (object)DBNull.Value));
+
+                // 写入 Validations
+                foreach (var val in formOp.Validations)
+                {
+                    var valDbId = _validationId;
+                    _validationId++;
+                    ExecuteNonQuery("INSERT INTO T_VALIDATION (FID, FFORMOPERATIONID, FVALIDATIONTYPE, FERRORMESSAGE, FDESCRIPTION, FISUSED) VALUES (@FID, @FFORMOPERATIONID, @FVALIDATIONTYPE, @FERRORMESSAGE, @FDESCRIPTION, @FISUSED)",
+                        new SQLiteParameter("@FID", valDbId),
+                        new SQLiteParameter("@FFORMOPERATIONID", formOpDbId),
+                        new SQLiteParameter("@FVALIDATIONTYPE", val.ValidationType ?? (object)DBNull.Value),
+                        new SQLiteParameter("@FERRORMESSAGE", val.ErrorMessage ?? (object)DBNull.Value),
+                        new SQLiteParameter("@FDESCRIPTION", val.Description ?? (object)DBNull.Value),
+                        new SQLiteParameter("@FISUSED", val.IsUsed ?? (object)DBNull.Value));
+                }
+
+                // 写入 ServicePlugins
+                foreach (var svcPlugin in formOp.ServicePlugins)
+                {
+                    var svcPluginDbId = _formOperationPluginId;
+                    _formOperationPluginId++;
+                    ExecuteNonQuery("INSERT INTO T_FORMOPERATION_PLUGIN (FID, FFORMOPERATIONID, FCLASSNAME, FISENABLED) VALUES (@FID, @FFORMOPERATIONID, @FCLASSNAME, @FISENABLED)",
+                        new SQLiteParameter("@FID", svcPluginDbId),
+                        new SQLiteParameter("@FFORMOPERATIONID", formOpDbId),
+                        new SQLiteParameter("@FCLASSNAME", svcPlugin.ClassName ?? (object)DBNull.Value),
+                        new SQLiteParameter("@FISENABLED", svcPlugin.IsEnabled ?? (object)DBNull.Value));
+                }
+
+                // 写入 AppBusinessServices
+                foreach (var appSvc in formOp.AppBusinessServices)
+                {
+                    var appSvcDbId = _formOperationAppServiceId;
+                    _formOperationAppServiceId++;
+                    ExecuteNonQuery("INSERT INTO T_FORMOPERATION_APPSERVICE (FID, FFORMOPERATIONID, FDESCRIPTION, FISFORBIDDEN) VALUES (@FID, @FFORMOPERATIONID, @FDESCRIPTION, @FISFORBIDDEN)",
+                        new SQLiteParameter("@FID", appSvcDbId),
+                        new SQLiteParameter("@FFORMOPERATIONID", formOpDbId),
+                        new SQLiteParameter("@FDESCRIPTION", appSvc.Description ?? (object)DBNull.Value),
+                        new SQLiteParameter("@FISFORBIDDEN", appSvc.IsForbidden ?? (object)DBNull.Value));
+                }
             }
         }
 

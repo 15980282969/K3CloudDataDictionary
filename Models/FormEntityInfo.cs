@@ -95,14 +95,17 @@ namespace K3CloudDataDictionary.Models
         public int ServiceRuleCount
         {
             get => _serviceRuleCount;
-            set { _serviceRuleCount = value; OnPropertyChanged(); }
+            set { _serviceRuleCount = value; OnPropertyChanged(); OnPropertyChanged(nameof(ServiceRuleCountDisplay)); }
         }
 
         public int UpdateActionCount
         {
             get => _updateActionCount;
-            set { _updateActionCount = value; OnPropertyChanged(); }
+            set { _updateActionCount = value; OnPropertyChanged(); OnPropertyChanged(nameof(UpdateActionCountDisplay)); }
         }
+
+        public string ServiceRuleCountDisplay => _serviceRuleCount > 0 ? _serviceRuleCount.ToString() : "";
+        public string UpdateActionCountDisplay => _updateActionCount > 0 ? _updateActionCount.ToString() : "";
 
         public event PropertyChangedEventHandler PropertyChanged;
 

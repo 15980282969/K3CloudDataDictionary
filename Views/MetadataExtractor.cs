@@ -26,6 +26,8 @@ namespace K3CloudDataDictionary.Views
         public List<SplitTableInfo> Splits { get; set; } = new List<SplitTableInfo>();
         /// <summary>插件列表</summary>
         public List<PluginInfo> Plugins { get; set; } = new List<PluginInfo>();
+        /// <summary>FormOperation列表</summary>
+        public List<FormOperationInfo> FormOperations { get; set; } = new List<FormOperationInfo>();
 
         /// <summary>
         /// 将结果输出到控制台
@@ -331,6 +333,7 @@ namespace K3CloudDataDictionary.Views
             var fieldDict = new Dictionary<string, MetadataFieldInfo>();
             var allSplits = new List<SplitTableInfo>();
             var allPlugins = new List<PluginInfo>();
+            var allFormOperations = new List<FormOperationInfo>();
 
             foreach (var chainFid in fullChain)
             {
@@ -346,9 +349,11 @@ namespace K3CloudDataDictionary.Views
                 MergeSplits(allSplits, ExtractSplits.ExtractFromXml(xml));
 
                 MergePlugins(allPlugins, ExtractEntities.ExtractPlugins(xml));
+
+                MergeFormOperations(allFormOperations, ExtractEntities.ExtractFormOperations(xml));
             }
 
-            var result = BuildResult(fid, entityDict, fieldDict, allSplits, allPlugins);
+            var result = BuildResult(fid, entityDict, fieldDict, allSplits, allPlugins, allFormOperations);
             result.ObjInfo = objInfo;
 
             return result;
@@ -357,7 +362,7 @@ namespace K3CloudDataDictionary.Views
         /// <summary>
         /// 将合并字典构建为MetadataResult，按oid有无分组
         /// </summary>
-        private static MetadataResult BuildResult(string fid, Dictionary<string, EntityInfo> entityDict, Dictionary<string, MetadataFieldInfo> fieldDict, List<SplitTableInfo> splits, List<PluginInfo> plugins)
+        private static MetadataResult BuildResult(string fid, Dictionary<string, EntityInfo> entityDict, Dictionary<string, MetadataFieldInfo> fieldDict, List<SplitTableInfo> splits, List<PluginInfo> plugins, List<FormOperationInfo> formOperations)
         {
             var result = new MetadataResult { Fid = fid };
 
@@ -387,6 +392,7 @@ namespace K3CloudDataDictionary.Views
 
             result.Splits = splits;
             result.Plugins = plugins;
+            result.FormOperations = formOperations;
             return result;
         }
 
@@ -450,6 +456,153 @@ namespace K3CloudDataDictionary.Views
         private static string GetPluginKey(PluginInfo plugin)
         {
             return !string.IsNullOrEmpty(plugin.Oid) ? plugin.Oid : plugin.ClassName;
+        }
+
+        /// <summary>
+        /// 合并FormOperation列表，按继承键匹配（oid 优先，否则用 Id）：
+        /// 扩展 XML 中 FormOperation 的 oid = 系统 XML 中 FormOperation 的 Id
+        /// action=remove则删除，已存在则覆盖属性并合并子集合，不存在则新增
+        /// </summary>
+        private static void MergeFormOperations(List<FormOperationInfo> allFormOps, List<FormOperationInfo> newFormOps)
+        {
+            foreach (var op in newFormOps)
+            {
+                string opKey = GetFormOperationKey(op);
+
+                if (op.Action == "remove")
+                {
+                    allFormOps.RemoveAll(o => GetFormOperationKey(o) == opKey);
+                    continue;
+                }
+
+                var existing = allFormOps.FirstOrDefault(o => GetFormOperationKey(o) == opKey);
+                if (existing != null)
+                {
+                    if (!string.IsNullOrEmpty(op.Id)) existing.Id = op.Id;
+                    if (!string.IsNullOrEmpty(op.Operation)) existing.Operation = op.Operation;
+                    if (!string.IsNullOrEmpty(op.OperationName)) existing.OperationName = op.OperationName;
+
+                    // 合并 Validations
+                    MergeValidations(existing.Validations, op.Validations);
+
+                    // 合并 ServicePlugins
+                    MergeFormOperationPlugins(existing.ServicePlugins, op.ServicePlugins);
+
+                    // 合并 AppBusinessServices
+                    MergeFormOperationAppServices(existing.AppBusinessServices, op.AppBusinessServices);
+                }
+                else
+                {
+                    allFormOps.Add(op.Clone());
+                }
+            }
+        }
+
+        /// <summary>
+        /// 获取FormOperation的继承匹配键：oid 优先（扩展），否则用 Id（基础）
+        /// </summary>
+        private static string GetFormOperationKey(FormOperationInfo op)
+        {
+            return !string.IsNullOrEmpty(op.Oid) ? op.Oid : op.Id;
+        }
+
+        /// <summary>
+        /// 合并Validation列表，按继承键匹配（oid 优先，否则用 Id）：
+        /// action=remove则删除，已存在则覆盖，不存在则新增
+        /// </summary>
+        private static void MergeValidations(List<ValidationInfo> existingVals, List<ValidationInfo> newVals)
+        {
+            foreach (var val in newVals)
+            {
+                if (val.Action == "remove")
+                {
+                    existingVals.RemoveAll(v => GetValidationKey(v) == GetValidationKey(val));
+                    continue;
+                }
+
+                var existing = existingVals.FirstOrDefault(v => GetValidationKey(v) == GetValidationKey(val));
+                if (existing != null)
+                {
+                    if (!string.IsNullOrEmpty(val.Id)) existing.Id = val.Id;
+                    if (!string.IsNullOrEmpty(val.ValidationType)) existing.ValidationType = val.ValidationType;
+                    if (!string.IsNullOrEmpty(val.ValidationTypeName)) existing.ValidationTypeName = val.ValidationTypeName;
+                    if (!string.IsNullOrEmpty(val.ErrorMessage)) existing.ErrorMessage = val.ErrorMessage;
+                    if (!string.IsNullOrEmpty(val.Description)) existing.Description = val.Description;
+                    if (!string.IsNullOrEmpty(val.IsUsed)) existing.IsUsed = val.IsUsed;
+                }
+                else
+                {
+                    existingVals.Add(val.Clone());
+                }
+            }
+        }
+
+        private static string GetValidationKey(ValidationInfo val)
+        {
+            return !string.IsNullOrEmpty(val.Oid) ? val.Oid : val.Id;
+        }
+
+        /// <summary>
+        /// 合并FormOperation下的ServicePlugin列表，按继承键匹配（oid 优先，否则用 ClassName）：
+        /// action=remove则删除，已存在则覆盖，不存在则新增
+        /// </summary>
+        private static void MergeFormOperationPlugins(List<FormOperationPluginInfo> existingPlugins, List<FormOperationPluginInfo> newPlugins)
+        {
+            foreach (var plugin in newPlugins)
+            {
+                string pluginKey = !string.IsNullOrEmpty(plugin.Oid) ? plugin.Oid : plugin.ClassName;
+
+                if (plugin.Action == "remove")
+                {
+                    existingPlugins.RemoveAll(p => (!string.IsNullOrEmpty(p.Oid) ? p.Oid : p.ClassName) == pluginKey);
+                    continue;
+                }
+
+                var existing = existingPlugins.FirstOrDefault(p => (!string.IsNullOrEmpty(p.Oid) ? p.Oid : p.ClassName) == pluginKey);
+                if (existing != null)
+                {
+                    if (!string.IsNullOrEmpty(plugin.ClassName)) existing.ClassName = plugin.ClassName;
+                    if (!string.IsNullOrEmpty(plugin.OrderId)) existing.OrderId = plugin.OrderId;
+                    if (!string.IsNullOrEmpty(plugin.ElementType)) existing.ElementType = plugin.ElementType;
+                    if (!string.IsNullOrEmpty(plugin.ElementStyle)) existing.ElementStyle = plugin.ElementStyle;
+                    if (!string.IsNullOrEmpty(plugin.IsEnabled)) existing.IsEnabled = plugin.IsEnabled;
+                }
+                else
+                {
+                    existingPlugins.Add(plugin.Clone());
+                }
+            }
+        }
+
+        /// <summary>
+        /// 合并FormOperation下的AppBusinessService列表，按继承键匹配（oid 优先，否则用 Id）：
+        /// action=remove则删除，已存在则覆盖，不存在则新增
+        /// </summary>
+        private static void MergeFormOperationAppServices(List<FormOperationAppServiceInfo> existingSvcs, List<FormOperationAppServiceInfo> newSvcs)
+        {
+            foreach (var svc in newSvcs)
+            {
+                string svcKey = !string.IsNullOrEmpty(svc.Oid) ? svc.Oid : svc.Id;
+
+                if (svc.Action == "remove")
+                {
+                    existingSvcs.RemoveAll(s => (!string.IsNullOrEmpty(s.Oid) ? s.Oid : s.Id) == svcKey);
+                    continue;
+                }
+
+                var existing = existingSvcs.FirstOrDefault(s => (!string.IsNullOrEmpty(s.Oid) ? s.Oid : s.Id) == svcKey);
+                if (existing != null)
+                {
+                    if (!string.IsNullOrEmpty(svc.Id)) existing.Id = svc.Id;
+                    if (!string.IsNullOrEmpty(svc.ServiceTypeName)) existing.ServiceTypeName = svc.ServiceTypeName;
+                    if (!string.IsNullOrEmpty(svc.Description)) existing.Description = svc.Description;
+                    if (!string.IsNullOrEmpty(svc.IsForbidden)) existing.IsForbidden = svc.IsForbidden;
+                }
+                else
+                {
+                    existingSvcs.Add(svc.Clone());
+                }
+            }
         }
 
         /// <summary>

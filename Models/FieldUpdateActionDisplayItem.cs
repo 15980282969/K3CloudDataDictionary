@@ -5,27 +5,26 @@ namespace K3CloudDataDictionary.Models
 {
     public class FieldUpdateActionDisplayItem : INotifyPropertyChanged
     {
-        private string _serviceTypeName;
         private string _actionId;
+        private string _actionDesc;
         private string _description;
         private string _parameters;
-        private string _seq;
         private string _isForbidden;
         private string _preCondition;
         private string _preConditionDesc;
         private string _fieldName;
         private string _fieldDisplayName;
 
-        public string ServiceTypeName
-        {
-            get => _serviceTypeName;
-            set { _serviceTypeName = value; OnPropertyChanged(); }
-        }
-
         public string ActionId
         {
             get => _actionId;
             set { _actionId = value; OnPropertyChanged(); }
+        }
+
+        public string ActionDesc
+        {
+            get => _actionDesc;
+            set { _actionDesc = value; OnPropertyChanged(); }
         }
 
         public string Description
@@ -38,12 +37,6 @@ namespace K3CloudDataDictionary.Models
         {
             get => _parameters;
             set { _parameters = value; OnPropertyChanged(); }
-        }
-
-        public string Seq
-        {
-            get => _seq;
-            set { _seq = value; OnPropertyChanged(); }
         }
 
         public string IsForbidden
