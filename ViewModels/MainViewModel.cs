@@ -1681,7 +1681,7 @@ LEFT JOIN T_ENTITY ent ON ent.FFORMID = a.FID" : "");
                         parameters.Add(new SQLiteParameter("@SearchValue", $"%{searchText}"));
                         break;
                     default:
-                        whereConditions.Add("(a.FFORMIDENTIFIER = @SearchValue OR a.FNAME = @SearchValue OR ent.FTableName = @SearchValue)");
+                        whereConditions.Add("(a.FFORMIDENTIFIER = @SearchValue COLLATE NOCASE OR a.FNAME = @SearchValue COLLATE NOCASE OR ent.FTableName = @SearchValue COLLATE NOCASE)");
                         parameters.Add(new SQLiteParameter("@SearchValue", searchText));
                         break;
                 }
