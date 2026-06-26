@@ -20,6 +20,7 @@ namespace K3CloudDataDictionary.Views
         public string EnumType { get; set; } = "";
         public string Action { get; set; } = "";
         public List<FieldUpdateActionInfo> UpdateActions { get; set; } = new List<FieldUpdateActionInfo>();
+        public List<StatusItemInfo> StatusItems { get; set; } = new List<StatusItemInfo>();
 
         public override string ToString()
         {
@@ -43,7 +44,25 @@ namespace K3CloudDataDictionary.Views
                 LookUpObjectID = LookUpObjectID,
                 EnumType = EnumType,
                 Action = Action,
-                UpdateActions = new List<FieldUpdateActionInfo>(UpdateActions.ConvertAll(a => a.Clone()))
+                UpdateActions = new List<FieldUpdateActionInfo>(UpdateActions.ConvertAll(a => a.Clone())),
+                StatusItems = new List<StatusItemInfo>(StatusItems.ConvertAll(s => s.Clone()))
+            };
+        }
+    }
+
+    public class StatusItemInfo
+    {
+        public string Id { get; set; } = "";
+        public string StatusName { get; set; } = "";
+        public string StatusValue { get; set; } = "";
+
+        public StatusItemInfo Clone()
+        {
+            return new StatusItemInfo
+            {
+                Id = Id,
+                StatusName = StatusName,
+                StatusValue = StatusValue
             };
         }
     }
@@ -112,6 +131,22 @@ namespace K3CloudDataDictionary.Views
                             PreConditionDesc = svcElement.Element("PreConditionDesc")?.Value ?? ""
                         };
                         info.UpdateActions.Add(action);
+                    }
+                }
+
+                // 提取 StatusItems（单据状态字段，ElementType=40）
+                var statusItemsElement = element.Element("StatusItems");
+                if (statusItemsElement != null)
+                {
+                    foreach (var statusElement in statusItemsElement.Elements())
+                    {
+                        var statusItem = new StatusItemInfo
+                        {
+                            Id = statusElement.Element("Id")?.Value ?? "",
+                            StatusName = statusElement.Element("StatusName")?.Value ?? "",
+                            StatusValue = statusElement.Element("StatusValue")?.Value ?? ""
+                        };
+                        info.StatusItems.Add(statusItem);
                     }
                 }
 

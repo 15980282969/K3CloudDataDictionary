@@ -1,0 +1,48 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net472</TargetFramework>
+    <RootNamespace>K3CloudDataDictionary.Cli</RootNamespace>
+    <AssemblyName>k3cli</AssemblyName>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+    <PackageReference Include="System.Data.SqlClient" Version="4.8.6" />
+    <PackageReference Include="System.Data.SQLite.Core" Version="1.0.119" />
+  </ItemGroup>
+  <ItemGroup>
+    <Reference Include="System.Security" />
+  </ItemGroup>
+  <!-- 链接共享主项目的源文件 -->
+  <ItemGroup>
+    <Compile Include="..\Helpers\DbHelper.cs" Link="Shared\Helpers\DbHelper.cs" />
+    <Compile Include="..\Helpers\PasswordHelper.cs" Link="Shared\Helpers\PasswordHelper.cs" />
+    <Compile Include="..\Helpers\SQLiteHelper.cs" Link="Shared\Helpers\SQLiteHelper.cs" />
+    <Compile Include="..\Models\AllFieldInfo.cs" Link="Shared\Models\AllFieldInfo.cs" />
+    <Compile Include="..\Models\AssistantDataItem.cs" Link="Shared\Models\AssistantDataItem.cs" />
+    <Compile Include="..\Models\BillTypeInfo.cs" Link="Shared\Models\BillTypeInfo.cs" />
+    <Compile Include="..\Models\ConnectionInfo.cs" Link="Shared\Models\ConnectionInfo.cs" />
+    <Compile Include="..\Models\EntityServiceRuleDisplayItem.cs" Link="Shared\Models\EntityServiceRuleDisplayItem.cs" />
+    <Compile Include="..\Models\EnumItemInfo.cs" Link="Shared\Models\EnumItemInfo.cs" />
+    <Compile Include="..\Models\FieldInfo.cs" Link="Shared\Models\FieldInfo.cs" />
+    <Compile Include="..\Models\FieldUpdateActionDisplayItem.cs" Link="Shared\Models\FieldUpdateActionDisplayItem.cs" />
+    <Compile Include="..\Models\FormBusinessServiceDisplayItem.cs" Link="Shared\Models\FormBusinessServiceDisplayItem.cs" />
+    <Compile Include="..\Models\FormEntityInfo.cs" Link="Shared\Models\FormEntityInfo.cs" />
+    <Compile Include="..\Models\FormInfo.cs" Link="Shared\Models\FormInfo.cs" />
+    <Compile Include="..\Models\FormOperationDisplayItem.cs" Link="Shared\Models\FormOperationDisplayItem.cs" />
+    <Compile Include="..\Models\LocalDataFileInfo.cs" Link="Shared\Models\LocalDataFileInfo.cs" />
+    <Compile Include="..\Models\ModuleTabItem.cs" Link="Shared\Models\ModuleTabItem.cs" />
+    <Compile Include="..\Models\ModuleTreeItem.cs" Link="Shared\Models\ModuleTreeItem.cs" />
+    <Compile Include="..\Models\OperatorItem.cs" Link="Shared\Models\OperatorItem.cs" />
+    <Compile Include="..\Models\PluginDisplayItem.cs" Link="Shared\Models\PluginDisplayItem.cs" />
+    <Compile Include="..\Views\EntityServiceRuleInfo.cs" Link="Shared\Views\EntityServiceRuleInfo.cs" />
+    <Compile Include="..\Views\ExtractEntities.cs" Link="Shared\Views\ExtractEntities.cs" />
+    <Compile Include="..\Views\ExtractFields.cs" Link="Shared\Views\ExtractFields.cs" />
+    <Compile Include="..\Views\ExtractSplits.cs" Link="Shared\Views\ExtractSplits.cs" />
+    <Compile Include="..\Views\FieldUpdateActionInfo.cs" Link="Shared\Views\FieldUpdateActionInfo.cs" />
+    <Compile Include="..\Views\FormOperationInfo.cs" Link="Shared\Views\FormOperationInfo.cs" />
+    <Compile Include="..\Views\MetadataDbHelper.cs" Link="Shared\Views\MetadataDbHelper.cs" />
+    <Compile Include="..\Views\MetadataExtractor.cs" Link="Shared\Views\MetadataExtractor.cs" />
+    <Compile Include="..\Views\PluginInfo.cs" Link="Shared\Views\PluginInfo.cs" />
+  </ItemGroup>
+</Project>
