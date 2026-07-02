@@ -58,6 +58,8 @@ namespace K3CloudDataDictionary.Cli.Commands
                         table = entity.GetValueOrDefault("FTABLENAME")?.ToString() ?? "",
                         entryName = entity.GetValueOrDefault("FEntryName")?.ToString() ?? "",
                         elementType = entity.GetValueOrDefault("FELEMENTTYPENAME")?.ToString() ?? "",
+                        seqFieldKey = entity.GetValueOrDefault("FSEQFIELDKEY")?.ToString() ?? "",
+                        entryPkFieldName = entity.GetValueOrDefault("FENTRY_PK_FIELD_NAME")?.ToString() ?? "",
                         serviceRuleCount = Convert.ToInt32(entity.GetValueOrDefault("FSERVICERULECOUNT") ?? 0),
                         updateActionCount = Convert.ToInt32(entity.GetValueOrDefault("FUPDATEACTIONCOUNT") ?? 0)
                     });

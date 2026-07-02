@@ -12,6 +12,7 @@ namespace K3CloudDataDictionary.Views
         public string TableName { get; set; } = "";
         public string Name { get; set; } = "";
         public string EntryPkFieldName { get; set; } = "";
+        public string SeqFieldKey { get; set; } = "";
         public string Id { get; set; } = "";
         public string Key { get; set; } = "";
         public string KeyField { get; set; } = "";
@@ -19,9 +20,24 @@ namespace K3CloudDataDictionary.Views
         public string Action { get; set; } = "";
         public List<EntityServiceRuleInfo> ServiceRules { get; set; } = new List<EntityServiceRuleInfo>();
 
+        /// <summary>
+        /// 获取有效的主键字段名（XML值或默认规则）
+        /// 整单（单据头）默认 FID，分录实体（单据体）默认 FEntryId
+        /// </summary>
+        public string EffectivePkFieldName
+        {
+            get
+            {
+                if (!string.IsNullOrEmpty(EntryPkFieldName)) return EntryPkFieldName;
+                // 默认规则：单据头用 FID，单据体用 FEntryId
+                if (TagName != null && TagName.Contains("Head")) return "FID";
+                return "FEntryId";
+            }
+        }
+
         public override string ToString()
         {
-            return $"[{TagName}] Oid={Oid}, ElementType={ElementType}, EntryName={EntryName}, TableName={TableName}, Name={Name}, EntryPkFieldName={EntryPkFieldName}, Id={Id}, Key={Key}, KeyField={KeyField}";
+            return $"[{TagName}] Oid={Oid}, ElementType={ElementType}, EntryName={EntryName}, TableName={TableName}, Name={Name}, EntryPkFieldName={EntryPkFieldName}, SeqFieldKey={SeqFieldKey}, Id={Id}, Key={Key}, KeyField={KeyField}";
         }
 
         public EntityInfo Clone()
@@ -34,6 +50,7 @@ namespace K3CloudDataDictionary.Views
                 TableName = TableName,
                 Name = Name,
                 EntryPkFieldName = EntryPkFieldName,
+                SeqFieldKey = SeqFieldKey,
                 Id = Id,
                 Key = Key,
                 KeyField = KeyField,
@@ -77,6 +94,7 @@ namespace K3CloudDataDictionary.Views
                     TableName = element.Element("TableName")?.Value ?? "",
                     Name = element.Element("Name")?.Value ?? "",
                     EntryPkFieldName = element.Element("EntryPkFieldName")?.Value ?? "",
+                    SeqFieldKey = element.Element("SeqFieldKey")?.Value ?? "",
                     Id = element.Element("Id")?.Value ?? "",
                     Key = element.Element("Key")?.Value ?? "",
                     KeyField = element.Element("KeyField")?.Value ?? ""

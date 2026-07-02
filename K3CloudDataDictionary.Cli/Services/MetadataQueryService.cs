@@ -282,6 +282,8 @@ namespace K3CloudDataDictionary.Cli.Services
                                 ["FTABLENAME"] = entity.TableName,
                                 ["FEntryName"] = entity.EntryName,
                                 ["FELEMENTTYPENAME"] = entity.ElementType,
+                                ["FSEQFIELDKEY"] = entity.SeqFieldKey,
+                                ["FENTRY_PK_FIELD_NAME"] = entity.EffectivePkFieldName,
                                 ["FSERVICERULECOUNT"] = entity.ServiceRules.Count,
                                 ["FUPDATEACTIONCOUNT"] = 0 // 需要关联字段统计
                             });
@@ -382,6 +384,8 @@ namespace K3CloudDataDictionary.Cli.Services
                                 ["FDJMC"] = _allObjects[fid].FName,
                                 ["FENTITYNAME"] = entity?.Name ?? field.EntityKey,
                                 ["FENTITYKEY"] = field.EntityKey,
+                                ["FSEQFIELDKEY"] = entity?.SeqFieldKey ?? "",
+                                ["FENTRY_PK_FIELD_NAME"] = entity?.EffectivePkFieldName ?? "FEntryId",
                                 ["FTABLENAME"] = entity?.TableName ?? "",
                                 ["FFIELDDBID"] = field.Id,
                                 ["FKey"] = field.Key,
@@ -515,6 +519,8 @@ namespace K3CloudDataDictionary.Cli.Services
                                 ["FDJMC"] = objInfo.FName,
                                 ["FENTITYNAME"] = entity?.Name ?? field.EntityKey,
                                 ["FENTITYKEY"] = field.EntityKey,
+                                ["FSEQFIELDKEY"] = entity?.SeqFieldKey ?? "",
+                                ["FENTRY_PK_FIELD_NAME"] = entity?.EffectivePkFieldName ?? "FEntryId",
                                 ["FTABLENAME"] = entity?.TableName ?? "",
                                 ["FFIELDDBID"] = field.Id,
                                 ["FKey"] = field.Key,
@@ -1101,7 +1107,7 @@ namespace K3CloudDataDictionary.Cli.Services
             // 生成 SQL 模板
             var headerTable = headerEntity?.TableName ?? "";
             var entryTable = entryEntity?.TableName ?? "";
-            var pkField = entryEntity?.EntryPkFieldName ?? "FEntryID";
+            var pkField = entryEntity?.EffectivePkFieldName ?? "FEntryId";
             var billNoCond = !string.IsNullOrEmpty(billNoField) ? "h." + billNoField + " = @BillNo" : "";
             var seqCond = !string.IsNullOrEmpty(seqField) ? " AND e." + seqField + " = @Seq" : "";
 

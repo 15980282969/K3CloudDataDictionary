@@ -55,6 +55,8 @@ namespace K3CloudDataDictionary.Cli.Commands
                         ["formName"] = row.GetValueOrDefault("FDJMC")?.ToString() ?? "",
                         ["entityName"] = row.GetValueOrDefault("FENTITYNAME")?.ToString() ?? "",
                         ["entityKey"] = row.GetValueOrDefault("FENTITYKEY")?.ToString() ?? "",
+                        ["seqFieldKey"] = row.GetValueOrDefault("FSEQFIELDKEY")?.ToString() ?? "",
+                        ["entryPkFieldName"] = row.GetValueOrDefault("FENTRY_PK_FIELD_NAME")?.ToString() ?? "",
                         ["table"] = row.GetValueOrDefault("FTABLENAME")?.ToString() ?? "",
                         ["key"] = row.GetValueOrDefault("FKey")?.ToString() ?? "",
                         ["name"] = row.GetValueOrDefault("FName")?.ToString() ?? "",
