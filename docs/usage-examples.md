@@ -772,6 +772,159 @@ k3cli sql --form PUR_PurchaseOrder --fields "FMaterialId，累计收料数量" -
 
 ---
 
+## 案例：实体主键字段和序号字段
+
+### 场景说明
+
+每个实体（单据头/单据体）都有主键字段和可选的序号字段。这些信息对于编写 SQL 查询和更新语句至关重要。
+
+- **entryPkFieldName**：实体的主键字段名，用于定位记录
+- **seqFieldKey**：分录实体的序号字段名，用于标识行顺序
+
+### 主键字段默认规则
+
+| 情况 | entryPkFieldName 值 |
+|------|---------------------|
+| XML 中有 `<EntryPkFieldName>` 标签 | 使用标签值（如 `FEntryID`、`FDetailId`） |
+| 单据头（主表），无标签 | 默认 `FID` |
+| 分录实体（子表），无标签 | 默认 `FEntryId` |
+
+### 序号字段说明
+
+| 情况 | seqFieldKey 值 |
+|------|----------------|
+| XML 中有 `<SeqFieldKey>` 标签 | 使用标签值（如 `FSeq`、`FSEQ`） |
+| 单据头（主表） | 通常为空 `""` |
+| 分录实体，无标签 | 通常为空 `""` |
+
+### 使用示例：通过 form 命令查看实体的主键和序号字段
+
+```bash
+k3cli form --id PUR_PurchaseOrder --pretty
+```
+
+输出示例（entities 部分）：
+
+```json
+{
+  "entities": [
+    {
+      "entityKey": "",
+      "entityName": "基本信息",
+      "table": "t_PUR_POOrder",
+      "entryName": "POOrder",
+      "elementType": "34",
+      "seqFieldKey": "",
+      "entryPkFieldName": "FID",
+      "serviceRuleCount": 23,
+      "updateActionCount": 0
+    },
+    {
+      "entityKey": "FPOOrderEntry",
+      "entityName": "明细信息",
+      "table": "t_PUR_POOrderEntry",
+      "entryName": "POOrderEntry",
+      "elementType": "35",
+      "seqFieldKey": "FSeq",
+      "entryPkFieldName": "FEntryID",
+      "serviceRuleCount": 38,
+      "updateActionCount": 0
+    },
+    {
+      "entityKey": "FEntryDeliveryPlan",
+      "entityName": "交货明细",
+      "table": "t_PUR_POENTRYDELIPLAN",
+      "entryName": "POOrderEntryDeliPlan",
+      "elementType": "60502",
+      "seqFieldKey": "FSEQ",
+      "entryPkFieldName": "FDetailId",
+      "serviceRuleCount": 3,
+      "updateActionCount": 0
+    }
+  ]
+}
+```
+
+**解读**：
+
+| 实体 | seqFieldKey | entryPkFieldName | 说明 |
+|------|------------|-----------------|------|
+| 基本信息（单据头） | `""` | `FID` | 主表无序号字段，主键为 FID（默认规则） |
+| 明细信息（单据体） | `FSeq` | `FEntryID` | XML 中有 EntryPkFieldName 标签 |
+| 交货明细（子单据体） | `FSEQ` | `FDetailId` | 子表有独立的主键和序号字段 |
+
+### 使用示例：通过 fields 命令查看字段所属实体的主键和序号信息
+
+```bash
+k3cli fields --form PUR_PurchaseOrder --keyword "FMaterialId" --exact --pretty
+```
+
+输出示例：
+
+```json
+{
+  "success": true,
+  "command": "fields",
+  "data": [
+    {
+      "formName": "采购订单",
+      "entityName": "明细信息",
+      "entityKey": "FPOORDERENTRY",
+      "seqFieldKey": "FSeq",
+      "entryPkFieldName": "FEntryID",
+      "table": "t_PUR_POOrderEntry",
+      "key": "FMaterialId",
+      "name": "物料编码",
+      "fieldName": "FMATERIALID",
+      "elementType": "13",
+      "elementTypeName": "基础资料",
+      "tagName": "BaseDataField"
+    }
+  ],
+  "count": 1
+}
+```
+
+**解读**：
+- `seqFieldKey: "FSeq"` → 该实体使用 FSeq 作为行序号字段
+- `entryPkFieldName: "FEntryID"` → 该实体使用 FEntryID 作为主键
+
+### 这些字段在 SQL 命令中的应用
+
+`sql` 命令会自动使用这些信息生成正确的 WHERE 条件：
+
+```bash
+k3cli sql --form PUR_PurchaseOrder --fields "FMaterialId" --pretty
+```
+
+输出中的 SQL 模板：
+
+```sql
+-- SELECT 模板（使用 seqFieldKey 作为行定位条件）
+SELECT
+    e.FMATERIALID AS [物料编码]
+FROM t_PUR_POOrder h
+INNER JOIN t_PUR_POOrderEntry e ON e.FID = h.FID
+WHERE h.FBILLNO = @BillNo AND e.FSEQ = @Seq;
+
+-- UPDATE 模板（使用 entryPkFieldName 作为主键定位）
+UPDATE t_PUR_POOrderEntry
+SET
+    FMATERIALID = @NewValue_FMATERIALID
+WHERE FEntryID = (
+    SELECT e.FEntryID
+    FROM t_PUR_POOrderEntry e
+    INNER JOIN t_PUR_POOrder h ON e.FID = h.FID
+    WHERE h.FBILLNO = @BillNo AND e.FSEQ = @Seq
+);
+```
+
+**关键点**：
+- `WHERE FEntryID = ...` → 使用 `entryPkFieldName` 定位要更新的行
+- `AND e.FSEQ = @Seq` → 使用 `seqFieldKey` 定位具体的行序号
+
+---
+
 ## 命令速查表
 
 | 命令 | 用途 | 关键参数 |
