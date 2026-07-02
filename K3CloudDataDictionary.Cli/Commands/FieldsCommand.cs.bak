@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using K3CloudDataDictionary.Cli.Services;
 using K3CloudDataDictionary.Cli;
 
@@ -46,15 +45,11 @@ namespace K3CloudDataDictionary.Cli.Commands
                 var output = new List<object>();
                 foreach (var row in results)
                 {
-                    // 跳过提示行（在循环后单独处理）
-                    if (row.ContainsKey("_hint")) continue;
-
                     var statusItems = row.GetValueOrDefault("FSTATUSITEMS");
                     var fieldOutput = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase)
                     {
                         ["formName"] = row.GetValueOrDefault("FDJMC")?.ToString() ?? "",
                         ["entityName"] = row.GetValueOrDefault("FENTITYNAME")?.ToString() ?? "",
-                        ["entityKey"] = row.GetValueOrDefault("FENTITYKEY")?.ToString() ?? "",
                         ["table"] = row.GetValueOrDefault("FTABLENAME")?.ToString() ?? "",
                         ["key"] = row.GetValueOrDefault("FKey")?.ToString() ?? "",
                         ["name"] = row.GetValueOrDefault("FName")?.ToString() ?? "",
@@ -77,20 +72,6 @@ namespace K3CloudDataDictionary.Cli.Commands
                     }
 
                     output.Add(fieldOutput);
-                }
-
-                // 检查实体未找到提示
-                var hintRow = results.FirstOrDefault(r => r.ContainsKey("_hint") && r["_hint"]?.ToString() == "entity_not_found");
-                if (hintRow != null && output.Count == 0)
-                {
-                    var hintOutput = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase)
-                    {
-                        ["hint"] = "entity_not_found",
-                        ["message"] = hintRow.GetValueOrDefault("message")?.ToString() ?? "",
-                        ["availableEntities"] = hintRow.GetValueOrDefault("availableEntities")
-                    };
-                    JsonOutputWriter.WriteSuccess("fields", new List<object> { hintOutput });
-                    return 0;
                 }
 
                 JsonOutputWriter.WriteSuccess("fields", output);

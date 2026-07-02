@@ -1,0 +1,194 @@
+# 知识卡导出索引文件
+schema_version: 1
+locale: zh-CN
+branch: dev
+nodes_managed: true
+exported_at: "2026-07-01T06:35:50Z"
+modules:
+    "":
+        dir_name: K3Cloud 元数据字典综合管理平台
+        title: K3Cloud 元数据字典综合管理平台
+        scope:
+            - .gitignore
+            - .gitattributes
+            - K3CloudDataDictionary.sln
+            - docs/
+            - .vs\K3CloudDataDictionary\FileContentIndex\e39d6f36-be6e-41f6-a0f9-be29595b2fdb.vsidx
+            - .vs\K3CloudDataDictionary\v18\.futdcache.v2
+            - .vs\K3CloudDataDictionary\v18\.suo
+            - .vs\K3CloudDataDictionary\v18\DocumentLayout.json
+            - App.xaml
+            - App.xaml.cs
+            - ConnectionDialog.xaml
+            - ConnectionDialog.xaml.cs
+            - Helpers\DbHelper.cs
+            - Helpers\PasswordHelper.cs
+            - Helpers\SQLiteHelper.cs
+            - K3CloudDataDictionary.Cli\Commands\AssistantDataCommand.cs
+            - K3CloudDataDictionary.Cli\Commands\BillStatusCommand.cs
+            - K3CloudDataDictionary.Cli\Commands\BillTypeCommand.cs
+            - K3CloudDataDictionary.Cli\Commands\ConnectionsCommand.cs
+            - K3CloudDataDictionary.Cli\Commands\EnumCommand.cs
+            - K3CloudDataDictionary.Cli\Commands\FieldsCommand.cs
+            - K3CloudDataDictionary.Cli\Commands\FormCommand.cs
+            - K3CloudDataDictionary.Cli\Commands\HelpCommand.cs
+            - K3CloudDataDictionary.Cli\Commands\ResolveCommand.cs
+            - K3CloudDataDictionary.Cli\Commands\SearchCommand.cs
+            - K3CloudDataDictionary.Cli\DictionaryExtensions.cs
+            - K3CloudDataDictionary.Cli\K3CloudDataDictionary.Cli.csproj
+            - K3CloudDataDictionary.Cli\Program.cs
+            - K3CloudDataDictionary.Cli\Services\JsonOutputWriter.cs
+            - K3CloudDataDictionary.Cli\Services\MetadataQueryService.cs
+            - LICENSE
+            - MainWindow.xaml
+            - MainWindow.xaml.cs
+            - Models\AllFieldInfo.cs
+            - Models\AssistantDataItem.cs
+            - Models\BillTypeInfo.cs
+            - Models\ConnectionInfo.cs
+            - Models\EntityServiceRuleDisplayItem.cs
+            - Models\EnumItemInfo.cs
+            - Models\FieldInfo.cs
+            - Models\FieldUpdateActionDisplayItem.cs
+            - Models\FormBusinessServiceDisplayItem.cs
+            - Models\FormEntityInfo.cs
+            - Models\FormInfo.cs
+            - Models\FormOperationDisplayItem.cs
+            - Models\LocalDataFileInfo.cs
+            - Models\ModuleTabItem.cs
+            - Models\ModuleTreeItem.cs
+            - Models\OperatorItem.cs
+            - Models\PluginDisplayItem.cs
+            - README.md
+            - Resources\app.ico
+            - TabContentTemplateSelector.cs
+            - ViewModels\MainViewModel.cs
+            - ViewModels\RelayCommand.cs
+            - Views\EntityServiceRuleInfo.cs
+            - Views\ExtractEntities.cs
+            - Views\ExtractFields.cs
+            - Views\ExtractSplits.cs
+            - Views\FieldUpdateActionInfo.cs
+            - Views\FormOperationInfo.cs
+            - Views\MetadataDbHelper.cs
+            - Views\MetadataExtractor.cs
+            - Views\MetadataSqliteWriter.cs
+            - Views\PluginInfo.cs
+            - docs\usage-examples.md
+        source_files: []
+        children:
+            - cli_tool
+            - data_models
+            - desktop_app
+            - utilities
+        depends_on: []
+        related_to: []
+    build_system:
+        dir_name: 基于 .NET SDK 的构建与多项目协同
+        title: 基于 .NET SDK 的构建与多项目协同
+        scope: []
+        source_files:
+            - K3CloudDataDictionary.sln
+            - K3CloudDataDictionary.csproj
+            - K3CloudDataDictionary.Cli/K3CloudDataDictionary.Cli.csproj
+            - .gitignore
+        children: []
+        depends_on: []
+        related_to: []
+    cli_tool:
+        dir_name: K3Cloud 元数据命令行查询工具
+        title: K3Cloud 元数据命令行查询工具
+        scope:
+            - K3CloudDataDictionary.Cli/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: data_models
+            - path: utilities
+    configuration_system:
+        dir_name: 基于 SQLite 的本地化配置持久化与连接管理
+        title: 基于 SQLite 的本地化配置持久化与连接管理
+        scope: []
+        source_files:
+            - Helpers/SQLiteHelper.cs
+            - Models/ConnectionInfo.cs
+            - Helpers/PasswordHelper.cs
+            - K3CloudDataDictionary.Cli/Program.cs
+            - K3CloudDataDictionary.Cli/Commands/ConnectionsCommand.cs
+            - Helpers/DbHelper.cs
+        children: []
+        depends_on: []
+        related_to: []
+    data_models:
+        dir_name: 金蝶云业务元数据模型
+        title: 金蝶云业务元数据模型
+        scope:
+            - Models/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: cli_tool
+            - path: desktop_app
+    dependency_management:
+        dir_name: .NET Framework NuGet 依赖管理
+        title: .NET Framework NuGet 依赖管理
+        scope: []
+        source_files:
+            - K3CloudDataDictionary.csproj
+            - K3CloudDataDictionary.Cli/K3CloudDataDictionary.Cli.csproj
+            - K3CloudDataDictionary.sln
+        children: []
+        depends_on: []
+        related_to: []
+    desktop_app:
+        dir_name: K3Cloud元数据提取与字典管理
+        title: K3Cloud元数据提取与字典管理
+        scope:
+            - Views/
+            - ViewModels/
+            - K3CloudDataDictionary.csproj
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: data_models
+            - path: utilities
+    error_handling:
+        dir_name: 错误处理机制：基于 Try-Catch 的异常捕获与状态反馈
+        title: 错误处理机制：基于 Try-Catch 的异常捕获与状态反馈
+        scope: []
+        source_files:
+            - Helpers/DbHelper.cs
+            - Helpers/SQLiteHelper.cs
+            - K3CloudDataDictionary.Cli/Program.cs
+            - K3CloudDataDictionary.Cli/Services/JsonOutputWriter.cs
+            - ConnectionDialog.xaml.cs
+            - ViewModels/MainViewModel.cs
+        children: []
+        depends_on: []
+        related_to: []
+    frontend_style:
+        dir_name: WPF + HandyControl 桌面端 UI 风格体系
+        title: WPF + HandyControl 桌面端 UI 风格体系
+        scope: []
+        source_files:
+            - App.xaml
+            - MainWindow.xaml
+            - ConnectionDialog.xaml
+            - K3CloudDataDictionary.csproj
+        children: []
+        depends_on: []
+        related_to: []
+    utilities:
+        dir_name: 数据库连接与数据持久化工具
+        title: 数据库连接与数据持久化工具
+        scope:
+            - Helpers/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: cli_tool
+            - path: desktop_app

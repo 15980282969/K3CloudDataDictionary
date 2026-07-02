@@ -50,10 +50,6 @@ namespace K3CloudDataDictionary.Cli
                         return ResolveCommand.Execute(commandArgs, globalOptions);
                     case "connections":
                         return ConnectionsCommand.Execute(commandArgs, globalOptions);
-                    case "probe":
-                        return ProbeCommand.Execute(commandArgs, globalOptions);
-                    case "sql":
-                        return SqlHelperCommand.Execute(commandArgs, globalOptions);
                     case "help":
                     case "--help":
                     case "-h":

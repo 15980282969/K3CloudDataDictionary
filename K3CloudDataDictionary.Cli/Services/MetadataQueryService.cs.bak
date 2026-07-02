@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Data.SqlClient;
 using System.Linq;
-using System.Text.RegularExpressions;
 using K3CloudDataDictionary.Views;
 
 namespace K3CloudDataDictionary.Cli.Services
@@ -20,26 +19,6 @@ namespace K3CloudDataDictionary.Cli.Services
         public MetadataQueryService(string connectionString)
         {
             _connectionString = connectionString;
-        }
-
-        /// <summary>
-        /// 归一化关键词：去除全角/半角括号和空格，便于容错匹配
-        /// 例："剩余收料数量（基本）" → "剩余收料数量基本"
-        /// </summary>
-        public static string NormalizeKeyword(string keyword)
-        {
-            if (string.IsNullOrEmpty(keyword)) return keyword;
-            return Regex.Replace(keyword, @"[\s\(\)（）]+", "").Trim();
-        }
-
-        /// <summary>
-        /// 归一化后的模糊匹配
-        /// </summary>
-        private static bool NormalizedContains(string text, string normalizedKeyword)
-        {
-            if (string.IsNullOrEmpty(text) || string.IsNullOrEmpty(normalizedKeyword)) return false;
-            var normalizedText = NormalizeKeyword(text);
-            return normalizedText.IndexOf(normalizedKeyword, StringComparison.OrdinalIgnoreCase) >= 0;
         }
 
         /// <summary>
@@ -323,9 +302,6 @@ namespace K3CloudDataDictionary.Cli.Services
                         var allFields = metadata.FieldsWithOid.Concat(metadata.FieldsWithoutOid).ToList();
                         var allEntities = metadata.EntitiesWithOid.Concat(metadata.EntitiesWithoutOid).ToList();
 
-                        // 归一化关键词（兼容全角/半角括号）
-                        var normalizedKeyword = string.IsNullOrEmpty(keyword) ? null : NormalizeKeyword(keyword);
-
                         // 构建 EntityKey -> Entity 映射
                         var entityMap = allEntities.ToDictionary(
                             e => e.Key,
@@ -356,7 +332,7 @@ namespace K3CloudDataDictionary.Cli.Services
                                 else
                                 {
                                     matched = field.Key.ToLowerInvariant().Contains(keywordLower) ||
-                                              NormalizedContains(field.Name, normalizedKeyword) ||
+                                              field.Name.ToLowerInvariant().Contains(keywordLower) ||
                                               field.FieldName.ToLowerInvariant().Contains(keywordLower) ||
                                               field.PropertyName.ToLowerInvariant().Contains(keywordLower);
                                 }
@@ -381,7 +357,6 @@ namespace K3CloudDataDictionary.Cli.Services
                             {
                                 ["FDJMC"] = _allObjects[fid].FName,
                                 ["FENTITYNAME"] = entity?.Name ?? field.EntityKey,
-                                ["FENTITYKEY"] = field.EntityKey,
                                 ["FTABLENAME"] = entity?.TableName ?? "",
                                 ["FFIELDDBID"] = field.Id,
                                 ["FKey"] = field.Key,
@@ -409,37 +384,6 @@ namespace K3CloudDataDictionary.Cli.Services
                 }
             }
 
-            // 如果指定了 entityKey 但没匹配到任何字段，输出可用实体列表
-            if (!string.IsNullOrEmpty(entityKey) && results.Count == 0)
-            {
-                foreach (var fid2 in matchingFids)
-                {
-                    try
-                    {
-                        var md = ExtractMetadata(fid2);
-                        if (md != null)
-                        {
-                            var allEnt = md.EntitiesWithOid.Concat(md.EntitiesWithoutOid).ToList();
-                            var suggestions = allEnt.Select(e => new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase)
-                            {
-                                ["entityKey"] = e.Key,
-                                ["entityName"] = e.Name,
-                                ["table"] = e.TableName
-                            }).ToList();
-
-                            var hint = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase)
-                            {
-                                ["_hint"] = "entity_not_found",
-                                ["message"] = $"未找到实体 '{entityKey}' 的字段。该表单包含以下实体：",
-                                ["availableEntities"] = suggestions
-                            };
-                            results.Add(hint);
-                        }
-                    }
-                    catch { }
-                }
-            }
-
             return results;
         }
 
@@ -453,7 +397,6 @@ namespace K3CloudDataDictionary.Cli.Services
             EnsureContext();
             var results = new List<Dictionary<string, object>>();
             var keywordLower = keyword.ToLowerInvariant();
-            var normalizedKeyword = NormalizeKeyword(keyword);
 
             // 遍历所有对象，搜索匹配的字段
             foreach (var kvp in _allObjects)
@@ -490,7 +433,7 @@ namespace K3CloudDataDictionary.Cli.Services
                             else
                             {
                                 matched = field.Key.ToLowerInvariant().Contains(keywordLower) ||
-                                          NormalizedContains(field.Name, normalizedKeyword) ||
+                                          field.Name.ToLowerInvariant().Contains(keywordLower) ||
                                           field.FieldName.ToLowerInvariant().Contains(keywordLower) ||
                                           field.PropertyName.ToLowerInvariant().Contains(keywordLower);
                             }
@@ -514,7 +457,6 @@ namespace K3CloudDataDictionary.Cli.Services
                             {
                                 ["FDJMC"] = objInfo.FName,
                                 ["FENTITYNAME"] = entity?.Name ?? field.EntityKey,
-                                ["FENTITYKEY"] = field.EntityKey,
                                 ["FTABLENAME"] = entity?.TableName ?? "",
                                 ["FFIELDDBID"] = field.Id,
                                 ["FKey"] = field.Key,
@@ -876,281 +818,6 @@ namespace K3CloudDataDictionary.Cli.Services
             }
 
             return results;
-        }
-
-        /// <summary>
-        /// 通过 sys.columns 探测物理表列（不受字典覆盖范围限制）
-        /// </summary>
-        public List<Dictionary<string, object>> ProbePhysicalColumns(string tableName, string keyword = null)
-        {
-            var results = new List<Dictionary<string, object>>();
-            if (string.IsNullOrEmpty(tableName)) return results;
-
-            string sql = @"SELECT c.name AS ColumnName, tp.name AS DataType,
-                                  c.max_length, c.precision, c.scale, c.is_nullable
-                           FROM sys.columns c
-                           INNER JOIN sys.tables t_obj ON c.object_id = t_obj.object_id
-                           INNER JOIN sys.schemas s ON t_obj.schema_id = s.schema_id
-                           INNER JOIN sys.types tp ON c.user_type_id = tp.user_type_id
-                           WHERE (s.name + '.' + t_obj.name = @TableName OR t_obj.name = @TableName)";
-
-            if (!string.IsNullOrEmpty(keyword))
-                sql += " AND c.name LIKE @Keyword";
-
-            sql += " ORDER BY c.column_id";
-
-            using (var conn = new SqlConnection(_connectionString))
-            {
-                conn.Open();
-                using (var cmd = new SqlCommand(sql, conn))
-                {
-                    cmd.Parameters.AddWithValue("@TableName", tableName);
-                    if (!string.IsNullOrEmpty(keyword))
-                        cmd.Parameters.AddWithValue("@Keyword", "%" + keyword + "%");
-                    cmd.CommandTimeout = 30;
-                    using (var reader = cmd.ExecuteReader())
-                    {
-                        while (reader.Read())
-                        {
-                            results.Add(new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase)
-                            {
-                                ["columnName"] = reader["ColumnName"]?.ToString() ?? "",
-                                ["dataType"] = reader["DataType"]?.ToString() ?? "",
-                                ["maxLength"] = Convert.ToInt32(reader["max_length"] ?? 0),
-                                ["precision"] = Convert.ToInt32(reader["precision"] ?? 0),
-                                ["scale"] = Convert.ToInt32(reader["scale"] ?? 0),
-                                ["isNullable"] = reader["is_nullable"] != null && (bool)reader["is_nullable"]
-                            });
-                        }
-                    }
-                }
-            }
-            return results;
-        }
-
-        /// <summary>
-        /// 根据已知字段推测"基本"单位衍生字段的物理列名（FBASE 前缀规律）
-        /// 例：FRECEIVEQTY → FBASERECEIVEQTY
-        /// 先查字典，再查物理表
-        /// </summary>
-        public List<string> SuggestBaseFields(string tableName, string knownFieldName, List<MetadataFieldInfo> allFields = null)
-        {
-            var suggestions = new List<string>();
-            if (string.IsNullOrEmpty(knownFieldName) || string.IsNullOrEmpty(tableName)) return suggestions;
-
-            // 去掉开头的 F，再加上 FBASE 前缀
-            var nameWithoutF = knownFieldName.ToUpperInvariant();
-            if (nameWithoutF.StartsWith("F"))
-                nameWithoutF = nameWithoutF.Substring(1);
-            var baseFieldName = "FBASE" + nameWithoutF;
-
-            // 优先从字典中查找
-            if (allFields != null)
-            {
-                var dictMatch = allFields.FirstOrDefault(f =>
-                    f.FieldName.Equals(baseFieldName, StringComparison.OrdinalIgnoreCase));
-                if (dictMatch != null)
-                {
-                    suggestions.Add(baseFieldName);
-                    return suggestions;
-                }
-            }
-
-            // 字典中未找到，探测物理表
-            string sql = @"SELECT c.name FROM sys.columns c
-                           INNER JOIN sys.tables t ON c.object_id = t.object_id
-                           WHERE t.name = @TableName AND c.name = @FieldName";
-
-            using (var conn = new SqlConnection(_connectionString))
-            {
-                conn.Open();
-                using (var cmd = new SqlCommand(sql, conn))
-                {
-                    cmd.Parameters.AddWithValue("@TableName", tableName);
-                    cmd.Parameters.AddWithValue("@FieldName", baseFieldName);
-                    cmd.CommandTimeout = 10;
-                    var result = cmd.ExecuteScalar();
-                    if (result != null) suggestions.Add(result.ToString());
-                }
-            }
-            return suggestions;
-        }
-
-        /// <summary>
-        /// 生成 SQL 辅助信息：物理表名、列名、JOIN 条件、行号字段、SQL 模板
-        /// </summary>
-        public Dictionary<string, object> GenerateSqlHelper(string formIdentifier, string fieldKeywords)
-        {
-            EnsureContext();
-            var result = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
-
-            var matchingFids = _allObjects.Keys
-                .Where(k => k.Equals(formIdentifier, StringComparison.OrdinalIgnoreCase))
-                .ToList();
-
-            if (matchingFids.Count == 0)
-            {
-                result["error"] = "未找到表单: " + formIdentifier;
-                return result;
-            }
-
-            var fid = matchingFids[0];
-            var metadata = ExtractMetadata(fid);
-            if (metadata == null)
-            {
-                result["error"] = "无法提取表单元数据: " + formIdentifier;
-                return result;
-            }
-
-            var allFields = metadata.FieldsWithOid.Concat(metadata.FieldsWithoutOid).ToList();
-            var allEntities = metadata.EntitiesWithOid.Concat(metadata.EntitiesWithoutOid).ToList();
-            var entityMap = allEntities.ToDictionary(e => e.Key, e => e, StringComparer.OrdinalIgnoreCase);
-
-            // 识别单据头和明细体
-            var headerEntity = allEntities.FirstOrDefault(e =>
-                e.ElementType == "单据头" || (e.TagName != null && e.TagName.Contains("Head")));
-            var entryEntity = allEntities.FirstOrDefault(e =>
-                e.ElementType == "单据体" || (e.TagName != null && e.TagName.Contains("Entry")));
-
-            // 识别行号字段和单据编号字段
-            string seqField = null, billNoField = null;
-            foreach (var field in allFields)
-            {
-                if (field.Key.Equals("FSeq", StringComparison.OrdinalIgnoreCase) ||
-                    field.PropertyName.Equals("Seq", StringComparison.OrdinalIgnoreCase))
-                    seqField = field.FieldName;
-                if (field.ElementType == "12" || // BillNoField
-                    field.Key.Equals("FBillNo", StringComparison.OrdinalIgnoreCase))
-                    billNoField = field.FieldName;
-            }
-
-            // 如果字典中未找到行号字段，通过物理表探测 FSEQ
-            if (seqField == null && entryEntity != null && !string.IsNullOrEmpty(entryEntity.TableName))
-            {
-                var probeResults = ProbePhysicalColumns(entryEntity.TableName, "FSEQ");
-                if (probeResults.Count > 0)
-                    seqField = "FSEQ";
-            }
-
-            // 收集表信息
-            var tables = new List<Dictionary<string, object>>();
-            if (headerEntity != null)
-                tables.Add(new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase)
-                {
-                    ["alias"] = "h", ["table"] = headerEntity.TableName,
-                    ["entityKey"] = headerEntity.Key, ["entityName"] = headerEntity.Name, ["type"] = "单据头"
-                });
-            if (entryEntity != null)
-                tables.Add(new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase)
-                {
-                    ["alias"] = "e", ["table"] = entryEntity.TableName,
-                    ["entityKey"] = entryEntity.Key, ["entityName"] = entryEntity.Name, ["type"] = "明细体"
-                });
-
-            // 解析目标字段（支持逗号分隔，中英文均可）
-            var keywords = fieldKeywords
-                .Split(new[] { ',', '\uFF0C' }, StringSplitOptions.RemoveEmptyEntries)
-                .Select(k => k.Trim())
-                .Where(k => !string.IsNullOrEmpty(k))
-                .ToList();
-
-            var matchedFields = new List<Dictionary<string, object>>();
-            var unmatchedKeywords = new List<string>();
-
-            foreach (var kw in keywords)
-            {
-                var normalizedKw = NormalizeKeyword(kw);
-                var kwLower = kw.ToLowerInvariant();
-
-                var match = allFields.FirstOrDefault(f =>
-                    f.Key.Equals(kw, StringComparison.OrdinalIgnoreCase) ||
-                    f.FieldName.Equals(kw, StringComparison.OrdinalIgnoreCase) ||
-                    f.Name.Equals(kw, StringComparison.OrdinalIgnoreCase) ||
-                    NormalizedContains(f.Name, normalizedKw) ||
-                    f.Key.ToLowerInvariant().Contains(kwLower) ||
-                    f.FieldName.ToLowerInvariant().Contains(kwLower));
-
-                if (match != null)
-                {
-                    var entity = entityMap.ContainsKey(match.EntityKey) ? entityMap[match.EntityKey] : null;
-                    var fieldInfo = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase)
-                    {
-                        ["searchKeyword"] = kw,
-                        ["name"] = match.Name,
-                        ["key"] = match.Key,
-                        ["fieldName"] = match.FieldName,
-                        ["table"] = entity?.TableName ?? "",
-                        ["entityKey"] = match.EntityKey,
-                        ["elementType"] = match.ElementType,
-                        ["elementTypeName"] = GetElementTypeName(match.ElementType)
-                    };
-
-                    // 推测基本单位字段
-                    var baseSuggestions = SuggestBaseFields(entity?.TableName ?? "", match.FieldName, allFields);
-                    if (baseSuggestions.Count > 0)
-                        fieldInfo["suggestedBaseFields"] = baseSuggestions;
-
-                    matchedFields.Add(fieldInfo);
-                }
-                else
-                {
-                    unmatchedKeywords.Add(kw);
-                }
-            }
-
-            // 生成 SQL 模板
-            var headerTable = headerEntity?.TableName ?? "";
-            var entryTable = entryEntity?.TableName ?? "";
-            var pkField = entryEntity?.EntryPkFieldName ?? "FEntryID";
-            var billNoCond = !string.IsNullOrEmpty(billNoField) ? "h." + billNoField + " = @BillNo" : "";
-            var seqCond = !string.IsNullOrEmpty(seqField) ? " AND e." + seqField + " = @Seq" : "";
-
-            // SELECT 模板
-            var selectCols = matchedFields.Select(f =>
-            {
-                var tbl = f["table"]?.ToString() ?? "";
-                var alias = tbl == entryTable ? "e" : "h";
-                return "    " + alias + "." + f["fieldName"] + " AS [" + f["name"] + "]";
-            });
-
-            var selectSql = "SELECT\n" + string.Join(",\n", selectCols) + "\nFROM " + headerTable + " h";
-            if (entryEntity != null)
-                selectSql += "\nINNER JOIN " + entryTable + " e ON e.FID = h.FID";
-            selectSql += "\nWHERE " + billNoCond + (entryEntity != null ? seqCond : "") + ";";
-
-            // UPDATE 模板
-            var updateSql = "";
-            if (entryEntity != null && matchedFields.Count > 0)
-            {
-                var setClauses = matchedFields.Select(f =>
-                    "    " + f["fieldName"] + " = @NewValue_" + f["fieldName"]);
-
-                updateSql = "UPDATE " + entryTable + "\nSET\n" + string.Join(",\n", setClauses)
-                    + "\nWHERE " + pkField + " = (\n    SELECT e." + pkField
-                    + "\n    FROM " + entryTable + " e"
-                    + "\n    INNER JOIN " + headerTable + " h ON e.FID = h.FID"
-                    + "\n    WHERE " + billNoCond + seqCond
-                    + "\n);";
-            }
-
-            // 组装结果
-            result["formIdentifier"] = formIdentifier;
-            result["formName"] = _allObjects[fid].FName;
-            result["tables"] = tables;
-            result["seqField"] = seqField ?? "(未找到行号字段)";
-            result["billNoField"] = billNoField ?? "(未找到单据编号字段)";
-            result["matchedFields"] = matchedFields;
-
-            if (unmatchedKeywords.Count > 0)
-            {
-                result["unmatchedKeywords"] = unmatchedKeywords;
-                result["hint"] = "以下关键词未匹配到字段，可能是字典未收录。请使用 probe 命令探测物理表列。";
-            }
-
-            result["selectSql"] = selectSql;
-            result["updateSql"] = updateSql;
-
-            return result;
         }
 
         /// <summary>

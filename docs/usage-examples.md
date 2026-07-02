@@ -512,11 +512,271 @@ k3cli billstatus --form PUR_PurchaseOrder --keyword "已审核" --pretty
 
 ---
 
+## 案例：括号/符号容错搜索
+
+### 场景说明
+
+字段名称中可能包含全角括号`（）`或半角括号`()`，用户输入时可能使用任意一种。容错搜索会自动归一化这些符号，使两种写法都能匹配到同一字段。
+
+### 使用示例
+
+以下三种写法等价，都能匹配到"累计收料数量（基本）"字段：
+
+```bash
+# 半角括号
+k3cli fields --form PUR_PurchaseOrder --keyword "收料数量(基本)" --pretty
+
+# 全角括号
+k3cli fields --form PUR_PurchaseOrder --keyword "收料数量（基本）" --pretty
+
+# 无括号（也能匹配）
+k3cli fields --form PUR_PurchaseOrder --keyword "收料数量基本" --pretty
+```
+
+输出示例：
+
+```json
+{
+  "success": true,
+  "command": "fields",
+  "data": [
+    {
+      "formName": "采购订单",
+      "entityName": "明细信息",
+      "entityKey": "FPOORDERENTRY",
+      "table": "t_PUR_POOrderEntry",
+      "key": "FBASERECEIVEQTY",
+      "name": "累计收料数量(基本)",
+      "fieldName": "FBASERECEIVEQTY",
+      "elementType": "47",
+      "elementTypeName": "基本单位数量",
+      "tagName": "BaseQtyField"
+    }
+  ],
+  "count": 1
+}
+```
+
+### 归一化规则
+
+| 输入 | 归一化后 | 匹配效果 |
+|------|---------|---------|
+| `收料数量(基本)` | `收料数量基本` | 匹配 |
+| `收料数量（基本）` | `收料数量基本` | 匹配 |
+| `收料数量 基本` | `收料数量基本` | 匹配 |
+| `收料数量( 基本 )` | `收料数量基本` | 匹配 |
+
+---
+
+## 案例：实体 Key 错误自动提示
+
+### 场景说明
+
+当使用 `fields --entity` 指定了错误的实体 Key 时，系统不会返回空结果，而是自动列出该表单所有可用的实体，帮助用户快速定位正确的实体标识。
+
+### 使用示例
+
+```bash
+k3cli fields --form PUR_PurchaseOrder --entity WRONG_ENTITY --pretty
+```
+
+输出示例：
+
+```json
+{
+  "success": true,
+  "command": "fields",
+  "data": [
+    {
+      "hint": "entity_not_found",
+      "message": "未找到实体 'WRONG_ENTITY' 的字段。该表单包含以下实体：",
+      "availableEntities": [
+        { "entityKey": "", "entityName": "基本信息", "table": "t_PUR_POOrder" },
+        { "entityKey": "FPOOrderEntry", "entityName": "明细信息", "table": "t_PUR_POOrderEntry" },
+        { "entityKey": "FPOOrderFinance", "entityName": "财务信息", "table": "T_PUR_POORDERFIN" }
+      ]
+    }
+  ],
+  "count": 1
+}
+```
+
+### 使用提示
+
+1. 看到 `hint: "entity_not_found"` 后，从 `availableEntities` 中选择正确的 `entityKey`
+2. 用正确的 `entityKey` 重新执行 `fields` 命令
+3. 也可以先用 `search --keyword "采购订单"` 查看表单的实体列表
+
+---
+
+## 案例：探测物理表列（probe 命令）
+
+### 场景说明
+
+当字典中查不到某个字段时（可能是自定义字段或字典未收录的字段），可使用 `probe` 命令直接查询 SQL Server 物理表的列信息。该命令通过 `sys.columns` 系统视图查询，不受字典覆盖范围限制。
+
+### 使用示例
+
+```bash
+# 查询物理表的所有列
+k3cli probe --table t_PUR_POOrderEntry --pretty
+
+# 按关键词过滤列名
+k3cli probe --table t_PUR_POOrderEntry --keyword BASE --pretty
+
+# 查找特定列
+k3cli probe --table t_PUR_POOrderEntry --keyword FBASEREMAIN --pretty
+```
+
+输出示例（`--keyword BASE`）：
+
+```json
+{
+  "success": true,
+  "command": "probe",
+  "data": [
+    {
+      "columnName": "FBASEUNITID",
+      "dataType": "int",
+      "maxLength": 4,
+      "precision": 10,
+      "scale": 0,
+      "isNullable": false
+    },
+    {
+      "columnName": "FBASEUNITQTY",
+      "dataType": "decimal",
+      "maxLength": 13,
+      "precision": 23,
+      "scale": 10,
+      "isNullable": false
+    },
+    {
+      "columnName": "FBASECONSUMESUMQTY",
+      "dataType": "decimal",
+      "maxLength": 13,
+      "precision": 23,
+      "scale": 10,
+      "isNullable": true
+    }
+  ],
+  "count": 3
+}
+```
+
+### 输出字段说明
+
+| 字段 | 含义 |
+|------|------|
+| `columnName` | 物理列名 |
+| `dataType` | 数据类型（int, decimal, nvarchar 等） |
+| `maxLength` | 最大长度（字节） |
+| `precision` | 精度（数值类型） |
+| `scale` | 小数位数（数值类型） |
+| `isNullable` | 是否允许 NULL |
+
+### 典型使用场景
+
+1. 字典中查不到某个字段 → 用 `probe` 确认物理表中是否存在该列
+2. 需要确认字段的数据类型和精度 → 用 `probe` 查看列定义
+3. 查找衍生字段（如基本单位字段）→ 用 `probe --keyword BASE` 批量查找
+
+---
+
+## 案例：生成 SQL 辅助信息（sql 命令）
+
+### 场景说明
+
+根据表单标识和字段列表，自动生成 SQL 辅助信息，包括物理表名、列名、JOIN 条件、SELECT 和 UPDATE 模板。适用于需要手写 SQL 查询或更新业务数据的场景。
+
+> **安全说明**：`sql` 命令仅生成 SQL 模板文本，不会执行任何写操作。输出的 SQL 需要复制到数据库管理工具中手动执行。
+
+### 使用示例
+
+```bash
+# 按中文名称查询
+k3cli sql --form PUR_PurchaseOrder --fields "物料编码,累计收料数量" --pretty
+
+# 按英文 Key 查询
+k3cli sql --form PUR_PurchaseOrder --fields "FMaterialId,FReceiveBaseQty" --pretty
+
+# 混合使用（支持中英文逗号分隔）
+k3cli sql --form PUR_PurchaseOrder --fields "FMaterialId，累计收料数量" --pretty
+```
+
+输出示例：
+
+```json
+{
+  "success": true,
+  "command": "sql",
+  "data": {
+    "formIdentifier": "PUR_PurchaseOrder",
+    "formName": "采购订单",
+    "tables": [
+      { "alias": "h", "table": "t_PUR_POOrder", "entityName": "基本信息", "type": "单据头" },
+      { "alias": "e", "table": "t_PUR_POOrderEntry", "entityName": "明细信息", "type": "明细体" }
+    ],
+    "seqField": "(未找到行号字段)",
+    "billNoField": "FBILLNO",
+    "matchedFields": [
+      {
+        "searchKeyword": "FMaterialId",
+        "name": "物料编码",
+        "fieldName": "FMATERIALID",
+        "table": "t_PUR_POOrderEntry",
+        "elementType": "13",
+        "elementTypeName": "基础资料"
+      }
+    ],
+    "unmatchedKeywords": ["FReceiveBaseQty"],
+    "hint": "以下关键词未匹配到字段，可能是字典未收录。请使用 probe 命令探测物理表列。",
+    "selectSql": "SELECT\n    e.FMATERIALID AS [物料编码]\nFROM t_PUR_POOrder h\nINNER JOIN t_PUR_POOrderEntry e ON e.FID = h.FID\nWHERE h.FBILLNO = @BillNo;",
+    "updateSql": "UPDATE t_PUR_POOrderEntry\nSET\n    FMATERIALID = @NewValue_FMATERIALID\nWHERE FEntryID = (\n    SELECT e.FEntryID\n    FROM t_PUR_POOrderEntry e\n    INNER JOIN t_PUR_POOrder h ON e.FID = h.FID\n    WHERE h.FBILLNO = @BillNo\n);"
+  }
+}
+```
+
+### 输出字段说明
+
+| 字段 | 含义 |
+|------|------|
+| `formIdentifier` | 表单标识 |
+| `formName` | 表单名称 |
+| `tables` | 单据头和明细体的物理表信息（含别名、表名、实体Key） |
+| `seqField` | 行号字段（用于明细行定位） |
+| `billNoField` | 单据编号字段（用于 WHERE 条件） |
+| `matchedFields` | 匹配到的字段列表（含物理列名、表名、元素类型） |
+| `unmatchedKeywords` | 未匹配的关键词（可能是字典未收录） |
+| `selectSql` | 可直接使用的 SELECT 模板 |
+| `updateSql` | 可直接使用的 UPDATE 模板 |
+
+### 典型使用流程
+
+```
+1. 用 sql 命令生成 SQL 模板
+   k3cli sql --form PUR_PurchaseOrder --fields "物料编码" --pretty
+
+2. 如果有未匹配字段，用 probe 命令探测物理表
+   k3cli probe --table t_PUR_POOrderEntry --keyword ReceiveBaseQty --pretty
+
+3. 将 selectSql/updateSql 复制到 SSMS 中，替换参数值后执行
+```
+
+### 注意事项
+
+1. `sql` 命令**仅生成文本**，不会执行任何 SQL
+2. 未匹配的关键词会提示使用 `probe` 命令进一步探测
+3. SELECT 模板使用 `@BillNo` 参数，执行时需替换为实际单据编号
+4. UPDATE 模板使用子查询定位行，避免误更新
+
+---
+
 ## 命令速查表
 
 | 命令 | 用途 | 关键参数 |
 |------|------|---------|
-| `fields` | 查询表单字段 | `--form`, `--entity`, `--keyword`, `--exact` |
+| `fields` | 查询表单字段（支持括号容错+实体提示） | `--form`, `--entity`, `--keyword`, `--exact` |
 | `search` | 搜索表单或字段 | `--keyword`, `--type field\|table`, `--exact` |
 | `form` | 查询表单元数据 | `--id` |
 | `billtype` | 查询单据类型（列表/详情） | `--form`, `--id`, `--keyword` |
@@ -525,6 +785,8 @@ k3cli billstatus --form PUR_PurchaseOrder --keyword "已审核" --pretty
 | `assistantdata` | 查询辅助资料选项 | `--id` (lookUpObject) |
 | `resolve` | 解析 lookUpObject 对应表单 | `--id` (lookUpObject) |
 | `connections` | 管理数据库连接 | `list`, `add`, `test`, `set-default` |
+| `probe` | 探测物理表列（字典未收录时使用） | `--table`, `--keyword` |
+| `sql` | 生成 SQL 辅助信息（模板文本，不执行） | `--form`, `--fields` |
 
 ## elementType 速查
 

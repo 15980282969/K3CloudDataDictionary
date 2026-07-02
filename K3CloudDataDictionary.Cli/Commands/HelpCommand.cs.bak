@@ -23,8 +23,6 @@ namespace K3CloudDataDictionary.Cli.Commands
   enum            查询枚举值列表（下拉列表）
   resolve         解析对象 ID 对应的表单信息
   connections     管理数据库连接
-  probe           探测物理表列（解决字典未收录字段）
-  sql             生成 SQL 辅助信息（表名、列名、SQL模板）
   help            显示此帮助信息
 
 全局选项:
@@ -70,14 +68,6 @@ namespace K3CloudDataDictionary.Cli.Commands
   k3cli connections list
   k3cli connections add --server 192.168.1.100 --db AISC001 --user sa --password xxx --default
   k3cli connections test --id 1
-
-  # 探测物理表列（字典查不到时使用）
-  k3cli probe --table t_PUR_POOrderEntry --keyword BASE
-  k3cli probe --table t_PUR_POOrderEntry --keyword ReceiveQty
-
-  # 生成 SQL 辅助信息
-  k3cli sql --form PUR_PurchaseOrder --fields ""累计收料数量,剩余收料数量""
-  k3cli sql --form PUR_PurchaseOrder --fields ""FReceiveQty,FRemainReceiveQty""
 ");
         }
 
@@ -108,10 +98,6 @@ namespace K3CloudDataDictionary.Cli.Commands
   # 精确搜索字段
   k3cli fields --form PUR_PurchaseOrder --keyword ""FMaterialId"" --exact
   k3cli fields --form PUR_PurchaseOrder --entity FK_BillEntry --keyword ""物料"" -e
-
-提示:
-  当 --entity 指定的实体 Key 不存在时，会自动返回该表单的可用实体列表。
-  搜索关键词支持括号容错匹配（全角/半角括号等价）。
 ");
         }
 
@@ -294,50 +280,6 @@ add 选项:
   k3cli connections add --server 192.168.1.100 --db AISC001 --user sa --password xxx --default
   k3cli connections test --id 1
   k3cli connections set-default --id 1
-");
-        }
-
-        public static void ShowProbeHelp()
-        {
-            Console.WriteLine(@"用法: k3cli probe [options]
-
-选项:
-  --table <tableName>       物理表名（必填），如 t_PUR_POOrderEntry
-  --keyword <keyword>       列名关键词（可选），模糊匹配
-  --connection, -c <id>     指定连接 ID
-  --pretty                  格式化 JSON 输出
-
-说明:
-  当字典中查不到某个字段时，可使用 probe 命令直接查询物理表的列信息。
-  该命令通过 SQL Server 的 sys.columns 系统视图查询，不受字典覆盖范围限制。
-
-示例:
-  k3cli probe --table t_PUR_POOrderEntry --keyword BASE
-  k3cli probe --table t_PUR_POOrderEntry --keyword FBASEREMAIN
-");
-        }
-
-        public static void ShowSqlHelp()
-        {
-            Console.WriteLine(@"用法: k3cli sql [options]
-
-选项:
-  --form <identifier>       表单标识（必填），如 PUR_PurchaseOrder
-  --fields <field1,field2>  逗号分隔的字段列表（必填），支持中文名或英文 key
-  --connection, -c <id>     指定连接 ID
-  --pretty                  格式化 JSON 输出
-
-说明:
-  根据指定的表单和字段，自动生成 SQL 辅助信息，包括：
-  - 单据头和明细体的物理表名
-  - 目标字段的物理列名
-  - 行号字段（FSeq）和单据编号字段
-  - JOIN 条件
-  - 可直接使用的 SELECT 和 UPDATE SQL 模板
-
-示例:
-  k3cli sql --form PUR_PurchaseOrder --fields ""累计收料数量,剩余收料数量""
-  k3cli sql --form PUR_PurchaseOrder --fields ""FReceiveQty,FRemainReceiveQty""
 ");
         }
     }
