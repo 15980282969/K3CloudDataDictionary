@@ -772,6 +772,94 @@ k3cli sql --form PUR_PurchaseOrder --fields "FMaterialId，累计收料数量" -
 
 ---
 
+## 案例：LK 关联表自动检测
+
+### 场景说明
+
+在金蝶云星空中，单据转换后上下游单据之间的关系存储在 **LK 表（关联关系表）** 中。LK 表命名规则为 `{实体表名}_LK`，例如 `t_PUR_POOrderEntry_LK`。
+
+`sql` 命令会自动检测表单实体是否存在对应的 LK 表，并在输出中提供关联信息。
+
+### LK 表核心字段
+
+| 字段 | 说明 |
+|------|------|
+| `FENTRYID` | 关联单据关联配置中单据体实体的主键 |
+| `FRuleID` | 单据转换规则 ID |
+| `FSBillID` | 源单的单据头 ID |
+| `FSID` | 源单明细 ID 或单据头 ID（取决于配置） |
+
+### 使用示例
+
+```bash
+k3cli sql --form PUR_PurchaseOrder --fields "FMaterialId"
+```
+
+输出示例（包含 LK 表信息）：
+
+```json
+{
+  "success": true,
+  "command": "sql",
+  "data": {
+    "formIdentifier": "PUR_PurchaseOrder",
+    "formName": "采购订单",
+    "tables": [
+      { "alias": "h", "table": "t_PUR_POOrder", "entityName": "基本信息", "type": "单据头" },
+      { "alias": "e", "table": "t_PUR_POOrderEntry", "entityName": "明细信息", "type": "明细体" }
+    ],
+    "lkTables": [
+      {
+        "lkTable": "t_PUR_POOrderEntry_LK",
+        "entityTable": "t_PUR_POOrderEntry",
+        "entityKey": "FPOOrderEntry",
+        "entityName": "明细信息",
+        "joinCondition": "lk.FENTRYID = e.FEntryID",
+        "sourceJoinCondition": "lk.FSBILLID = src.FID AND lk.FSID = src.FEntryID",
+        "description": "t_PUR_POOrderEntry 的关联关系表，用于追溯上下游单据关系"
+      }
+    ],
+    "lkHint": "发现 1 个 LK 关联表。LK 表用于存储单据转换后的上下游关联关系，可通过 FSBILLID（源单单据头ID）和 FSID（源单明细ID）追溯源单。"
+  }
+}
+```
+
+### LK 表关联查询示例
+
+根据 `sql` 命令输出的 LK 表信息，可以构建上下游单据追溯查询：
+
+```sql
+-- 查询收料通知单及其关联的采购订单
+SELECT
+    T0.FBILLNO AS 收料通知单号,
+    T3.FBILLNO AS 采购订单号,
+    T1.FMATERIALID AS 物料
+FROM T_PUR_Receive T0
+LEFT JOIN T_PUR_ReceiveEntry T1 ON T1.FID = T0.FID
+LEFT JOIN T_PUR_ReceiveEntry_LK T2 ON T2.FENTRYID = T1.FENTRYID
+LEFT JOIN t_PUR_POOrderEntry T3 ON T3.FENTRYID = T2.FSID AND T3.FID = T2.FSBILLID
+WHERE T0.FBILLNO = @BillNo;
+```
+
+**关联逻辑**：
+1. `T_PUR_Receive` → `T_PUR_ReceiveEntry`：通过 `FID` 关联单据头和明细
+2. `T_PUR_ReceiveEntry` → `T_PUR_ReceiveEntry_LK`：通过 `FENTRYID = FENTRYID` 关联 LK 表
+3. `T_PUR_ReceiveEntry_LK` → `t_PUR_POOrderEntry`：通过 `FSBILLID = FID AND FSID = FENTRYID` 关联源单
+
+### 输出字段说明
+
+| 字段 | 含义 |
+|------|------|
+| `lkTable` | LK 关联表名 |
+| `entityTable` | 对应的实体表名 |
+| `entityKey` | 实体 Key |
+| `entityName` | 实体名称 |
+| `joinCondition` | LK 表与目标单的 JOIN 条件 |
+| `sourceJoinCondition` | LK 表与源单的 JOIN 条件 |
+| `description` | LK 表用途说明 |
+
+---
+
 ## 案例：实体主键字段和序号字段
 
 ### 场景说明
