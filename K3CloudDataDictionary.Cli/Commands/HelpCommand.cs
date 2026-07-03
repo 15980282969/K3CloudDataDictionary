@@ -23,8 +23,8 @@ namespace K3CloudDataDictionary.Cli.Commands
   enum            查询枚举值列表（下拉列表）
   resolve         解析对象 ID 对应的表单信息
   connections     管理数据库连接
-  probe           探测物理表列（解决字典未收录字段）
-  sql             生成 SQL 辅助信息（表名、列名、SQL模板）
+  probe           探测物理表列（支持通配符）
+  sql             生成 SQL 辅助信息（支持拆分表）
   help            显示此帮助信息
 
 全局选项:
@@ -71,13 +71,14 @@ namespace K3CloudDataDictionary.Cli.Commands
   k3cli connections add --server 192.168.1.100 --db AISC001 --user sa --password xxx --default
   k3cli connections test --id 1
 
-  # 探测物理表列（字典查不到时使用）
+  # 探测物理表列（支持 * 通配符匹配拆分表）
   k3cli probe --table t_PUR_POOrderEntry --keyword BASE
-  k3cli probe --table t_PUR_POOrderEntry --keyword ReceiveQty
+  k3cli probe --table ""t_PUR_POOrderEntry*"" --keyword FDELIVERYDATE
 
-  # 生成 SQL 辅助信息
+  # 生成 SQL 辅助信息（自动识别拆分表）
   k3cli sql --form PUR_PurchaseOrder --fields ""累计收料数量,剩余收料数量""
   k3cli sql --form PUR_PurchaseOrder --fields ""FReceiveQty,FRemainReceiveQty""
+  k3cli sql --form PUR_PurchaseOrder --fields ""最终确认交期""
 ");
         }
 
@@ -112,6 +113,7 @@ namespace K3CloudDataDictionary.Cli.Commands
 提示:
   当 --entity 指定的实体 Key 不存在时，会自动返回该表单的可用实体列表。
   搜索关键词支持括号容错匹配（全角/半角括号等价）。
+  输出中包含 splitTable 字段，标识字段所在的拆分表（如有）。
 ");
         }
 
@@ -302,7 +304,7 @@ add 选项:
             Console.WriteLine(@"用法: k3cli probe [options]
 
 选项:
-  --table <tableName>       物理表名（必填），如 t_PUR_POOrderEntry
+  --table <tableName>       物理表名（必填），支持 * 通配符
   --keyword <keyword>       列名关键词（可选），模糊匹配
   --connection, -c <id>     指定连接 ID
   --pretty                  格式化 JSON 输出
@@ -310,10 +312,14 @@ add 选项:
 说明:
   当字典中查不到某个字段时，可使用 probe 命令直接查询物理表的列信息。
   该命令通过 SQL Server 的 sys.columns 系统视图查询，不受字典覆盖范围限制。
+  表名支持 * 通配符，可同时匹配主表和所有拆分表（如 _D、_L 后缀表）。
 
 示例:
+  # 单表探测
   k3cli probe --table t_PUR_POOrderEntry --keyword BASE
-  k3cli probe --table t_PUR_POOrderEntry --keyword FBASEREMAIN
+
+  # 批量匹配所有拆分表
+  k3cli probe --table ""t_PUR_POOrderEntry*"" --keyword FDELIVERYDATE
 ");
         }
 
@@ -330,14 +336,24 @@ add 选项:
 说明:
   根据指定的表单和字段，自动生成 SQL 辅助信息，包括：
   - 单据头和明细体的物理表名
-  - 目标字段的物理列名
+  - 目标字段的物理列名（含拆分表信息）
   - 行号字段（FSeq）和单据编号字段
-  - JOIN 条件
+  - JOIN 条件（自动包含拆分表 JOIN）
+  - LK 关联表信息（自动检测）
   - 可直接使用的 SELECT 和 UPDATE SQL 模板
 
 示例:
+  # 基本用法
   k3cli sql --form PUR_PurchaseOrder --fields ""累计收料数量,剩余收料数量""
   k3cli sql --form PUR_PurchaseOrder --fields ""FReceiveQty,FRemainReceiveQty""
+
+  # 拆分表字段（自动 JOIN 拆分表）
+  k3cli sql --form PUR_PurchaseOrder --fields ""最终确认交期""
+
+提示:
+  1. 当字段有 splitSuffix 时，SQL 会自动使用拆分表并生成正确的 JOIN
+  2. LK 关联表信息会自动检测，超时后降级提示
+  3. 生成的 SQL 仅供参考，请在测试环境验证后使用
 ");
         }
     }
