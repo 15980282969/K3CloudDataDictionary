@@ -983,7 +983,47 @@ namespace K3CloudDataDictionary.Cli.Services
         }
 
         /// <summary>
-        /// 生成 SQL 辅助信息：物理表名、列名、JOIN 条件、行号字段、SQL 模板
+        /// 批量探测物理表是否存在（用于检测 LK 关联表）
+        /// </summary>
+        public List<string> FindExistingTables(List<string> tableNames)
+        {
+            var existing = new List<string>();
+            if (tableNames == null || tableNames.Count == 0) return existing;
+
+            // 只按表名查询（不带 schema）
+            var paramNames = new List<string>();
+            var parameters = new List<SqlParameter>();
+            for (int i = 0; i < tableNames.Count; i++)
+            {
+                var paramName = "@T" + i;
+                paramNames.Add(paramName);
+                parameters.Add(new SqlParameter(paramName, tableNames[i]));
+            }
+
+            string sql = @"SELECT t.name FROM sys.tables t
+                           WHERE t.name IN (" + string.Join(",", paramNames) + ")";
+
+            using (var conn = new SqlConnection(_connectionString))
+            {
+                conn.Open();
+                using (var cmd = new SqlCommand(sql, conn))
+                {
+                    cmd.Parameters.AddRange(parameters.ToArray());
+                    cmd.CommandTimeout = 15;
+                    using (var reader = cmd.ExecuteReader())
+                    {
+                        while (reader.Read())
+                        {
+                            existing.Add(reader["name"]?.ToString() ?? "");
+                        }
+                    }
+                }
+            }
+            return existing;
+        }
+
+        /// <summary>
+        /// 生成 SQL 辅助信息：物理表名、列名、JOIN 条件、行号字段、SQL 模板、LK 关联表提示
         /// </summary>
         public Dictionary<string, object> GenerateSqlHelper(string formIdentifier, string fieldKeywords)
         {
@@ -1139,6 +1179,35 @@ namespace K3CloudDataDictionary.Cli.Services
                     + "\n);";
             }
 
+            // 批量检测 LK 关联表
+            var lkTableNames = allEntities
+                .Where(e => !string.IsNullOrEmpty(e.TableName))
+                .Select(e => e.TableName + "_LK")
+                .ToList();
+
+            var existingLkTables = FindExistingTables(lkTableNames);
+            var existingLkSet = new HashSet<string>(existingLkTables, StringComparer.OrdinalIgnoreCase);
+
+            var lkTables = new List<Dictionary<string, object>>();
+            foreach (var entity in allEntities)
+            {
+                if (string.IsNullOrEmpty(entity.TableName)) continue;
+                var lkTableName = entity.TableName + "_LK";
+                if (existingLkSet.Contains(lkTableName))
+                {
+                    lkTables.Add(new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase)
+                    {
+                        ["lkTable"] = lkTableName,
+                        ["entityTable"] = entity.TableName,
+                        ["entityKey"] = entity.Key,
+                        ["entityName"] = entity.Name,
+                        ["joinCondition"] = "lk.FENTRYID = e." + entity.EffectivePkFieldName,
+                        ["sourceJoinCondition"] = "lk.FSBILLID = src.FID AND lk.FSID = src." + entity.EffectivePkFieldName,
+                        ["description"] = entity.TableName + " 的关联关系表，用于追溯上下游单据关系"
+                    });
+                }
+            }
+
             // 组装结果
             result["formIdentifier"] = formIdentifier;
             result["formName"] = _allObjects[fid].FName;
@@ -1146,6 +1215,12 @@ namespace K3CloudDataDictionary.Cli.Services
             result["seqField"] = seqField ?? "(未找到行号字段)";
             result["billNoField"] = billNoField ?? "(未找到单据编号字段)";
             result["matchedFields"] = matchedFields;
+
+            if (lkTables.Count > 0)
+            {
+                result["lkTables"] = lkTables;
+                result["lkHint"] = "发现 " + lkTables.Count + " 个 LK 关联表。LK 表用于存储单据转换后的上下游关联关系，可通过 FSBILLID（源单单据头ID）和 FSID（源单明细ID）追溯源单。";
+            }
 
             if (unmatchedKeywords.Count > 0)
             {
