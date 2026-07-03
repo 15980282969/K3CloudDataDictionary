@@ -1,4 +1,4 @@
-# K3Cloud CLI 使用案例文档
+﻿# K3Cloud CLI 使用案例文档
 
 ## 案例：通过 lookUpObject 查询关联表单的完整流程
 
@@ -771,6 +771,135 @@ k3cli sql --form PUR_PurchaseOrder --fields "FMaterialId，累计收料数量" -
 4. UPDATE 模板使用子查询定位行，避免误更新
 
 ---
+
+
+---
+
+## 案例：拆分表（Split Table）支持
+
+### 场景说明
+
+金蝶 K3Cloud 中，部分字段会被拆分到后缀表中（如 `_D` 表示日期拆分表、`_L` 表示长文本拆分表）。`fields` 命令输出中的 `splitTable` 字段会直接显示完整的拆分表名，`sql` 命令会自动生成正确的拆分表 JOIN 语句。
+
+### fields 命令输出中的 splitTable 字段
+
+`ash
+k3cli fields --form PUR_PurchaseOrder --keyword "最终确认交期" --pretty
+`
+
+输出示例：
+
+`json
+{
+  "data": [
+    {
+      "table": "t_PUR_POOrderEntry",
+      "splitSuffix": "D",
+      "splitTable": "t_PUR_POOrderEntry_D",
+      "fieldName": "FDELIVERYDATE",
+      "name": "最终确认交期"
+    }
+  ]
+}
+`
+
+**字段说明**：
+
+| 字段 | 含义 |
+|------|------|
+| `table` | 实体主表名 |
+| `splitSuffix` | 拆分后缀（如 `D`、`L`），空表示无拆分 |
+| `splitTable` | 完整拆分表名（`{主表}_{后缀}`），空表示无拆分 |
+
+### sql 命令自动处理拆分表
+
+`ash
+k3cli sql --form PUR_PurchaseOrder --fields "最终确认交期" --pretty
+`
+
+输出中的 SQL 模板会自动包含拆分表 JOIN：
+
+`sql
+-- SELECT 模板（自动 JOIN 拆分表）
+SELECT
+    p_d.FDELIVERYDATE AS [最终确认交期]
+FROM t_PUR_POOrder h
+INNER JOIN t_PUR_POOrderEntry e ON e.FID = h.FID
+INNER JOIN t_PUR_POOrderEntry_D p_d ON p_d.FENTRYID = e.FENTRYID
+WHERE h.FBILLNO = @BillNo AND e.FSEQ = @Seq;
+
+-- UPDATE 模板（直接更新拆分表）
+UPDATE t_PUR_POOrderEntry_D
+SET FDELIVERYDATE = @NewValue_FDELIVERYDATE
+WHERE FENTRYID = (
+    SELECT e.FENTRYID
+    FROM t_PUR_POOrderEntry e
+    INNER JOIN t_PUR_POOrder h ON e.FID = h.FID
+    WHERE h.FBILLNO = @BillNo AND e.FSEQ = @Seq
+);
+`
+
+**处理逻辑**：
+1. 检测到字段的 `splitSuffix` 不为空
+2. 物理表名使用 `{实体主表}_{splitSuffix}`
+3. 自动生成 `INNER JOIN {拆分表} {别名} ON {别名}.FENTRYID = e.FENTRYID`
+4. 同一拆分表的多个字段只 JOIN 一次
+
+---
+
+## 案例：probe 命令通配符匹配
+
+### 场景说明
+
+查找拆分表时需要手动猜测表名后缀（`_D`、`_L` 等），效率低。`probe` 命令支持 `*` 通配符，可同时匹配多个表。
+
+### 使用示例
+
+`ash
+# 单表探测（字段不在主表中，返回空）
+k3cli probe --table t_PUR_POOrderEntry --keyword FDELIVERYDATE
+
+# 通配符匹配（找到拆分表中的字段）
+k3cli probe --table "t_PUR_POOrderEntry*" --keyword FDELIVERYDATE --pretty
+`
+
+输出示例：
+
+`json
+{
+  "success": true,
+  "command": "probe",
+  "data": [
+    {
+      "table": "T_PUR_POORDERENTRY_D",
+      "columnName": "FDELIVERYDATE",
+      "dataType": "datetime",
+      "maxLength": 8,
+      "precision": 23,
+      "scale": 3,
+      "isNullable": true
+    },
+    {
+      "table": "T_pur_POORDERENTRY_D_0212BACK",
+      "columnName": "FDELIVERYDATE",
+      "dataType": "datetime",
+      "maxLength": 8,
+      "precision": 23,
+      "scale": 3,
+      "isNullable": true
+    }
+  ],
+  "count": 2
+}
+`
+
+### 通配符规则
+
+| 模式 | 匹配范围 | 示例 |
+|------|---------|------|
+| `t_PUR_POOrderEntry` | 仅主表 | 精确匹配 |
+| `t_PUR_POOrderEntry*` | 主表 + 所有拆分表 | 包含 `_D`、`_L` 等后缀表 |
+| `t_PUR_PO*` | 所有采购订单相关表 | 更广泛的匹配 |
 
 ## 案例：LK 关联表自动检测
 
