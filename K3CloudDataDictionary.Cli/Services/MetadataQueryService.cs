@@ -16,6 +16,8 @@ namespace K3CloudDataDictionary.Cli.Services
         private MetadataContext _context;
         private Dictionary<string, ObjectBasicInfo> _allObjects;
         private Dictionary<string, string> _elementTypeNames;
+        private HashSet<string> _lkTableCache; // LK 表检测结果缓存
+        private bool _lkDetectionTimedOut; // LK 检测是否超时
 
         public MetadataQueryService(string connectionString)
         {
@@ -379,6 +381,11 @@ namespace K3CloudDataDictionary.Cli.Services
                                 });
                             }
 
+                            // 计算拆分表名
+                            var splitTable = !string.IsNullOrEmpty(field.Suffix)
+                                ? (entity?.TableName ?? "") + "_" + field.Suffix
+                                : "";
+
                             results.Add(new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase)
                             {
                                 ["FDJMC"] = _allObjects[fid].FName,
@@ -387,6 +394,7 @@ namespace K3CloudDataDictionary.Cli.Services
                                 ["FSEQFIELDKEY"] = entity?.SeqFieldKey ?? "",
                                 ["FENTRY_PK_FIELD_NAME"] = entity?.EffectivePkFieldName ?? "FEntryId",
                                 ["FTABLENAME"] = entity?.TableName ?? "",
+                                ["FSPLITTABlE"] = splitTable,
                                 ["FFIELDDBID"] = field.Id,
                                 ["FKey"] = field.Key,
                                 ["FName"] = field.Name,
@@ -514,6 +522,10 @@ namespace K3CloudDataDictionary.Cli.Services
                                 });
                             }
 
+                            var splitTable2 = !string.IsNullOrEmpty(field.Suffix)
+                                ? (entity?.TableName ?? "") + "_" + field.Suffix
+                                : "";
+
                             results.Add(new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase)
                             {
                                 ["FDJMC"] = objInfo.FName,
@@ -522,6 +534,7 @@ namespace K3CloudDataDictionary.Cli.Services
                                 ["FSEQFIELDKEY"] = entity?.SeqFieldKey ?? "",
                                 ["FENTRY_PK_FIELD_NAME"] = entity?.EffectivePkFieldName ?? "FEntryId",
                                 ["FTABLENAME"] = entity?.TableName ?? "",
+                                ["FSPLITTABlE"] = splitTable2,
                                 ["FFIELDDBID"] = field.Id,
                                 ["FKey"] = field.Key,
                                 ["FName"] = field.Name,
@@ -533,6 +546,7 @@ namespace K3CloudDataDictionary.Cli.Services
                                 ["FLookUpObjectID"] = field.LookUpObjectID,
                                 ["FLookUpObjectDisplay"] = "",
                                 ["FEnumTypeDisplay"] = "",
+                                ["FSUFFIX"] = field.Suffix,
                                 ["FSTATUSITEMS"] = statusItemsData
                             });
 
@@ -935,6 +949,61 @@ namespace K3CloudDataDictionary.Cli.Services
         }
 
         /// <summary>
+        /// 按模式匹配批量探测物理表列（支持通配符 *）
+        /// </summary>
+        /// <param name="tablePattern">表名模式，支持 * 通配符，如 "t_PUR_POOrderEntry*"</param>
+        /// <param name="keyword">列名关键词（可选）</param>
+        public List<Dictionary<string, object>> ProbePhysicalColumnsByPattern(string tablePattern, string keyword = null)
+        {
+            var results = new List<Dictionary<string, object>>();
+            if (string.IsNullOrEmpty(tablePattern)) return results;
+
+            // 将通配符 * 转换为 SQL LIKE 的 %
+            var likePattern = tablePattern.Replace("*", "%");
+
+            string sql = @"SELECT t.name AS TableName, c.name AS ColumnName, tp.name AS DataType,
+                                  c.max_length, c.precision, c.scale, c.is_nullable
+                           FROM sys.columns c
+                           INNER JOIN sys.tables t ON c.object_id = t.object_id
+                           INNER JOIN sys.types tp ON c.user_type_id = tp.user_type_id
+                           WHERE t.name LIKE @TablePattern";
+
+            if (!string.IsNullOrEmpty(keyword))
+                sql += " AND c.name LIKE @Keyword";
+
+            sql += " ORDER BY t.name, c.column_id";
+
+            using (var conn = new SqlConnection(_connectionString))
+            {
+                conn.Open();
+                using (var cmd = new SqlCommand(sql, conn))
+                {
+                    cmd.Parameters.AddWithValue("@TablePattern", likePattern);
+                    if (!string.IsNullOrEmpty(keyword))
+                        cmd.Parameters.AddWithValue("@Keyword", "%" + keyword + "%");
+                    cmd.CommandTimeout = 30;
+                    using (var reader = cmd.ExecuteReader())
+                    {
+                        while (reader.Read())
+                        {
+                            results.Add(new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase)
+                            {
+                                ["table"] = reader["TableName"]?.ToString() ?? "",
+                                ["columnName"] = reader["ColumnName"]?.ToString() ?? "",
+                                ["dataType"] = reader["DataType"]?.ToString() ?? "",
+                                ["maxLength"] = Convert.ToInt32(reader["max_length"] ?? 0),
+                                ["precision"] = Convert.ToInt32(reader["precision"] ?? 0),
+                                ["scale"] = Convert.ToInt32(reader["scale"] ?? 0),
+                                ["isNullable"] = reader["is_nullable"] != null && (bool)reader["is_nullable"]
+                            });
+                        }
+                    }
+                }
+            }
+            return results;
+        }
+
+        /// <summary>
         /// 根据已知字段推测"基本"单位衍生字段的物理列名（FBASE 前缀规律）
         /// 例：FRECEIVEQTY → FBASERECEIVEQTY
         /// 先查字典，再查物理表
@@ -983,42 +1052,87 @@ namespace K3CloudDataDictionary.Cli.Services
         }
 
         /// <summary>
+        /// 根据拆分表名生成简短别名，如 t_PUR_POOrderEntry_D → po_d
+        /// </summary>
+        private static string GenerateSplitAlias(string splitTableName)
+        {
+            if (string.IsNullOrEmpty(splitTableName)) return "st";
+            // 去掉前缀 t_ 或 T_，取最后两段用下划线连接
+            var name = splitTableName;
+            if (name.StartsWith("t_", StringComparison.OrdinalIgnoreCase))
+                name = name.Substring(2);
+            var parts = name.Split('_');
+            if (parts.Length >= 2)
+            {
+                // 取倒数第二段的首字母 + 最后一段
+                return parts[parts.Length - 2].Substring(0, 1).ToLowerInvariant() + "_" + parts[parts.Length - 1].ToLowerInvariant();
+            }
+            return name.ToLowerInvariant();
+        }
+
+        /// <summary>
         /// 批量探测物理表是否存在（用于检测 LK 关联表）
+        /// 带超时保护和缓存机制
         /// </summary>
         public List<string> FindExistingTables(List<string> tableNames)
         {
             var existing = new List<string>();
             if (tableNames == null || tableNames.Count == 0) return existing;
 
-            // 只按表名查询（不带 schema）
+            // 初始化缓存
+            if (_lkTableCache == null)
+                _lkTableCache = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            // 从缓存中查找
+            var toQuery = tableNames.Where(t => !_lkTableCache.Contains(t)).ToList();
+            var cached = tableNames.Where(t => _lkTableCache.Contains(t)).ToList();
+            existing.AddRange(cached);
+
+            if (toQuery.Count == 0) return existing;
+
+            // 已超时则跳过
+            if (_lkDetectionTimedOut) return existing;
+
+            // 只按表名查询（不带 schema），使用短超时
             var paramNames = new List<string>();
             var parameters = new List<SqlParameter>();
-            for (int i = 0; i < tableNames.Count; i++)
+            for (int i = 0; i < toQuery.Count; i++)
             {
                 var paramName = "@T" + i;
                 paramNames.Add(paramName);
-                parameters.Add(new SqlParameter(paramName, tableNames[i]));
+                parameters.Add(new SqlParameter(paramName, toQuery[i]));
             }
 
             string sql = @"SELECT t.name FROM sys.tables t
                            WHERE t.name IN (" + string.Join(",", paramNames) + ")";
 
-            using (var conn = new SqlConnection(_connectionString))
+            try
             {
-                conn.Open();
-                using (var cmd = new SqlCommand(sql, conn))
+                using (var conn = new SqlConnection(_connectionString))
                 {
-                    cmd.Parameters.AddRange(parameters.ToArray());
-                    cmd.CommandTimeout = 15;
-                    using (var reader = cmd.ExecuteReader())
+                    conn.Open();
+                    using (var cmd = new SqlCommand(sql, conn))
                     {
-                        while (reader.Read())
+                        cmd.Parameters.AddRange(parameters.ToArray());
+                        cmd.CommandTimeout = 5; // 短超时 5 秒
+                        using (var reader = cmd.ExecuteReader())
                         {
-                            existing.Add(reader["name"]?.ToString() ?? "");
+                            while (reader.Read())
+                            {
+                                var name = reader["name"]?.ToString() ?? "";
+                                existing.Add(name);
+                                _lkTableCache.Add(name);
+                            }
                         }
                     }
                 }
             }
+            catch (SqlException ex) when (ex.Number == -2 || ex.Message.Contains("timeout"))
+            {
+                // 超时：标记并返回已有结果
+                _lkDetectionTimedOut = true;
+            }
+
             return existing;
         }
 
@@ -1119,6 +1233,11 @@ namespace K3CloudDataDictionary.Cli.Services
                 if (match != null)
                 {
                     var entity = entityMap.ContainsKey(match.EntityKey) ? entityMap[match.EntityKey] : null;
+                    var splitSuffix = match.Suffix ?? "";
+                    var splitTable = !string.IsNullOrEmpty(splitSuffix)
+                        ? (entity?.TableName ?? "") + "_" + splitSuffix
+                        : "";
+
                     var fieldInfo = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase)
                     {
                         ["searchKeyword"] = kw,
@@ -1126,6 +1245,8 @@ namespace K3CloudDataDictionary.Cli.Services
                         ["key"] = match.Key,
                         ["fieldName"] = match.FieldName,
                         ["table"] = entity?.TableName ?? "",
+                        ["splitSuffix"] = splitSuffix,
+                        ["splitTable"] = splitTable,
                         ["entityKey"] = match.EntityKey,
                         ["elementType"] = match.ElementType,
                         ["elementTypeName"] = GetElementTypeName(match.ElementType)
@@ -1144,16 +1265,34 @@ namespace K3CloudDataDictionary.Cli.Services
                 }
             }
 
-            // 生成 SQL 模板
+            // 生成 SQL 模板（支持拆分表）
             var headerTable = headerEntity?.TableName ?? "";
             var entryTable = entryEntity?.TableName ?? "";
             var pkField = entryEntity?.EffectivePkFieldName ?? "FEntryId";
             var billNoCond = !string.IsNullOrEmpty(billNoField) ? "h." + billNoField + " = @BillNo" : "";
             var seqCond = !string.IsNullOrEmpty(seqField) ? " AND e." + seqField + " = @Seq" : "";
 
+            // 收集需要 JOIN 的拆分表（去重）
+            var splitTables = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase); // alias -> tableName
+            foreach (var f in matchedFields)
+            {
+                var st = f.GetValueOrDefault("splitTable")?.ToString() ?? "";
+                if (!string.IsNullOrEmpty(st) && !splitTables.ContainsKey(st))
+                {
+                    // 生成别名：表名最后一段 + 后缀，如 po_d
+                    var alias = GenerateSplitAlias(st);
+                    splitTables[st] = alias;
+                }
+            }
+
             // SELECT 模板
             var selectCols = matchedFields.Select(f =>
             {
+                var st = f.GetValueOrDefault("splitTable")?.ToString() ?? "";
+                if (!string.IsNullOrEmpty(st) && splitTables.ContainsKey(st))
+                {
+                    return "    " + splitTables[st] + "." + f["fieldName"] + " AS [" + f["name"] + "]";
+                }
                 var tbl = f["table"]?.ToString() ?? "";
                 var alias = tbl == entryTable ? "e" : "h";
                 return "    " + alias + "." + f["fieldName"] + " AS [" + f["name"] + "]";
@@ -1162,21 +1301,65 @@ namespace K3CloudDataDictionary.Cli.Services
             var selectSql = "SELECT\n" + string.Join(",\n", selectCols) + "\nFROM " + headerTable + " h";
             if (entryEntity != null)
                 selectSql += "\nINNER JOIN " + entryTable + " e ON e.FID = h.FID";
+            foreach (var kvp in splitTables)
+            {
+                selectSql += "\nINNER JOIN " + kvp.Key + " " + kvp.Value + " ON " + kvp.Value + ".FENTRYID = e.FENTRYID";
+            }
             selectSql += "\nWHERE " + billNoCond + (entryEntity != null ? seqCond : "") + ";";
 
             // UPDATE 模板
             var updateSql = "";
             if (entryEntity != null && matchedFields.Count > 0)
             {
-                var setClauses = matchedFields.Select(f =>
-                    "    " + f["fieldName"] + " = @NewValue_" + f["fieldName"]);
+                // 检查是否有拆分表字段
+                var hasSplitFields = matchedFields.Any(f => !string.IsNullOrEmpty(f.GetValueOrDefault("splitTable")?.ToString()));
 
-                updateSql = "UPDATE " + entryTable + "\nSET\n" + string.Join(",\n", setClauses)
-                    + "\nWHERE " + pkField + " = (\n    SELECT e." + pkField
-                    + "\n    FROM " + entryTable + " e"
-                    + "\n    INNER JOIN " + headerTable + " h ON e.FID = h.FID"
-                    + "\n    WHERE " + billNoCond + seqCond
-                    + "\n);";
+                if (hasSplitFields)
+                {
+                    // 按拆分表分组生成 UPDATE
+                    var splitGroups = matchedFields.GroupBy(f => f.GetValueOrDefault("splitTable")?.ToString() ?? "");
+                    foreach (var group in splitGroups)
+                    {
+                        var groupName = group.Key ?? "";
+                        var setClauses = group.Select(f => "    " + f["fieldName"] + " = @NewValue_" + f["fieldName"]);
+
+                        if (string.IsNullOrEmpty(groupName))
+                        {
+                            // 主表字段
+                            updateSql += "UPDATE " + entryTable + "\nSET\n" + string.Join(",\n", setClauses)
+                                + "\nWHERE " + pkField + " = (\n    SELECT e." + pkField
+                                + "\n    FROM " + entryTable + " e"
+                                + "\n    INNER JOIN " + headerTable + " h ON e.FID = h.FID"
+                                + "\n    WHERE " + billNoCond + seqCond
+                                + "\n);\n\n";
+                        }
+                        else
+                        {
+                            // 拆分表字段
+                            var alias = splitTables.ContainsKey(groupName) ? splitTables[groupName] : "st";
+                            updateSql += "UPDATE " + groupName + "\nSET\n" + string.Join(",\n", setClauses)
+                                + "\nWHERE FENTRYID = (\n    SELECT e.FENTRYID"
+                                + "\n    FROM " + entryTable + " e"
+                                + "\n    INNER JOIN " + headerTable + " h ON e.FID = h.FID"
+                                + "\n    WHERE " + billNoCond + seqCond
+                                + "\n);\n\n";
+                        }
+                    }
+                    // 去掉末尾多余换行
+                    updateSql = updateSql.TrimEnd();
+                }
+                else
+                {
+                    var setClauses = matchedFields.Select(f =>
+                        "    " + f["fieldName"] + " = @NewValue_" + f["fieldName"]);
+
+                    updateSql = "UPDATE " + entryTable + "\nSET\n" + string.Join(",\n", setClauses)
+                        + "\nWHERE " + pkField + " = (\n    SELECT e." + pkField
+                        + "\n    FROM " + entryTable + " e"
+                        + "\n    INNER JOIN " + headerTable + " h ON e.FID = h.FID"
+                        + "\n    WHERE " + billNoCond + seqCond
+                        + "\n);";
+                }
             }
 
             // 批量检测 LK 关联表
@@ -1220,6 +1403,15 @@ namespace K3CloudDataDictionary.Cli.Services
             {
                 result["lkTables"] = lkTables;
                 result["lkHint"] = "发现 " + lkTables.Count + " 个 LK 关联表。LK 表用于存储单据转换后的上下游关联关系，可通过 FSBILLID（源单单据头ID）和 FSID（源单明细ID）追溯源单。";
+            }
+            else if (_lkDetectionTimedOut)
+            {
+                result["lkTables"] = new List<object>();
+                var timeoutHint = "LK 表检测超时，请手动确认是否存在关联表";
+                if (entryEntity != null)
+                    timeoutHint += "（如 " + entryEntity.TableName + "_LK）";
+                timeoutHint += "。可使用 probe 命令验证：k3cli probe --table " + (entryEntity?.TableName ?? "") + "_LK";
+                result["lkHint"] = timeoutHint;
             }
 
             if (unmatchedKeywords.Count > 0)

@@ -7,6 +7,7 @@ namespace K3CloudDataDictionary.Cli.Commands
 {
     /// <summary>
     /// probe 命令：探测物理表中的列（解决字典未收录字段无法查询的问题）
+    /// 支持通配符 * 匹配多个表名
     /// </summary>
     public static class ProbeCommand
     {
@@ -34,20 +35,42 @@ namespace K3CloudDataDictionary.Cli.Commands
             {
                 var connectionString = Program.ResolveConnectionString(options);
                 var service = new MetadataQueryService(connectionString);
-                var results = service.ProbePhysicalColumns(tableName, keyword);
+
+                // 判断是否包含通配符
+                bool isPattern = tableName.Contains("*");
+                List<Dictionary<string, object>> results;
+
+                if (isPattern)
+                {
+                    // 批量模式匹配
+                    results = service.ProbePhysicalColumnsByPattern(tableName, keyword);
+                }
+                else
+                {
+                    // 单表探测
+                    results = service.ProbePhysicalColumns(tableName, keyword);
+                }
 
                 var output = new List<object>();
                 foreach (var row in results)
                 {
-                    output.Add(new
+                    var item = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase)
                     {
-                        columnName = row.GetValueOrDefault("columnName")?.ToString() ?? "",
-                        dataType = row.GetValueOrDefault("dataType")?.ToString() ?? "",
-                        maxLength = row.GetValueOrDefault("maxLength"),
-                        precision = row.GetValueOrDefault("precision"),
-                        scale = row.GetValueOrDefault("scale"),
-                        isNullable = row.GetValueOrDefault("isNullable")
-                    });
+                        ["columnName"] = row.GetValueOrDefault("columnName")?.ToString() ?? "",
+                        ["dataType"] = row.GetValueOrDefault("dataType")?.ToString() ?? "",
+                        ["maxLength"] = row.GetValueOrDefault("maxLength"),
+                        ["precision"] = row.GetValueOrDefault("precision"),
+                        ["scale"] = row.GetValueOrDefault("scale"),
+                        ["isNullable"] = row.GetValueOrDefault("isNullable")
+                    };
+
+                    // 批量模式时附加表名
+                    if (isPattern && row.ContainsKey("table"))
+                    {
+                        item["table"] = row.GetValueOrDefault("table")?.ToString() ?? "";
+                    }
+
+                    output.Add(item);
                 }
 
                 JsonOutputWriter.WriteSuccess("probe", output);

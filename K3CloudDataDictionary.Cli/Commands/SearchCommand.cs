@@ -78,6 +78,8 @@ namespace K3CloudDataDictionary.Cli.Commands
                             ["seqFieldKey"] = row.GetValueOrDefault("FSEQFIELDKEY")?.ToString() ?? "",
                             ["entryPkFieldName"] = row.GetValueOrDefault("FENTRY_PK_FIELD_NAME")?.ToString() ?? "",
                             ["table"] = row.GetValueOrDefault("FTABLENAME")?.ToString() ?? "",
+                            ["splitSuffix"] = row.GetValueOrDefault("FSUFFIX")?.ToString() ?? "",
+                            ["splitTable"] = row.GetValueOrDefault("FSPLITTABlE")?.ToString() ?? "",
                             ["key"] = row.GetValueOrDefault("FKey")?.ToString() ?? "",
                             ["name"] = row.GetValueOrDefault("FName")?.ToString() ?? "",
                             ["fieldName"] = row.GetValueOrDefault("FFieldName")?.ToString() ?? "",
