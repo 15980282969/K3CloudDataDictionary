@@ -1,4 +1,4 @@
-﻿# K3Cloud CLI 使用案例文档
+# K3Cloud CLI 使用案例文档
 
 ## 案例：通过 lookUpObject 查询关联表单的完整流程
 
@@ -1171,3 +1171,76 @@ WHERE FEntryID = (
 | 30 | AssistantField | 辅助资料 | `assistantdata --id <lookUpObject>` |
 | 40 | BillStatusField | 单据状态 | `billstatus --form <formId> --field <fieldKey>` |
 | 44 | BillTypeField | 单据类型 | `billtype --form <formId>` |
+
+---
+
+## 案例：ORM 实体名与实体标识的区别
+
+### 场景说明
+
+在金蝶 K3Cloud 中，每个实体有两个重要的标识：
+
+| 字段 | 含义 | 示例 |
+|------|------|------|
+| `entityKey` | 实体标识（Entity Key） | `FEntity`、`FPOOrderEntry` |
+| `ormEntityName` | ORM 实体名（EntryName） | `ReqEntry`、`POOrderEntry` |
+
+**重要**：在代码中访问 `DynamicObject` 对象实体时，应当使用 **ORM 实体名**（`ormEntityName`）进行访问，而非实体标识（`entityKey`）。
+
+### 使用示例
+
+```bash
+k3cli fields --form PUR_PurchaseOrder --keyword "物料编码" --exact --pretty
+```
+
+输出示例：
+
+```json
+{
+  "data": [
+    {
+      "formName": "采购订单",
+      "entityName": "明细信息",
+      "entityKey": "FPOORDERENTRY",
+      "ormEntityName": "POOrderEntry",
+      "table": "t_PUR_POOrderEntry",
+      "key": "FMaterialId",
+      "name": "物料编码"
+    }
+  ]
+}
+```
+
+### 字段说明
+
+| 字段 | 含义 | 用途 |
+|------|------|------|
+| `entityKey` | 实体标识 | 用于 CLI 命令的 `--entity` 参数 |
+| `ormEntityName` | ORM 实体名 | 用于代码中访问 DynamicObject 实体 |
+| `entityName` | 实体显示名称 | 用于界面显示（如"明细信息"） |
+
+### 代码访问示例
+
+```csharp
+// 错误：使用 entityKey 访问实体
+var entry = dynamicObject["FPOOrderEntry"];  // ❌
+
+// 正确：使用 ormEntityName 访问实体
+var entry = dynamicObject["POOrderEntry"];   // ✅
+```
+
+### 常见实体的 ORM 实体名对照
+
+| 表单 | entityKey | ormEntityName | 说明 |
+|------|-----------|---------------|------|
+| 采购订单-明细 | `FPOORDERENTRY` | `POOrderEntry` | 明细信息实体 |
+| 采购订单-财务 | `FPOORDERFINANCE` | `POOrderFinance` | 财务信息实体 |
+| 采购申请单-明细 | `FEntity` | `ReqEntry` | 明细信息实体 |
+| 应收单-明细 | `FEntityDetail` | `ReceivableEntry` | 明细信息实体 |
+
+### 注意事项
+
+1. **CLI 命令参数**：使用 `entityKey`（如 `--entity FPOOrderEntry`）
+2. **代码访问实体**：使用 `ormEntityName`（如 `dynamicObject["POOrderEntry"]`）
+3. **数据库表名**：使用 `table` 字段（如 `t_PUR_POOrderEntry`）
+4. **三者不可混用**，否则会导致访问失败
