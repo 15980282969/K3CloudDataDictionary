@@ -34,6 +34,9 @@ namespace K3CloudDataDictionary.Cli.Commands
                     case "user-licenses":
                         return ExecuteUserLicenses(queryArgs, service);
 
+                    case "blocking":
+                        return ExecuteBlocking(service);
+
                     case "list":
                         var queries = service.GetAvailableQueries();
                         JsonOutputWriter.WriteSuccess("query", queries);
@@ -57,6 +60,13 @@ namespace K3CloudDataDictionary.Cli.Commands
             var userName = Program.GetArgValue(args, "user");
 
             var results = service.QueryUserLicenses(orgName, userName);
+            JsonOutputWriter.WriteSuccess("query", results);
+            return 0;
+        }
+
+        private static int ExecuteBlocking(MetadataQueryService service)
+        {
+            var results = service.QueryBlockingProcesses();
             JsonOutputWriter.WriteSuccess("query", results);
             return 0;
         }

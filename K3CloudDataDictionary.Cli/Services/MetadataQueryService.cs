@@ -1558,6 +1558,44 @@ WHERE u.FFORBIDSTATUS = 'A'
         }
 
         /// <summary>
+        /// 查询数据库阻塞/死锁信息
+        /// </summary>
+        public List<Dictionary<string, object>> QueryBlockingProcesses()
+        {
+            string sql = @"
+SELECT SPID,
+       BLOCKED,
+       WAITTIME,
+       LASTWAITTYPE,
+       WAITRESOURCE,
+       OPEN_TRAN,
+       STATUS,
+       P.DBID,
+       CPU,
+       PHYSICAL_IO,
+       MEMUSAGE,
+       LOGIN_TIME,
+       LAST_BATCH,
+       HOSTNAME,
+       [program_name],
+       HOSTPROCESS,
+       CMD,
+       NT_DOMAIN,
+       NT_USERNAME,
+       NET_ADDRESS,
+       NET_LIBRARY,
+       LOGINAME,
+       SQL_HANDLE,
+       TEXT
+FROM MASTER.DBO.SYSPROCESSES P
+CROSS APPLY SYS.DM_EXEC_SQL_TEXT(P.SQL_HANDLE) S
+WHERE BLOCKED > 0
+   OR SPID IN (SELECT SP.BLOCKED FROM MASTER.DBO.SYSPROCESSES SP WHERE SP.BLOCKED > 0)";
+
+            return ExecuteSql(sql);
+        }
+
+        /// <summary>
         /// 查询所有可用常用查询的列表
         /// </summary>
         public List<Dictionary<string, object>> GetAvailableQueries()
@@ -1569,6 +1607,12 @@ WHERE u.FFORBIDSTATUS = 'A'
                     ["name"] = "user-licenses",
                     ["description"] = "查询用户许可分配（组织、用户、许可分组）",
                     ["parameters"] = "--org <组织名称关键词>, --user <用户名称关键词>"
+                },
+                new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["name"] = "blocking",
+                    ["description"] = "查询数据库阻塞/死锁进程信息",
+                    ["parameters"] = "无需参数"
                 }
             };
         }

@@ -1244,3 +1244,142 @@ var entry = dynamicObject["POOrderEntry"];   // ✅
 2. **代码访问实体**：使用 `ormEntityName`（如 `dynamicObject["POOrderEntry"]`）
 3. **数据库表名**：使用 `table` 字段（如 `t_PUR_POOrderEntry`）
 4. **三者不可混用**，否则会导致访问失败
+
+---
+
+## 案例：常用代码查询（query 命令）
+
+### 场景说明
+
+`query` 命令提供常用业务数据的快速查询能力，通过预定义的 SQL 语句直接返回业务数据，无需手动编写 SQL。
+
+### 使用流程
+
+#### 第一步：查看可用查询列表
+
+```bash
+k3cli query list --pretty
+```
+
+输出示例：
+
+```json
+{
+  "success": true,
+  "command": "query",
+  "data": [
+    {
+      "name": "user-licenses",
+      "description": "查询用户许可分配（组织、用户、许可分组）",
+      "parameters": "--org <组织名称关键词>, --user <用户名称关键词>"
+    }
+  ],
+  "count": 1
+}
+```
+
+#### 第二步：执行查询
+
+```bash
+# 查询所有用户许可分配
+k3cli query user-licenses --pretty
+
+# 按组织名称过滤
+k3cli query user-licenses --org "荣耀" --pretty
+
+# 按用户名称过滤
+k3cli query user-licenses --user "Harrison" --pretty
+
+# 组合过滤
+k3cli query user-licenses --org "荣耀" --user "Harrison" --pretty
+```
+
+输出示例：
+
+```json
+{
+  "success": true,
+  "command": "query",
+  "data": [
+    {
+      "组织名称": "荣耀...",
+      "组织编码": "300",
+      "用户ID": 100218,
+      "用户名称": "郑...",
+      "许可分组代码": "BOS",
+      "许可分组名称": "BOS运行平台"
+    },
+    {
+      "组织名称": "荣耀...",
+      "组织编码": "300",
+      "用户ID": 3442639,
+      "用户名称": "张...",
+      "许可分组代码": "BOS_Integration",
+      "许可分组名称": "BOS运行平台-融合开发"
+    }
+  ],
+  "count": 2
+}
+```
+
+### 许可分组代码对照表
+
+| 代码 | 名称 | 代码 | 名称 |
+|------|------|------|------|
+| `FIN` | 财务会计云 | `SCM` | 供应链云 |
+| `FIN_SCM` | 财务会计+供应链 | `MFG` | 智能制造云 |
+| `FIN_SCM_MFG` | 财务会计+供应链+标准制造 | `MFG_AdvMFG` | 高级制造云 |
+| `FIN_SCM_MFG_AdvMFG` | 财务会计+供应链+高级制造 | `MA` | 管理会计云 |
+| `BMCloud` | 预算管理云 | `CRCloud` | 合并报表云 |
+| `QM` | 质量管理云 | `B2C_EBus` | B2C电商云 |
+| `AllChannels` | 全渠道营销云 | `BBC` | BBC营销云 |
+| `CRM` | 客户关系管理 | `SupplierCollaboration` | 供应协同云 |
+| `EmployeeService` | 员工服务云 | `PLM` | PLM云 |
+| `BI` | 经营分析 | `QING` | 数据服务云 |
+| `BOS` | BOS运行平台 | `BOS_Indie` | BOS运行时-独立开发 |
+| `BOS_Integration` | BOS运行平台-融合开发 | `BOS_ISV` | 行业产品BOS运行平台 |
+| `BOS_Mobile` | 移动BOS运行平台 | `Pro` | 专业应用组 |
+| `All` | 全员应用组 | `ViewOnly` | 仅查询应用 |
+| `K3Cloud_ERP_RI` | 零售云 | `SmartShop` | 智能导购助手 |
+| `WisdomWorkshop` | 智慧车间MES云 | `DeviceCloud` | 设备云 |
+| `EKanban` | 电子看板 | `Kanban` | 数字大屏 |
+| `DSStock` | 动态安全库存 | `YDTM` | 移动条码 |
+| `MobileReport` | 移动工序报工 | | |
+
+### 添加新查询
+
+要添加新的常用查询，需要修改以下文件：
+
+1. **`MetadataQueryService.cs`**：添加查询方法
+   ```csharp
+   public List<Dictionary<string, object>> QueryXxx(string param = null)
+   {
+       string sql = @"SELECT ... FROM ...";
+       return ExecuteSql(sql, parameters);
+   }
+   ```
+
+2. **`GetAvailableQueries()`**：注册查询信息
+   ```csharp
+   new Dictionary<string, object>
+   {
+       ["name"] = "xxx",
+       ["description"] = "查询描述",
+       ["parameters"] = "--param <说明>"
+   }
+   ```
+
+3. **`QueryCommand.cs`**：添加路由
+   ```csharp
+   case "xxx":
+       return ExecuteXxx(queryArgs, service);
+   ```
+
+4. **`HelpCommand.cs`**：更新帮助文档
+
+### 注意事项
+
+1. `query` 命令直接执行 SQL 查询数据库，**仅支持只读查询**
+2. 查询结果中的列名使用中文别名（如"组织名称"、"用户名称"）
+3. 过滤参数支持模糊匹配（LIKE %keyword%）
+4. 新增查询需要重新编译 CLI 工具

@@ -368,10 +368,15 @@ add 选项:
 可用查询:
   list                    列出所有可用查询
   user-licenses           查询用户许可分配（组织、用户、许可分组）
+  blocking                查询数据库阻塞/死锁进程信息
 
 user-licenses 选项:
   --org <keyword>         按组织名称模糊过滤
   --user <keyword>        按用户名称模糊过滤
+  --connection, -c <id>   指定连接 ID
+  --pretty                格式化 JSON 输出
+
+blocking 选项:
   --connection, -c <id>   指定连接 ID
   --pretty                格式化 JSON 输出
 
@@ -390,6 +395,9 @@ user-licenses 选项:
 
   # 组合过滤
   k3cli query user-licenses --org ""荣耀"" --user ""Harrison"" --pretty
+
+  # 查询数据库阻塞/死锁进程
+  k3cli query blocking --pretty
 ");
         }
     }
