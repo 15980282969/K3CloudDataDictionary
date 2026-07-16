@@ -25,6 +25,7 @@ namespace K3CloudDataDictionary.Cli.Commands
   connections     管理数据库连接
   probe           探测物理表列（支持通配符）
   sql             生成 SQL 辅助信息（支持拆分表）
+  query           常用代码查询（用户许可等）
   help            显示此帮助信息
 
 全局选项:
@@ -354,6 +355,41 @@ add 选项:
   1. 当字段有 splitSuffix 时，SQL 会自动使用拆分表并生成正确的 JOIN
   2. LK 关联表信息会自动检测，超时后降级提示
   3. 生成的 SQL 仅供参考，请在测试环境验证后使用
+");
+        }
+
+        public static void ShowQueryHelp()
+        {
+            Console.WriteLine(@"用法: k3cli query <queryName> [options]
+
+说明:
+  常用代码查询功能，快速调用预定义 SQL 返回业务数据。
+
+可用查询:
+  list                    列出所有可用查询
+  user-licenses           查询用户许可分配（组织、用户、许可分组）
+
+user-licenses 选项:
+  --org <keyword>         按组织名称模糊过滤
+  --user <keyword>        按用户名称模糊过滤
+  --connection, -c <id>   指定连接 ID
+  --pretty                格式化 JSON 输出
+
+示例:
+  # 列出所有可用查询
+  k3cli query list
+
+  # 查询所有用户许可分配
+  k3cli query user-licenses
+
+  # 按组织过滤
+  k3cli query user-licenses --org ""荣耀""
+
+  # 按用户过滤
+  k3cli query user-licenses --user ""Harrison""
+
+  # 组合过滤
+  k3cli query user-licenses --org ""荣耀"" --user ""Harrison"" --pretty
 ");
         }
     }

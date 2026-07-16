@@ -1442,5 +1442,135 @@ namespace K3CloudDataDictionary.Cli.Services
             // 提取元数据
             return MetadataExtractor.ExtractByFid(_context, fid, xmlCache);
         }
+
+        /// <summary>
+        /// 执行通用 SQL 查询（用于常用代码查询功能）
+        /// </summary>
+        public List<Dictionary<string, object>> ExecuteSql(string sql, Dictionary<string, object> parameters = null)
+        {
+            var results = new List<Dictionary<string, object>>();
+
+            using (var conn = new SqlConnection(_connectionString))
+            {
+                conn.Open();
+                using (var cmd = new SqlCommand(sql, conn))
+                {
+                    if (parameters != null)
+                    {
+                        foreach (var kvp in parameters)
+                        {
+                            cmd.Parameters.AddWithValue(kvp.Key, kvp.Value);
+                        }
+                    }
+                    cmd.CommandTimeout = 60;
+                    using (var reader = cmd.ExecuteReader())
+                    {
+                        while (reader.Read())
+                        {
+                            var row = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
+                            for (int i = 0; i < reader.FieldCount; i++)
+                            {
+                                row[reader.GetName(i)] = reader.GetValue(i) == DBNull.Value ? "" : reader.GetValue(i);
+                            }
+                            results.Add(row);
+                        }
+                    }
+                }
+            }
+            return results;
+        }
+
+        /// <summary>
+        /// 查询用户许可分配
+        /// </summary>
+        public List<Dictionary<string, object>> QueryUserLicenses(string orgName = null, string userName = null)
+        {
+            string sql = @"
+SELECT org_l.FNAME               AS [组织名称],
+       org.FNUMBER               AS [组织编码],
+       u.FUSERID                 AS [用户ID],
+       u.FNAME                   AS [用户名称],
+       LTRIM(RTRIM(app.value))   AS [许可分组代码],
+       CASE LTRIM(RTRIM(app.value))
+           WHEN 'FIN' THEN '财务会计云'
+           WHEN 'SCM' THEN '供应链云'
+           WHEN 'FIN_SCM' THEN '财务会计+供应链'
+           WHEN 'MFG' THEN '智能制造云'
+           WHEN 'FIN_SCM_MFG' THEN '财务会计+供应链+标准制造'
+           WHEN 'MFG_AdvMFG' THEN '高级制造云'
+           WHEN 'FIN_SCM_MFG_AdvMFG' THEN '财务会计+供应链+高级制造'
+           WHEN 'MA' THEN '管理会计云'
+           WHEN 'BMCloud' THEN '预算管理云'
+           WHEN 'CRCloud' THEN '合并报表云'
+           WHEN 'QM' THEN '质量管理云'
+           WHEN 'B2C_EBus' THEN 'B2C电商云'
+           WHEN 'AllChannels' THEN '全渠道营销云'
+           WHEN 'BBC' THEN 'BBC营销云'
+           WHEN 'CRM' THEN '客户关系管理'
+           WHEN 'SupplierCollaboration' THEN '供应协同云'
+           WHEN 'EmployeeService' THEN '员工服务云'
+           WHEN 'PLM' THEN 'PLM云'
+           WHEN 'BI' THEN '经营分析'
+           WHEN 'QING' THEN '数据服务云'
+           WHEN 'BOS' THEN 'BOS运行平台'
+           WHEN 'BOS_Indie' THEN 'BOS运行时-独立开发'
+           WHEN 'BOS_Integration' THEN 'BOS运行平台-融合开发'
+           WHEN 'BOS_ISV' THEN '行业产品BOS运行平台'
+           WHEN 'BOS_Mobile' THEN '移动BOS运行平台'
+           WHEN 'Pro' THEN '专业应用组'
+           WHEN 'All' THEN '全员应用组'
+           WHEN 'ViewOnly' THEN '仅查询应用'
+           WHEN 'K3Cloud_ERP_RI' THEN '零售云'
+           WHEN 'SmartShop' THEN '智能导购助手'
+           WHEN 'WisdomWorkshop' THEN '智慧车间MES云'
+           WHEN 'DeviceCloud' THEN '设备云'
+           WHEN 'EKanban' THEN '电子看板'
+           WHEN 'Kanban' THEN '数字大屏'
+           WHEN 'DSStock' THEN '动态安全库存'
+           WHEN 'YDTM' THEN '移动条码'
+           WHEN 'MobileReport' THEN '移动工序报工'
+           ELSE LTRIM(RTRIM(app.value))
+           END                   AS [许可分组名称]
+FROM T_SEC_USER u
+INNER JOIN T_SEC_USERORG uo ON uo.FUSERID = u.FUSERID
+INNER JOIN T_ORG_ORGANIZATIONS org ON org.FORGID = uo.FORGID
+INNER JOIN T_ORG_ORGANIZATIONS_L org_l ON org_l.FORGID = org.FORGID AND org_l.FLOCALEID = 2052
+CROSS APPLY STRING_SPLIT(u.FAPPGROUP, ',') app
+WHERE u.FFORBIDSTATUS = 'A'
+  AND org.FDOCUMENTSTATUS = 'C'
+  AND org.FFORBIDSTATUS = 'A'
+  AND LTRIM(RTRIM(app.value)) <> ''";
+
+            var parameters = new Dictionary<string, object>();
+            if (!string.IsNullOrEmpty(orgName))
+            {
+                sql += " AND org_l.FNAME LIKE @OrgName";
+                parameters["@OrgName"] = "%" + orgName + "%";
+            }
+            if (!string.IsNullOrEmpty(userName))
+            {
+                sql += " AND u.FNAME LIKE @UserName";
+                parameters["@UserName"] = "%" + userName + "%";
+            }
+            sql += " ORDER BY org_l.FNAME, [许可分组代码]";
+
+            return ExecuteSql(sql, parameters);
+        }
+
+        /// <summary>
+        /// 查询所有可用常用查询的列表
+        /// </summary>
+        public List<Dictionary<string, object>> GetAvailableQueries()
+        {
+            return new List<Dictionary<string, object>>
+            {
+                new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["name"] = "user-licenses",
+                    ["description"] = "查询用户许可分配（组织、用户、许可分组）",
+                    ["parameters"] = "--org <组织名称关键词>, --user <用户名称关键词>"
+                }
+            };
+        }
     }
 }

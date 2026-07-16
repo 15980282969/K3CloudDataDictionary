@@ -54,6 +54,8 @@ namespace K3CloudDataDictionary.Cli
                         return ProbeCommand.Execute(commandArgs, globalOptions);
                     case "sql":
                         return SqlHelperCommand.Execute(commandArgs, globalOptions);
+                    case "query":
+                        return QueryCommand.Execute(commandArgs, globalOptions);
                     case "help":
                     case "--help":
                     case "-h":
