@@ -100,6 +100,34 @@ namespace K3CloudDataDictionary.Cli.Services
         }
 
         /// <summary>
+        /// 获取单据状态值的中文注释和常用标识
+        /// </summary>
+        private static readonly Dictionary<string, (string Description, bool IsCommon)> BillStatusAnnotations = 
+            new Dictionary<string, (string, bool)>(StringComparer.OrdinalIgnoreCase)
+            {
+                { "Z", ("暂存", true) },
+                { "A", ("待审核", true) },
+                { "B", ("审核中", false) },
+                { "C", ("已审核", true) },
+                { "D", ("重新审核", false) },
+                { "E", ("已驳回", true) }
+            };
+
+        private string GetBillStatusAnnotation(string statusValue, string statusName)
+        {
+            if (string.IsNullOrEmpty(statusValue)) return statusName ?? "";
+
+            if (BillStatusAnnotations.TryGetValue(statusValue, out var annotation))
+            {
+                string commonMark = annotation.IsCommon ? " ← 常用" : "";
+                return $"{annotation.Description}{commonMark}";
+            }
+
+            // 如果不在预定义列表中，返回原始名称
+            return statusName ?? "";
+        }
+
+        /// <summary>
         /// 根据对象 ID 解析对应的表单信息（用于 lookUpObject 反查）
         /// </summary>
         /// <param name="objectId">对象 ID（即 lookUpObject 值）</param>
@@ -308,7 +336,7 @@ namespace K3CloudDataDictionary.Cli.Services
         /// <param name="entityKey">实体 Key（可选）</param>
         /// <param name="keyword">字段搜索关键词（可选，支持模糊/精确匹配）</param>
         /// <param name="exact">true=精确匹配，false=模糊匹配（默认）</param>
-        public List<Dictionary<string, object>> QueryFields(string formIdentifier, string entityKey = null, string keyword = null, bool exact = false)
+        public List<Dictionary<string, object>> QueryFields(string formIdentifier, string entityKey = null, string keyword = null, bool exact = false, string typeFilter = null)
         {
             EnsureContext();
             var results = new List<Dictionary<string, object>>();
@@ -327,8 +355,18 @@ namespace K3CloudDataDictionary.Cli.Services
                         var allFields = metadata.FieldsWithOid.Concat(metadata.FieldsWithoutOid).ToList();
                         var allEntities = metadata.EntitiesWithOid.Concat(metadata.EntitiesWithoutOid).ToList();
 
-                        // 归一化关键词（兼容全角/半角括号）
-                        var normalizedKeyword = string.IsNullOrEmpty(keyword) ? null : NormalizeKeyword(keyword);
+                        // 支持逗号、分号分隔的多关键词（兼容中英文逗号和分号）
+                        var keywords = new List<string>();
+                        var normalizedKeywords = new List<string>();
+                        if (!string.IsNullOrEmpty(keyword))
+                        {
+                            var parts = keyword.Split(new[] { ',', '，', ';', '；' }, StringSplitOptions.RemoveEmptyEntries)
+                                               .Select(k => k.Trim())
+                                               .Where(k => k.Length > 0)
+                                               .ToList();
+                            keywords = parts;
+                            normalizedKeywords = parts.Select(k => NormalizeKeyword(k)).ToList();
+                        }
 
                         // 构建 EntityKey -> Entity 映射
                         var entityMap = allEntities.ToDictionary(
@@ -338,6 +376,42 @@ namespace K3CloudDataDictionary.Cli.Services
 
                         foreach (var field in allFields)
                         {
+                            // 类型过滤
+                            if (!string.IsNullOrEmpty(typeFilter))
+                            {
+                                var fieldEntity = entityMap.ContainsKey(field.EntityKey) ? entityMap[field.EntityKey] : null;
+                                bool includeByType = false;
+
+                                switch (typeFilter.ToLowerInvariant())
+                                {
+                                    case "entry":
+                                        // 明细实体字段：ElementType 包含"单据体"或 TagName 包含"Entry"
+                                        includeByType = fieldEntity != null && (
+                                            fieldEntity.ElementType.Contains("单据体") ||
+                                            (fieldEntity.TagName != null && fieldEntity.TagName.Contains("Entry")));
+                                        break;
+                                    case "head":
+                                        // 头部实体字段：ElementType 包含"单据头"或 TagName 包含"Head"
+                                        includeByType = fieldEntity != null && (
+                                            fieldEntity.ElementType.Contains("单据头") ||
+                                            (fieldEntity.TagName != null && fieldEntity.TagName.Contains("Head")));
+                                        break;
+                                    case "oid":
+                                        // OID 相关字段
+                                        includeByType = !string.IsNullOrEmpty(field.Oid);
+                                        break;
+                                    case "normal":
+                                        // 普通业务字段（非 OID）
+                                        includeByType = string.IsNullOrEmpty(field.Oid);
+                                        break;
+                                    default:
+                                        includeByType = true;
+                                        break;
+                                }
+
+                                if (!includeByType) continue;
+                            }
+
                             // 如果指定了 entityKey，只返回该实体的字段
                             if (!string.IsNullOrEmpty(entityKey) &&
                                 !field.EntityKey.Equals(entityKey, StringComparison.OrdinalIgnoreCase))
@@ -345,24 +419,37 @@ namespace K3CloudDataDictionary.Cli.Services
                                 continue;
                             }
 
-                            // 如果指定了 keyword，进行字段搜索过滤
-                            if (!string.IsNullOrEmpty(keyword))
+                            // 如果指定了 keyword，进行字段搜索过滤（多关键词：匹配任意一个即可）
+                            if (keywords.Count > 0)
                             {
-                                var keywordLower = keyword.ToLowerInvariant();
-                                bool matched;
-                                if (exact)
+                                bool matched = false;
+                                for (int ki = 0; ki < keywords.Count; ki++)
                                 {
-                                    matched = field.Key.Equals(keyword, StringComparison.OrdinalIgnoreCase) ||
-                                              field.Name.Equals(keyword, StringComparison.OrdinalIgnoreCase) ||
-                                              field.FieldName.Equals(keyword, StringComparison.OrdinalIgnoreCase) ||
-                                              field.PropertyName.Equals(keyword, StringComparison.OrdinalIgnoreCase);
-                                }
-                                else
-                                {
-                                    matched = field.Key.ToLowerInvariant().Contains(keywordLower) ||
-                                              NormalizedContains(field.Name, normalizedKeyword) ||
-                                              field.FieldName.ToLowerInvariant().Contains(keywordLower) ||
-                                              field.PropertyName.ToLowerInvariant().Contains(keywordLower);
+                                    var kw = keywords[ki];
+                                    if (exact)
+                                    {
+                                        if (field.Key.Equals(kw, StringComparison.OrdinalIgnoreCase) ||
+                                            field.Name.Equals(kw, StringComparison.OrdinalIgnoreCase) ||
+                                            field.FieldName.Equals(kw, StringComparison.OrdinalIgnoreCase) ||
+                                            field.PropertyName.Equals(kw, StringComparison.OrdinalIgnoreCase))
+                                        {
+                                            matched = true;
+                                            break;
+                                        }
+                                    }
+                                    else
+                                    {
+                                        var kwLower = kw.ToLowerInvariant();
+                                        var normalizedKw = normalizedKeywords[ki];
+                                        if (field.Key.ToLowerInvariant().Contains(kwLower) ||
+                                            NormalizedContains(field.Name, normalizedKw) ||
+                                            field.FieldName.ToLowerInvariant().Contains(kwLower) ||
+                                            field.PropertyName.ToLowerInvariant().Contains(kwLower))
+                                        {
+                                            matched = true;
+                                            break;
+                                        }
+                                    }
                                 }
 
                                 if (!matched) continue;
@@ -862,10 +949,14 @@ namespace K3CloudDataDictionary.Cli.Services
                                     }
                                 }
 
+                                // 获取状态值的中文注释和常用标识
+                                var annotation = GetBillStatusAnnotation(statusItem.StatusValue, statusItem.StatusName);
+
                                 statusItemsData.Add(new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase)
                                 {
                                     ["value"] = statusItem.StatusValue,
-                                    ["name"] = statusItem.StatusName
+                                    ["name"] = statusItem.StatusName,
+                                    ["annotation"] = annotation
                                 });
                             }
 
@@ -1073,6 +1164,33 @@ namespace K3CloudDataDictionary.Cli.Services
         }
 
         /// <summary>
+        /// 根据主表别名生成多语言表别名，如 h → h_l
+        /// </summary>
+        private static string GenerateLangTableAlias(string mainAlias)
+        {
+            return mainAlias + "_l";
+        }
+
+        /// <summary>
+        /// 根据基础资料视图表名生成简短别名，如 V_BD_BUYER → buyer
+        /// </summary>
+        private static string GenerateBaseDataAlias(string viewTableName)
+        {
+            if (string.IsNullOrEmpty(viewTableName)) return "bd";
+            var name = viewTableName;
+            if (name.StartsWith("v_", StringComparison.OrdinalIgnoreCase) ||
+                name.StartsWith("t_", StringComparison.OrdinalIgnoreCase))
+                name = name.Substring(2);
+            var parts = name.Split('_');
+            if (parts.Length >= 2)
+            {
+                // 取最后一段作为别名，如 V_BD_BUYER → buyer
+                return parts[parts.Length - 1].ToLowerInvariant();
+            }
+            return name.ToLowerInvariant();
+        }
+
+        /// <summary>
         /// 批量探测物理表是否存在（用于检测 LK 关联表）
         /// 带超时保护和缓存机制
         /// </summary>
@@ -1251,7 +1369,8 @@ namespace K3CloudDataDictionary.Cli.Services
                         ["splitTable"] = splitTable,
                         ["entityKey"] = match.EntityKey,
                         ["elementType"] = match.ElementType,
-                        ["elementTypeName"] = GetElementTypeName(match.ElementType)
+                        ["elementTypeName"] = GetElementTypeName(match.ElementType),
+                        ["lookUpObjectID"] = match.LookUpObjectID
                     };
 
                     // 推测基本单位字段
@@ -1287,26 +1406,129 @@ namespace K3CloudDataDictionary.Cli.Services
                 }
             }
 
-            // SELECT 模板
-            var selectCols = matchedFields.Select(f =>
+            // 解析基础资料字段（elementType=13），获取关联视图信息
+            var baseDataJoins = new Dictionary<string, Dictionary<string, object>>(StringComparer.OrdinalIgnoreCase);
+            var unresolvedBaseData = new List<string>();
+            foreach (var f in matchedFields)
+            {
+                var elType = f.GetValueOrDefault("elementType")?.ToString() ?? "";
+                var lookUpOid = f.GetValueOrDefault("lookUpObjectID")?.ToString() ?? "";
+                if (elType == "13" && !string.IsNullOrEmpty(lookUpOid) && !baseDataJoins.ContainsKey(lookUpOid))
+                {
+                    try
+                    {
+                        var resolved = ResolveObject(lookUpOid);
+                        if (resolved.Count > 0)
+                        {
+                            var r = resolved[0];
+                            var viewTable = r.GetValueOrDefault("FTABLENAME")?.ToString() ?? "";
+                            var viewPk = r.GetValueOrDefault("FPKFIELDNAME")?.ToString() ?? "FID";
+                            var viewFormId = r.GetValueOrDefault("FFORMID")?.ToString() ?? "";
+                            if (!string.IsNullOrEmpty(viewTable))
+                            {
+                                baseDataJoins[lookUpOid] = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase)
+                                {
+                                    ["viewTable"] = viewTable,
+                                    ["viewAlias"] = GenerateBaseDataAlias(viewTable),
+                                    ["pkField"] = viewPk,
+                                    ["formId"] = viewFormId,
+                                    ["sourceField"] = f["fieldName"].ToString(),
+                                    ["sourceAlias"] = (f["table"]?.ToString() ?? "") == entryTable ? "e" : "h"
+                                };
+                            }
+                            else
+                            {
+                                unresolvedBaseData.Add(lookUpOid);
+                            }
+                        }
+                        else
+                        {
+                            unresolvedBaseData.Add(lookUpOid);
+                        }
+                    }
+                    catch
+                    {
+                        unresolvedBaseData.Add(lookUpOid);
+                    }
+                }
+            }
+
+            // SELECT 模板（支持多语言表、基础资料视图、拆分表）
+            var selectCols = new List<string>();
+            foreach (var f in matchedFields)
             {
                 var st = f.GetValueOrDefault("splitTable")?.ToString() ?? "";
+                var fieldName = f["fieldName"].ToString();
+                var name = f["name"].ToString();
+                var elType = f.GetValueOrDefault("elementType")?.ToString() ?? "";
+                var lookUpOid = f.GetValueOrDefault("lookUpObjectID")?.ToString() ?? "";
+
                 if (!string.IsNullOrEmpty(st) && splitTables.ContainsKey(st))
                 {
-                    return "    " + splitTables[st] + "." + f["fieldName"] + " AS [" + f["name"] + "]";
+                    selectCols.Add("    " + splitTables[st] + "." + fieldName + " AS [" + name + "]");
                 }
-                var tbl = f["table"]?.ToString() ?? "";
-                var alias = tbl == entryTable ? "e" : "h";
-                return "    " + alias + "." + f["fieldName"] + " AS [" + f["name"] + "]";
-            });
+                else if (elType == "13" && !string.IsNullOrEmpty(lookUpOid) && baseDataJoins.ContainsKey(lookUpOid))
+                {
+                    var bdJoin = baseDataJoins[lookUpOid];
+                    var srcAlias = bdJoin["sourceAlias"].ToString();
+                    var viewAlias = bdJoin["viewAlias"].ToString();
+                    selectCols.Add("    " + srcAlias + "." + fieldName + " AS [" + name + "ID]");
+                    selectCols.Add("    " + viewAlias + "_l.FNAME AS [" + name + "]");
+                }
+                else
+                {
+                    var tbl = f["table"]?.ToString() ?? "";
+                    var alias = tbl == entryTable ? "e" : "h";
+                    selectCols.Add("    " + alias + "." + fieldName + " AS [" + name + "]");
+                }
+            }
 
             var selectSql = "SELECT\n" + string.Join(",\n", selectCols) + "\nFROM " + headerTable + " h";
+
+            // 主表多语言表 JOIN
+            if (headerEntity != null && !string.IsNullOrEmpty(headerTable))
+            {
+                var hLangTable = headerTable + "_L";
+                var hLangAlias = GenerateLangTableAlias("h");
+                var hPk = headerEntity.EffectivePkFieldName;
+                selectSql += "\nINNER JOIN " + hLangTable + " " + hLangAlias
+                    + "\n    ON " + hLangAlias + "." + hPk + " = h." + hPk
+                    + " AND " + hLangAlias + ".FLOCALEID = 2052";
+            }
+
+            // 明细体 JOIN + 多语言表 JOIN
             if (entryEntity != null)
+            {
                 selectSql += "\nINNER JOIN " + entryTable + " e ON e.FID = h.FID";
+                var eLangTable = entryTable + "_L";
+                var eLangAlias = GenerateLangTableAlias("e");
+                var ePk = entryEntity.EffectivePkFieldName;
+                selectSql += "\nINNER JOIN " + eLangTable + " " + eLangAlias
+                    + "\n    ON " + eLangAlias + "." + ePk + " = e." + ePk
+                    + " AND " + eLangAlias + ".FLOCALEID = 2052";
+            }
+
+            // 拆分表 JOIN
             foreach (var kvp in splitTables)
             {
                 selectSql += "\nINNER JOIN " + kvp.Key + " " + kvp.Value + " ON " + kvp.Value + ".FENTRYID = e.FENTRYID";
             }
+
+            // 基础资料视图 JOIN（LEFT JOIN，因为关联字段可能为空）
+            foreach (var bdKvp in baseDataJoins.Values)
+            {
+                var viewTable = bdKvp["viewTable"].ToString();
+                var viewAlias = bdKvp["viewAlias"].ToString();
+                var viewPk = bdKvp["pkField"].ToString();
+                var srcField = bdKvp["sourceField"].ToString();
+                var srcAlias = bdKvp["sourceAlias"].ToString();
+                selectSql += "\nLEFT JOIN " + viewTable + " " + viewAlias
+                    + "\n    ON " + viewAlias + "." + viewPk + " = " + srcAlias + "." + srcField;
+                selectSql += "\nINNER JOIN " + viewTable + "_L " + viewAlias + "_l"
+                    + "\n    ON " + viewAlias + "_l." + viewPk + " = " + viewAlias + "." + viewPk
+                    + " AND " + viewAlias + "_l.FLOCALEID = 2052";
+            }
+
             selectSql += "\nWHERE " + billNoCond + (entryEntity != null ? seqCond : "") + ";";
 
             // UPDATE 模板
@@ -1420,6 +1642,22 @@ namespace K3CloudDataDictionary.Cli.Services
             {
                 result["unmatchedKeywords"] = unmatchedKeywords;
                 result["hint"] = "以下关键词未匹配到字段，可能是字典未收录。请使用 probe 命令探测物理表列。";
+            }
+
+            if (baseDataJoins.Count > 0)
+            {
+                result["baseDataJoins"] = baseDataJoins.Values.Select(bd => new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["viewTable"] = bd["viewTable"],
+                    ["viewAlias"] = bd["viewAlias"],
+                    ["pkField"] = bd["pkField"],
+                    ["formId"] = bd["formId"]
+                }).ToList();
+            }
+            if (unresolvedBaseData.Count > 0)
+            {
+                result["unresolvedBaseData"] = unresolvedBaseData;
+                result["baseDataHint"] = "以下基础资料引用无法解析，请手动确认关联表：" + string.Join(", ", unresolvedBaseData);
             }
 
             result["selectSql"] = selectSql;
@@ -1615,6 +1853,315 @@ WHERE BLOCKED > 0
                     ["parameters"] = "无需参数"
                 }
             };
+        }
+
+        /// <summary>
+        /// 生成单据头→明细字段批量同步 SQL
+        /// 将单据头指定字段的值同步到明细体对应字段，仅当单据头不为空且明细为空时更新
+        /// </summary>
+        /// <param name="formIdentifier">表单标识</param>
+        /// <param name="fieldKeyword">字段关键词（支持中文名、字段Key、物理列名）</param>
+        /// <returns>包含 SQL 和字段映射信息的字典</returns>
+        public Dictionary<string, object> GenerateHeadToDetailSyncSql(string formIdentifier, string fieldKeyword)
+        {
+            EnsureContext();
+            var result = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
+
+            // 查找表单
+            var matchingFids = _allObjects.Keys
+                .Where(k => k.Equals(formIdentifier, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+
+            if (matchingFids.Count == 0)
+            {
+                result["error"] = "未找到表单: " + formIdentifier;
+                return result;
+            }
+
+            var fid = matchingFids[0];
+            var metadata = ExtractMetadata(fid);
+            if (metadata == null)
+            {
+                result["error"] = "无法提取表单元数据: " + formIdentifier;
+                return result;
+            }
+
+            var allFields = metadata.FieldsWithOid.Concat(metadata.FieldsWithoutOid).ToList();
+            var allEntities = metadata.EntitiesWithOid.Concat(metadata.EntitiesWithoutOid).ToList();
+
+            // 识别单据头和明细体
+            var headerEntity = allEntities.FirstOrDefault(e =>
+                e.ElementType == "单据头" || (e.TagName != null && e.TagName.Contains("Head")));
+            var entryEntity = allEntities.FirstOrDefault(e =>
+                e.ElementType == "单据体" || (e.TagName != null && e.TagName.Contains("Entry")));
+
+            if (headerEntity == null || entryEntity == null)
+            {
+                result["error"] = "未找到单据头或明细体实体";
+                result["availableEntities"] = allEntities.Select(e => new Dictionary<string, object>
+                {
+                    ["key"] = e.Key,
+                    ["name"] = e.Name,
+                    ["type"] = e.ElementType,
+                    ["table"] = e.TableName
+                }).ToList();
+                return result;
+            }
+
+            // 在单据头和明细体中查找匹配字段
+            var normalizedKw = NormalizeKeyword(fieldKeyword);
+            var kwLower = fieldKeyword.ToLowerInvariant();
+
+            var headField = allFields.FirstOrDefault(f =>
+                f.EntityKey.Equals(headerEntity.Key, StringComparison.OrdinalIgnoreCase) &&
+                (f.Key.Equals(fieldKeyword, StringComparison.OrdinalIgnoreCase) ||
+                 f.FieldName.Equals(fieldKeyword, StringComparison.OrdinalIgnoreCase) ||
+                 f.Name.Equals(fieldKeyword, StringComparison.OrdinalIgnoreCase) ||
+                 NormalizedContains(f.Name, normalizedKw) ||
+                 f.Key.ToLowerInvariant().Contains(kwLower) ||
+                 f.FieldName.ToLowerInvariant().Contains(kwLower)));
+
+            var entryField = allFields.FirstOrDefault(f =>
+                f.EntityKey.Equals(entryEntity.Key, StringComparison.OrdinalIgnoreCase) &&
+                (f.Key.Equals(fieldKeyword, StringComparison.OrdinalIgnoreCase) ||
+                 f.FieldName.Equals(fieldKeyword, StringComparison.OrdinalIgnoreCase) ||
+                 f.Name.Equals(fieldKeyword, StringComparison.OrdinalIgnoreCase) ||
+                 NormalizedContains(f.Name, normalizedKw) ||
+                 f.Key.ToLowerInvariant().Contains(kwLower) ||
+                 f.FieldName.ToLowerInvariant().Contains(kwLower)));
+
+            // 组装字段映射信息
+            var fieldMapping = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["headField"] = headField != null ? new Dictionary<string, object>
+                {
+                    ["name"] = headField.Name,
+                    ["key"] = headField.Key,
+                    ["fieldName"] = headField.FieldName,
+                    ["table"] = headerEntity.TableName,
+                    ["entityKey"] = headerEntity.Key
+                } : null,
+                ["entryField"] = entryField != null ? new Dictionary<string, object>
+                {
+                    ["name"] = entryField.Name,
+                    ["key"] = entryField.Key,
+                    ["fieldName"] = entryField.FieldName,
+                    ["table"] = entryEntity.TableName,
+                    ["entityKey"] = entryEntity.Key
+                } : null
+            };
+
+            result["formIdentifier"] = formIdentifier;
+            result["formName"] = _allObjects[fid].FName;
+            result["fieldMapping"] = fieldMapping;
+
+            if (headField == null && entryField == null)
+            {
+                result["error"] = $"在单据头和明细体中均未找到匹配字段: {fieldKeyword}";
+                return result;
+            }
+
+            if (headField == null)
+            {
+                result["error"] = $"在单据头({headerEntity.Key})中未找到匹配字段: {fieldKeyword}";
+                return result;
+            }
+
+            if (entryField == null)
+            {
+                result["error"] = $"在明细体({entryEntity.Key})中未找到匹配字段: {fieldKeyword}。该字段可能尚未在明细体中添加，或字段名称与单据头不一致。";
+                return result;
+            }
+
+            // 生成 UPDATE SQL
+            var headTable = headerEntity.TableName;
+            var entryTable = entryEntity.TableName;
+            var headFieldName = headField.FieldName;
+            var entryFieldName = entryField.FieldName;
+
+            var updateSql = $@"UPDATE {entryTable}
+SET {entryFieldName} = h.{headFieldName}
+FROM {entryTable} d
+INNER JOIN {headTable} h ON d.FID = h.FID
+WHERE h.{headFieldName} IS NOT NULL
+  AND h.{headFieldName} <> ''
+  AND (d.{entryFieldName} IS NULL OR d.{entryFieldName} = '');";
+
+            // 生成预览 SELECT SQL
+            var previewSql = $@"SELECT d.FENTRYID, d.FID, h.{headFieldName} AS HeadValue, d.{entryFieldName} AS DetailValue
+FROM {entryTable} d
+INNER JOIN {headTable} h ON d.FID = h.FID
+WHERE h.{headFieldName} IS NOT NULL
+  AND h.{headFieldName} <> ''
+  AND (d.{entryFieldName} IS NULL OR d.{entryFieldName} = '');";
+
+            result["updateSql"] = updateSql;
+            result["previewSql"] = previewSql;
+            result["hint"] = "建议先执行 previewSql 预览受影响的数据，确认无误后再执行 updateSql。";
+
+            return result;
+        }
+
+        /// <summary>
+        /// 对比单据头和明细体的字段差异
+        /// 找出仅存在于单据头、仅存在于明细体、以及两者都有的字段
+        /// </summary>
+        /// <param name="formIdentifier">表单标识</param>
+        /// <param name="keyword">可选的过滤关键词</param>
+        /// <returns>包含对比结果的字典</returns>
+        public Dictionary<string, object> CompareHeadEntryFields(string formIdentifier, string keyword = null)
+        {
+            EnsureContext();
+            var result = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
+
+            // 查找表单
+            var matchingFids = _allObjects.Keys
+                .Where(k => k.Equals(formIdentifier, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+
+            if (matchingFids.Count == 0)
+            {
+                result["error"] = "未找到表单: " + formIdentifier;
+                return result;
+            }
+
+            var fid = matchingFids[0];
+            var metadata = ExtractMetadata(fid);
+            if (metadata == null)
+            {
+                result["error"] = "无法提取表单元数据: " + formIdentifier;
+                return result;
+            }
+
+            var allFields = metadata.FieldsWithOid.Concat(metadata.FieldsWithoutOid).ToList();
+            var allEntities = metadata.EntitiesWithOid.Concat(metadata.EntitiesWithoutOid).ToList();
+
+            // 识别单据头和明细体
+            var headerEntity = allEntities.FirstOrDefault(e =>
+                e.ElementType == "单据头" || (e.TagName != null && e.TagName.Contains("Head")));
+            var entryEntity = allEntities.FirstOrDefault(e =>
+                e.ElementType == "单据体" || (e.TagName != null && e.TagName.Contains("Entry")));
+
+            if (headerEntity == null || entryEntity == null)
+            {
+                result["error"] = "未找到单据头或明细体实体";
+                result["availableEntities"] = allEntities.Select(e => new Dictionary<string, object>
+                {
+                    ["key"] = e.Key,
+                    ["name"] = e.Name,
+                    ["type"] = e.ElementType,
+                    ["table"] = e.TableName
+                }).ToList();
+                return result;
+            }
+
+            // 获取头和明细的字段
+            var headFields = allFields
+                .Where(f => f.EntityKey.Equals(headerEntity.Key, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+            var entryFields = allFields
+                .Where(f => f.EntityKey.Equals(entryEntity.Key, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+
+            // 按字段名称（Name）建立映射
+            var headFieldNames = new HashSet<string>(headFields.Select(f => f.Name), StringComparer.OrdinalIgnoreCase);
+            var entryFieldNames = new HashSet<string>(entryFields.Select(f => f.Name), StringComparer.OrdinalIgnoreCase);
+
+            // 仅单据头有的字段
+            var headOnly = headFields
+                .Where(f => !entryFieldNames.Contains(f.Name))
+                .ToList();
+
+            // 仅明细体有的字段
+            var entryOnly = entryFields
+                .Where(f => !headFieldNames.Contains(f.Name))
+                .ToList();
+
+            // 两者都有的字段
+            var both = headFields
+                .Where(f => entryFieldNames.Contains(f.Name))
+                .ToList();
+
+            // 关键词过滤（支持逗号、分号分隔的多关键词）
+            if (!string.IsNullOrEmpty(keyword))
+            {
+                var kwParts = keyword.Split(new[] { ',', '，', ';', '；' }, StringSplitOptions.RemoveEmptyEntries)
+                                      .Select(k => k.Trim())
+                                      .Where(k => k.Length > 0)
+                                      .ToList();
+                var normalizedKws = kwParts.Select(k => NormalizeKeyword(k)).ToList();
+                var kwLowers = kwParts.Select(k => k.ToLowerInvariant()).ToList();
+
+                Func<MetadataFieldInfo, bool> multiKwMatch = f =>
+                {
+                    for (int ki = 0; ki < kwParts.Count; ki++)
+                    {
+                        if (f.Key.ToLowerInvariant().Contains(kwLowers[ki]) ||
+                            f.FieldName.ToLowerInvariant().Contains(kwLowers[ki]) ||
+                            NormalizedContains(f.Name, normalizedKws[ki]))
+                            return true;
+                    }
+                    return false;
+                };
+
+                headOnly = headOnly.Where(multiKwMatch).ToList();
+                entryOnly = entryOnly.Where(multiKwMatch).ToList();
+                both = both.Where(multiKwMatch).ToList();
+            }
+
+            // 组装结果
+            result["formIdentifier"] = formIdentifier;
+            result["formName"] = _allObjects[fid].FName;
+            result["headEntity"] = new Dictionary<string, object>
+            {
+                ["key"] = headerEntity.Key,
+                ["name"] = headerEntity.Name,
+                ["table"] = headerEntity.TableName
+            };
+            result["entryEntity"] = new Dictionary<string, object>
+            {
+                ["key"] = entryEntity.Key,
+                ["name"] = entryEntity.Name,
+                ["table"] = entryEntity.TableName
+            };
+
+            result["headOnlyCount"] = headOnly.Count;
+            result["entryOnlyCount"] = entryOnly.Count;
+            result["bothCount"] = both.Count;
+
+            result["headOnly"] = headOnly.Select(f => new Dictionary<string, object>
+            {
+                ["name"] = f.Name,
+                ["key"] = f.Key,
+                ["fieldName"] = f.FieldName,
+                ["table"] = headerEntity.TableName
+            }).ToList();
+
+            result["entryOnly"] = entryOnly.Select(f => new Dictionary<string, object>
+            {
+                ["name"] = f.Name,
+                ["key"] = f.Key,
+                ["fieldName"] = f.FieldName,
+                ["table"] = entryEntity.TableName
+            }).ToList();
+
+            result["both"] = both.Select(f =>
+            {
+                var entryField = entryFields.FirstOrDefault(ef =>
+                    ef.Name.Equals(f.Name, StringComparison.OrdinalIgnoreCase));
+                return new Dictionary<string, object>
+                {
+                    ["name"] = f.Name,
+                    ["headKey"] = f.Key,
+                    ["headFieldName"] = f.FieldName,
+                    ["headTable"] = headerEntity.TableName,
+                    ["entryKey"] = entryField?.Key ?? "",
+                    ["entryFieldName"] = entryField?.FieldName ?? "",
+                    ["entryTable"] = entryEntity.TableName
+                };
+            }).ToList();
+
+            return result;
         }
     }
 }
