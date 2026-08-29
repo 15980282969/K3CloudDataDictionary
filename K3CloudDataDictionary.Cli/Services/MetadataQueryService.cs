@@ -993,28 +993,31 @@ namespace K3CloudDataDictionary.Cli.Services
 
         /// <summary>
         /// 通过 sys.columns 探测物理表列（不受字典覆盖范围限制）
+        /// 当目标为视图时，自动从 sys.views 查询并返回提示信息
         /// </summary>
         public List<Dictionary<string, object>> ProbePhysicalColumns(string tableName, string keyword = null)
         {
             var results = new List<Dictionary<string, object>>();
             if (string.IsNullOrEmpty(tableName)) return results;
 
-            string sql = @"SELECT c.name AS ColumnName, tp.name AS DataType,
-                                  c.max_length, c.precision, c.scale, c.is_nullable
-                           FROM sys.columns c
-                           INNER JOIN sys.tables t_obj ON c.object_id = t_obj.object_id
-                           INNER JOIN sys.schemas s ON t_obj.schema_id = s.schema_id
-                           INNER JOIN sys.types tp ON c.user_type_id = tp.user_type_id
-                           WHERE (s.name + '.' + t_obj.name = @TableName OR t_obj.name = @TableName)";
-
-            if (!string.IsNullOrEmpty(keyword))
-                sql += " AND c.name LIKE @Keyword";
-
-            sql += " ORDER BY c.column_id";
-
             using (var conn = new SqlConnection(_connectionString))
             {
                 conn.Open();
+
+                // 先尝试从 sys.tables 查询物理表
+                string sql = @"SELECT c.name AS ColumnName, tp.name AS DataType,
+                                      c.max_length, c.precision, c.scale, c.is_nullable
+                               FROM sys.columns c
+                               INNER JOIN sys.tables t_obj ON c.object_id = t_obj.object_id
+                               INNER JOIN sys.schemas s ON t_obj.schema_id = s.schema_id
+                               INNER JOIN sys.types tp ON c.user_type_id = tp.user_type_id
+                               WHERE (s.name + '.' + t_obj.name = @TableName OR t_obj.name = @TableName)";
+
+                if (!string.IsNullOrEmpty(keyword))
+                    sql += " AND c.name LIKE @Keyword";
+
+                sql += " ORDER BY c.column_id";
+
                 using (var cmd = new SqlCommand(sql, conn))
                 {
                     cmd.Parameters.AddWithValue("@TableName", tableName);
@@ -1035,6 +1038,56 @@ namespace K3CloudDataDictionary.Cli.Services
                                 ["isNullable"] = reader["is_nullable"] != null && (bool)reader["is_nullable"]
                             });
                         }
+                    }
+                }
+
+                // 物理表无结果时，检查是否为视图
+                if (results.Count == 0)
+                {
+                    string viewSql = @"SELECT c.name AS ColumnName, tp.name AS DataType,
+                                              c.max_length, c.precision, c.scale, c.is_nullable
+                                       FROM sys.columns c
+                                       INNER JOIN sys.views v ON c.object_id = v.object_id
+                                       INNER JOIN sys.schemas s ON v.schema_id = s.schema_id
+                                       INNER JOIN sys.types tp ON c.user_type_id = tp.user_type_id
+                                       WHERE (s.name + '.' + v.name = @TableName OR v.name = @TableName)";
+
+                    if (!string.IsNullOrEmpty(keyword))
+                        viewSql += " AND c.name LIKE @Keyword";
+
+                    viewSql += " ORDER BY c.column_id";
+
+                    using (var cmd = new SqlCommand(viewSql, conn))
+                    {
+                        cmd.Parameters.AddWithValue("@TableName", tableName);
+                        if (!string.IsNullOrEmpty(keyword))
+                            cmd.Parameters.AddWithValue("@Keyword", "%" + keyword + "%");
+                        cmd.CommandTimeout = 30;
+                        using (var reader = cmd.ExecuteReader())
+                        {
+                            while (reader.Read())
+                            {
+                                results.Add(new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase)
+                                {
+                                    ["columnName"] = reader["ColumnName"]?.ToString() ?? "",
+                                    ["dataType"] = reader["DataType"]?.ToString() ?? "",
+                                    ["maxLength"] = Convert.ToInt32(reader["max_length"] ?? 0),
+                                    ["precision"] = Convert.ToInt32(reader["precision"] ?? 0),
+                                    ["scale"] = Convert.ToInt32(reader["scale"] ?? 0),
+                                    ["isNullable"] = reader["is_nullable"] != null && (bool)reader["is_nullable"]
+                                });
+                            }
+                        }
+                    }
+
+                    // 如果是视图，添加提示信息
+                    if (results.Count > 0)
+                    {
+                        results.Insert(0, new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase)
+                        {
+                            ["_hint"] = "view_detected",
+                            ["message"] = $"{tableName} is a view, not a physical table. Columns listed below are from the view definition."
+                        });
                     }
                 }
             }
@@ -1145,6 +1198,28 @@ namespace K3CloudDataDictionary.Cli.Services
         }
 
         /// <summary>
+        /// 判断是否为主实体（单据头 / 基础资料主实体）。
+        /// EntityInfo.ElementType 存的是原始数字码（34=主实体），同时兼容中文名与标签名。
+        /// </summary>
+        private static bool IsHeadEntity(EntityInfo e)
+        {
+            if (e == null) return false;
+            if (e.ElementType == "单据头" || e.ElementType == "34") return true;
+            return e.TagName != null && e.TagName.Contains("Head");
+        }
+
+        /// <summary>
+        /// 判断是否为明细体实体。35 在基础资料下也可能是子实体，
+        /// 因此仅以 Entry 标签名 / "单据体" 中文名作为判定依据。
+        /// </summary>
+        private static bool IsEntryEntity(EntityInfo e)
+        {
+            if (e == null) return false;
+            if (e.ElementType == "单据体") return true;
+            return e.TagName != null && e.TagName.Contains("Entry");
+        }
+
+        /// <summary>
         /// 根据拆分表名生成简短别名，如 t_PUR_POOrderEntry_D → po_d
         /// </summary>
         private static string GenerateSplitAlias(string splitTableName)
@@ -1164,11 +1239,19 @@ namespace K3CloudDataDictionary.Cli.Services
         }
 
         /// <summary>
-        /// 根据主表别名生成多语言表别名，如 h → h_l
+        /// 根据子实体物理表名生成别名，如 T_BD_CUSTBANK → custbank
         /// </summary>
-        private static string GenerateLangTableAlias(string mainAlias)
+        private static string GenerateSubEntityAlias(string tableName)
         {
-            return mainAlias + "_l";
+            if (string.IsNullOrEmpty(tableName)) return "sub";
+            var name = tableName;
+            if (name.StartsWith("t_", StringComparison.OrdinalIgnoreCase) ||
+                name.StartsWith("v_", StringComparison.OrdinalIgnoreCase))
+                name = name.Substring(2);
+            var parts = name.Split('_');
+            var alias = parts[parts.Length - 1].ToLowerInvariant();
+            // 避免与保留的主表/明细体别名冲突
+            return alias == "h" || alias == "e" ? "sub" : alias;
         }
 
         /// <summary>
@@ -1287,13 +1370,15 @@ namespace K3CloudDataDictionary.Cli.Services
             var entityMap = allEntities.ToDictionary(e => e.Key, e => e, StringComparer.OrdinalIgnoreCase);
 
             // 识别单据头和明细体
-            var headerEntity = allEntities.FirstOrDefault(e =>
-                e.ElementType == "单据头" || (e.TagName != null && e.TagName.Contains("Head")));
-            var entryEntity = allEntities.FirstOrDefault(e =>
-                e.ElementType == "单据体" || (e.TagName != null && e.TagName.Contains("Entry")));
+            // 注意 ElementType 存的是原始数字码（34/35/38...），需同时匹配中文名与标签名，
+            // 且必须有物理表，否则会把无表的子实体误判为明细体
+            var headerEntity = allEntities.FirstOrDefault(e => !string.IsNullOrEmpty(e.TableName) && IsHeadEntity(e))
+                ?? allEntities.FirstOrDefault(e => !string.IsNullOrEmpty(e.TableName) && string.IsNullOrEmpty(e.Key))
+                ?? allEntities.FirstOrDefault(e => !string.IsNullOrEmpty(e.TableName));
+            var entryEntity = allEntities.FirstOrDefault(e => !string.IsNullOrEmpty(e.TableName) && IsEntryEntity(e));
 
             // 识别行号字段和单据编号字段
-            string seqField = null, billNoField = null;
+            string seqField = null, billNoField = null, numberField = null;
             foreach (var field in allFields)
             {
                 if (field.Key.Equals("FSeq", StringComparison.OrdinalIgnoreCase) ||
@@ -1302,6 +1387,12 @@ namespace K3CloudDataDictionary.Cli.Services
                 if (field.ElementType == "12" || // BillNoField
                     field.Key.Equals("FBillNo", StringComparison.OrdinalIgnoreCase))
                     billNoField = field.FieldName;
+                // 基础资料没有单据编号，用编码字段 FNUMBER 定位
+                if (string.IsNullOrEmpty(numberField) &&
+                    field.Key.Equals("FNumber", StringComparison.OrdinalIgnoreCase) &&
+                    !string.IsNullOrEmpty(field.FieldName) &&
+                    string.Equals(field.EntityKey, headerEntity?.Key ?? "", StringComparison.OrdinalIgnoreCase))
+                    numberField = field.FieldName;
             }
 
             // 如果字典中未找到行号字段，通过物理表探测 FSEQ
@@ -1311,21 +1402,6 @@ namespace K3CloudDataDictionary.Cli.Services
                 if (probeResults.Count > 0)
                     seqField = "FSEQ";
             }
-
-            // 收集表信息
-            var tables = new List<Dictionary<string, object>>();
-            if (headerEntity != null)
-                tables.Add(new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase)
-                {
-                    ["alias"] = "h", ["table"] = headerEntity.TableName,
-                    ["entityKey"] = headerEntity.Key, ["entityName"] = headerEntity.Name, ["type"] = "单据头"
-                });
-            if (entryEntity != null)
-                tables.Add(new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase)
-                {
-                    ["alias"] = "e", ["table"] = entryEntity.TableName,
-                    ["entityKey"] = entryEntity.Key, ["entityName"] = entryEntity.Name, ["type"] = "明细体"
-                });
 
             // 解析目标字段（支持逗号分隔，中英文均可）
             var keywords = fieldKeywords
@@ -1357,6 +1433,10 @@ namespace K3CloudDataDictionary.Cli.Services
                     var splitTable = !string.IsNullOrEmpty(splitSuffix)
                         ? (entity?.TableName ?? "") + "_" + splitSuffix
                         : "";
+                    // 多语言文本（elementType=36）物理存放在 {表}_L，字典不给拆分后缀，需单独路由
+                    var langTable = match.ElementType == "36" && !string.IsNullOrEmpty(entity?.TableName)
+                        ? entity.TableName + "_L"
+                        : "";
 
                     var fieldInfo = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase)
                     {
@@ -1367,6 +1447,7 @@ namespace K3CloudDataDictionary.Cli.Services
                         ["table"] = entity?.TableName ?? "",
                         ["splitSuffix"] = splitSuffix,
                         ["splitTable"] = splitTable,
+                        ["langTable"] = langTable,
                         ["entityKey"] = match.EntityKey,
                         ["elementType"] = match.ElementType,
                         ["elementTypeName"] = GetElementTypeName(match.ElementType),
@@ -1386,23 +1467,110 @@ namespace K3CloudDataDictionary.Cli.Services
                 }
             }
 
-            // 生成 SQL 模板（支持拆分表）
+            // 生成 SQL 模板（支持拆分表、多语言表、子实体）
             var headerTable = headerEntity?.TableName ?? "";
+            var headerPk = headerEntity?.EffectivePkFieldName ?? "FID";
+
+            // 明细体只有在请求字段真正落在其上时才需要 JOIN
+            bool OwnsRequestedField(EntityInfo ent) => ent != null && matchedFields.Any(f =>
+                string.Equals(f.GetValueOrDefault("entityKey")?.ToString() ?? "", ent.Key, StringComparison.OrdinalIgnoreCase));
+            if (!OwnsRequestedField(entryEntity)) entryEntity = null;
+
             var entryTable = entryEntity?.TableName ?? "";
             var pkField = entryEntity?.EffectivePkFieldName ?? "FEntryId";
-            var billNoCond = !string.IsNullOrEmpty(billNoField) ? "h." + billNoField + " = @BillNo" : "";
+            var billNoCond = !string.IsNullOrEmpty(billNoField) ? "h." + billNoField + " = @BillNo"
+                : !string.IsNullOrEmpty(numberField) ? "h." + numberField + " = @Number"
+                : "";
             var seqCond = !string.IsNullOrEmpty(seqField) ? " AND e." + seqField + " = @Seq" : "";
 
-            // 收集需要 JOIN 的拆分表（去重）
-            var splitTables = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase); // alias -> tableName
+            // 收集拥有请求字段的其他子实体，统一用主表主键与主表关联
+            var subEntities = new Dictionary<string, Dictionary<string, object>>(StringComparer.OrdinalIgnoreCase); // entityKey -> info
+            foreach (var f in matchedFields)
+            {
+                var ek = f.GetValueOrDefault("entityKey")?.ToString() ?? "";
+                if (string.Equals(ek, headerEntity?.Key ?? "", StringComparison.OrdinalIgnoreCase)) continue;
+                if (string.Equals(ek, entryEntity?.Key ?? "", StringComparison.OrdinalIgnoreCase)) continue;
+                if (string.IsNullOrEmpty(ek) || subEntities.ContainsKey(ek)) continue;
+                if (!entityMap.ContainsKey(ek)) continue;
+                var ent = entityMap[ek];
+                if (string.IsNullOrEmpty(ent.TableName)) continue;
+                subEntities[ek] = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["table"] = ent.TableName,
+                    ["alias"] = GenerateSubEntityAlias(ent.TableName),
+                    ["pk"] = ent.EffectivePkFieldName
+                };
+            }
+
+            // 收集实际参与 JOIN 的表信息
+            var tables = new List<Dictionary<string, object>>();
+            if (headerEntity != null)
+                tables.Add(new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["alias"] = "h", ["table"] = headerEntity.TableName,
+                    ["entityKey"] = headerEntity.Key, ["entityName"] = headerEntity.Name,
+                    ["type"] = "单据头", ["pkFieldName"] = headerPk
+                });
+            if (entryEntity != null)
+                tables.Add(new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["alias"] = "e", ["table"] = entryEntity.TableName,
+                    ["entityKey"] = entryEntity.Key, ["entityName"] = entryEntity.Name,
+                    ["type"] = "明细体", ["pkFieldName"] = pkField
+                });
+            foreach (var kvp in subEntities)
+                tables.Add(new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["alias"] = kvp.Value["alias"], ["table"] = kvp.Value["table"],
+                    ["entityKey"] = kvp.Key, ["type"] = "子实体", ["pkFieldName"] = kvp.Value["pk"]
+                });
+
+            // 字段 → 表别名 解析
+            string AliasForField(Dictionary<string, object> f)
+            {
+                var ek = f.GetValueOrDefault("entityKey")?.ToString() ?? "";
+                if (entryEntity != null && string.Equals(ek, entryEntity.Key, StringComparison.OrdinalIgnoreCase)) return "e";
+                if (subEntities.ContainsKey(ek)) return subEntities[ek]["alias"].ToString();
+                return "h";
+            }
+
+            // 收集需要 JOIN 的多语言表（去重）
+            var langTables = new Dictionary<string, Dictionary<string, object>>(StringComparer.OrdinalIgnoreCase); // langTableName -> info
+            foreach (var f in matchedFields)
+            {
+                var lt = f.GetValueOrDefault("langTable")?.ToString() ?? "";
+                if (string.IsNullOrEmpty(lt) || langTables.ContainsKey(lt)) continue;
+                var ownerAlias = AliasForField(f);
+                var ownerPk = ownerAlias == "e" ? pkField
+                    : ownerAlias == "h" ? headerPk
+                    : subEntities.Values.FirstOrDefault(s => s["alias"].ToString() == ownerAlias)?["pk"]?.ToString() ?? headerPk;
+                langTables[lt] = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["alias"] = ownerAlias + "_l",
+                    ["pk"] = ownerPk,
+                    ["ownerAlias"] = ownerAlias
+                };
+            }
+
+            // 收集需要 JOIN 的拆分表（去重），同时记录所属实体的别名与主键
+            var splitTables = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase); // tableName -> alias
+            var splitTableOwner = new Dictionary<string, Dictionary<string, object>>(StringComparer.OrdinalIgnoreCase); // tableName -> owner info
             foreach (var f in matchedFields)
             {
                 var st = f.GetValueOrDefault("splitTable")?.ToString() ?? "";
                 if (!string.IsNullOrEmpty(st) && !splitTables.ContainsKey(st))
                 {
-                    // 生成别名：表名最后一段 + 后缀，如 po_d
                     var alias = GenerateSplitAlias(st);
                     splitTables[st] = alias;
+                    var ownerAlias = AliasForField(f);
+                    var ownerPk = ownerAlias == "e" ? pkField
+                        : ownerAlias == "h" ? headerPk
+                        : subEntities.Values.FirstOrDefault(s => s["alias"].ToString() == ownerAlias)?["pk"]?.ToString() ?? headerPk;
+                    splitTableOwner[st] = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase)
+                    {
+                        ["ownerAlias"] = ownerAlias,
+                        ["pk"] = ownerPk
+                    };
                 }
             }
 
@@ -1433,7 +1601,7 @@ namespace K3CloudDataDictionary.Cli.Services
                                     ["pkField"] = viewPk,
                                     ["formId"] = viewFormId,
                                     ["sourceField"] = f["fieldName"].ToString(),
-                                    ["sourceAlias"] = (f["table"]?.ToString() ?? "") == entryTable ? "e" : "h"
+                                    ["sourceAlias"] = AliasForField(f)
                                 };
                             }
                             else
@@ -1458,6 +1626,7 @@ namespace K3CloudDataDictionary.Cli.Services
             foreach (var f in matchedFields)
             {
                 var st = f.GetValueOrDefault("splitTable")?.ToString() ?? "";
+                var lt = f.GetValueOrDefault("langTable")?.ToString() ?? "";
                 var fieldName = f["fieldName"].ToString();
                 var name = f["name"].ToString();
                 var elType = f.GetValueOrDefault("elementType")?.ToString() ?? "";
@@ -1466,6 +1635,11 @@ namespace K3CloudDataDictionary.Cli.Services
                 if (!string.IsNullOrEmpty(st) && splitTables.ContainsKey(st))
                 {
                     selectCols.Add("    " + splitTables[st] + "." + fieldName + " AS [" + name + "]");
+                }
+                else if (!string.IsNullOrEmpty(lt) && langTables.ContainsKey(lt))
+                {
+                    // 多语言文本存放在 {表}_L，需从语言表取列
+                    selectCols.Add("    " + langTables[lt]["alias"] + "." + fieldName + " AS [" + name + "]");
                 }
                 else if (elType == "13" && !string.IsNullOrEmpty(lookUpOid) && baseDataJoins.ContainsKey(lookUpOid))
                 {
@@ -1477,41 +1651,47 @@ namespace K3CloudDataDictionary.Cli.Services
                 }
                 else
                 {
-                    var tbl = f["table"]?.ToString() ?? "";
-                    var alias = tbl == entryTable ? "e" : "h";
-                    selectCols.Add("    " + alias + "." + fieldName + " AS [" + name + "]");
+                    selectCols.Add("    " + AliasForField(f) + "." + fieldName + " AS [" + name + "]");
                 }
             }
 
             var selectSql = "SELECT\n" + string.Join(",\n", selectCols) + "\nFROM " + headerTable + " h";
 
-            // 主表多语言表 JOIN
-            if (headerEntity != null && !string.IsNullOrEmpty(headerTable))
-            {
-                var hLangTable = headerTable + "_L";
-                var hLangAlias = GenerateLangTableAlias("h");
-                var hPk = headerEntity.EffectivePkFieldName;
-                selectSql += "\nINNER JOIN " + hLangTable + " " + hLangAlias
-                    + "\n    ON " + hLangAlias + "." + hPk + " = h." + hPk
-                    + " AND " + hLangAlias + ".FLOCALEID = 2052";
-            }
-
-            // 明细体 JOIN + 多语言表 JOIN
+            // 明细体 JOIN（仅在请求字段落在明细体上时生成）
             if (entryEntity != null)
             {
-                selectSql += "\nINNER JOIN " + entryTable + " e ON e.FID = h.FID";
-                var eLangTable = entryTable + "_L";
-                var eLangAlias = GenerateLangTableAlias("e");
-                var ePk = entryEntity.EffectivePkFieldName;
-                selectSql += "\nINNER JOIN " + eLangTable + " " + eLangAlias
-                    + "\n    ON " + eLangAlias + "." + ePk + " = e." + ePk
-                    + " AND " + eLangAlias + ".FLOCALEID = 2052";
+                selectSql += "\nINNER JOIN " + entryTable + " e ON e." + headerPk + " = h." + headerPk;
             }
 
-            // 拆分表 JOIN
+            // 子实体 JOIN：一律用主表主键与主表关联
+            foreach (var kvp in subEntities)
+            {
+                var table = kvp.Value["table"].ToString();
+                var alias = kvp.Value["alias"].ToString();
+                selectSql += "\nINNER JOIN " + table + " " + alias + " ON " + alias + "." + headerPk + " = h." + headerPk;
+            }
+
+            // 多语言表 JOIN（由请求的多语言字段驱动）
+            foreach (var kvp in langTables)
+            {
+                var alias = kvp.Value["alias"].ToString();
+                var ownerAlias = kvp.Value["ownerAlias"].ToString();
+                var pk = kvp.Value["pk"].ToString();
+                selectSql += "\nINNER JOIN " + kvp.Key + " " + alias
+                    + "\n    ON " + alias + "." + pk + " = " + ownerAlias + "." + pk
+                    + " AND " + alias + ".FLOCALEID = 2052";
+            }
+
+            // 拆分表 JOIN（按所属实体的别名与主键关联）
             foreach (var kvp in splitTables)
             {
-                selectSql += "\nINNER JOIN " + kvp.Key + " " + kvp.Value + " ON " + kvp.Value + ".FENTRYID = e.FENTRYID";
+                var tableName = kvp.Key;
+                var alias = kvp.Value;
+                var owner = splitTableOwner[tableName];
+                var ownerAlias = owner["ownerAlias"].ToString();
+                var ownerPk = owner["pk"].ToString();
+                selectSql += "\nINNER JOIN " + tableName + " " + alias
+                    + " ON " + alias + "." + ownerPk + " = " + ownerAlias + "." + ownerPk;
             }
 
             // 基础资料视图 JOIN（LEFT JOIN，因为关联字段可能为空）
@@ -1529,7 +1709,10 @@ namespace K3CloudDataDictionary.Cli.Services
                     + " AND " + viewAlias + "_l.FLOCALEID = 2052";
             }
 
-            selectSql += "\nWHERE " + billNoCond + (entryEntity != null ? seqCond : "") + ";";
+            if (!string.IsNullOrEmpty(billNoCond))
+                selectSql += "\nWHERE " + billNoCond + (entryEntity != null ? seqCond : "") + ";";
+            else
+                selectSql += "\nWHERE h." + headerPk + " = @" + headerPk + ";";
 
             // UPDATE 模板
             var updateSql = "";
@@ -1553,7 +1736,7 @@ namespace K3CloudDataDictionary.Cli.Services
                             updateSql += "UPDATE " + entryTable + "\nSET\n" + string.Join(",\n", setClauses)
                                 + "\nWHERE " + pkField + " = (\n    SELECT e." + pkField
                                 + "\n    FROM " + entryTable + " e"
-                                + "\n    INNER JOIN " + headerTable + " h ON e.FID = h.FID"
+                                + "\n    INNER JOIN " + headerTable + " h ON e." + headerPk + " = h." + headerPk + ""
                                 + "\n    WHERE " + billNoCond + seqCond
                                 + "\n);\n\n";
                         }
@@ -1564,7 +1747,7 @@ namespace K3CloudDataDictionary.Cli.Services
                             updateSql += "UPDATE " + groupName + "\nSET\n" + string.Join(",\n", setClauses)
                                 + "\nWHERE FENTRYID = (\n    SELECT e.FENTRYID"
                                 + "\n    FROM " + entryTable + " e"
-                                + "\n    INNER JOIN " + headerTable + " h ON e.FID = h.FID"
+                                + "\n    INNER JOIN " + headerTable + " h ON e." + headerPk + " = h." + headerPk + ""
                                 + "\n    WHERE " + billNoCond + seqCond
                                 + "\n);\n\n";
                         }
@@ -1580,7 +1763,7 @@ namespace K3CloudDataDictionary.Cli.Services
                     updateSql = "UPDATE " + entryTable + "\nSET\n" + string.Join(",\n", setClauses)
                         + "\nWHERE " + pkField + " = (\n    SELECT e." + pkField
                         + "\n    FROM " + entryTable + " e"
-                        + "\n    INNER JOIN " + headerTable + " h ON e.FID = h.FID"
+                        + "\n    INNER JOIN " + headerTable + " h ON e." + headerPk + " = h." + headerPk + ""
                         + "\n    WHERE " + billNoCond + seqCond
                         + "\n);";
                 }
@@ -1889,11 +2072,9 @@ WHERE BLOCKED > 0
             var allFields = metadata.FieldsWithOid.Concat(metadata.FieldsWithoutOid).ToList();
             var allEntities = metadata.EntitiesWithOid.Concat(metadata.EntitiesWithoutOid).ToList();
 
-            // 识别单据头和明细体
-            var headerEntity = allEntities.FirstOrDefault(e =>
-                e.ElementType == "单据头" || (e.TagName != null && e.TagName.Contains("Head")));
-            var entryEntity = allEntities.FirstOrDefault(e =>
-                e.ElementType == "单据体" || (e.TagName != null && e.TagName.Contains("Entry")));
+            // 识别单据头和明细体（须有物理表；ElementType 存的是原始数字码）
+            var headerEntity = allEntities.FirstOrDefault(e => !string.IsNullOrEmpty(e.TableName) && IsHeadEntity(e));
+            var entryEntity = allEntities.FirstOrDefault(e => !string.IsNullOrEmpty(e.TableName) && IsEntryEntity(e));
 
             if (headerEntity == null || entryEntity == null)
             {
@@ -2036,11 +2217,9 @@ WHERE h.{headFieldName} IS NOT NULL
             var allFields = metadata.FieldsWithOid.Concat(metadata.FieldsWithoutOid).ToList();
             var allEntities = metadata.EntitiesWithOid.Concat(metadata.EntitiesWithoutOid).ToList();
 
-            // 识别单据头和明细体
-            var headerEntity = allEntities.FirstOrDefault(e =>
-                e.ElementType == "单据头" || (e.TagName != null && e.TagName.Contains("Head")));
-            var entryEntity = allEntities.FirstOrDefault(e =>
-                e.ElementType == "单据体" || (e.TagName != null && e.TagName.Contains("Entry")));
+            // 识别单据头和明细体（须有物理表；ElementType 存的是原始数字码）
+            var headerEntity = allEntities.FirstOrDefault(e => !string.IsNullOrEmpty(e.TableName) && IsHeadEntity(e));
+            var entryEntity = allEntities.FirstOrDefault(e => !string.IsNullOrEmpty(e.TableName) && IsEntryEntity(e));
 
             if (headerEntity == null || entryEntity == null)
             {

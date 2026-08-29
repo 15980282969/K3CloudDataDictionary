@@ -51,9 +51,18 @@ namespace K3CloudDataDictionary.Cli.Commands
                     results = service.ProbePhysicalColumns(tableName, keyword);
                 }
 
+                // 检查是否有视图检测提示
+                string viewHint = null;
                 var output = new List<object>();
                 foreach (var row in results)
                 {
+                    // 跳过提示行，单独处理
+                    if (row.ContainsKey("_hint"))
+                    {
+                        viewHint = row.GetValueOrDefault("message")?.ToString();
+                        continue;
+                    }
+
                     var item = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase)
                     {
                         ["columnName"] = row.GetValueOrDefault("columnName")?.ToString() ?? "",
@@ -73,7 +82,21 @@ namespace K3CloudDataDictionary.Cli.Commands
                     output.Add(item);
                 }
 
-                JsonOutputWriter.WriteSuccess("probe", output);
+                // 如果检测到视图，在输出中附加提示信息
+                if (viewHint != null)
+                {
+                    var resultObj = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase)
+                    {
+                        ["hint"] = "view_detected",
+                        ["message"] = viewHint,
+                        ["columns"] = output
+                    };
+                    JsonOutputWriter.WriteSuccess("probe", resultObj);
+                }
+                else
+                {
+                    JsonOutputWriter.WriteSuccess("probe", output);
+                }
                 return 0;
             }
             catch (Exception ex)
