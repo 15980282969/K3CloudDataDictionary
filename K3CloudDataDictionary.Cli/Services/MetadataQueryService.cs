@@ -45,6 +45,44 @@ namespace K3CloudDataDictionary.Cli.Services
         }
 
         /// <summary>
+        /// 解析"XX名称/XX规格"类关键词：剥离后缀得到基础资料关键词，并返回 _L 多语言表对应列
+        /// 例："物料名称" → baseKeyword="物料"，返回 "FNAME"；"物料规格" → "FSPECIFICATION"
+        /// </summary>
+        private static string GetBaseDataLangColumn(string keyword, out string baseKeyword)
+        {
+            baseKeyword = null;
+            if (string.IsNullOrEmpty(keyword)) return null;
+
+            string langColumn;
+            if (keyword.EndsWith("规格型号", StringComparison.Ordinal))
+            {
+                langColumn = "FSPECIFICATION";
+                baseKeyword = keyword.Substring(0, keyword.Length - 4);
+            }
+            else if (keyword.EndsWith("名称", StringComparison.Ordinal))
+            {
+                langColumn = "FNAME";
+                baseKeyword = keyword.Substring(0, keyword.Length - 2);
+            }
+            else if (keyword.EndsWith("规格", StringComparison.Ordinal))
+            {
+                langColumn = "FSPECIFICATION";
+                baseKeyword = keyword.Substring(0, keyword.Length - 2);
+            }
+            else
+            {
+                return null;
+            }
+
+            if (string.IsNullOrWhiteSpace(baseKeyword))
+            {
+                baseKeyword = null;
+                return null;
+            }
+            return langColumn;
+        }
+
+        /// <summary>
         /// 初始化上下文（懒加载）
         /// </summary>
         private void EnsureContext()
@@ -1463,7 +1501,51 @@ namespace K3CloudDataDictionary.Cli.Services
                 }
                 else
                 {
-                    unmatchedKeywords.Add(kw);
+                    // 回退：形如"物料名称/物料规格"的关键词，剥离后缀匹配基础资料字段（elementType=13），
+                    // 名称/规格实际存放在基础资料的 _L 多语言表中
+                    var langColumn = GetBaseDataLangColumn(kw, out string baseKw);
+                    MetadataFieldInfo baseMatch = null;
+                    if (langColumn != null)
+                    {
+                        var normalizedBase = NormalizeKeyword(baseKw);
+                        var baseLower = baseKw.ToLowerInvariant();
+                        baseMatch = allFields.FirstOrDefault(f =>
+                            f.ElementType == "13" &&
+                            (f.Name.Equals(baseKw, StringComparison.OrdinalIgnoreCase) ||
+                             NormalizedContains(f.Name, normalizedBase) ||
+                             f.Key.ToLowerInvariant().Contains(baseLower) ||
+                             f.FieldName.ToLowerInvariant().Contains(baseLower)));
+                    }
+
+                    if (baseMatch != null)
+                    {
+                        var entity = entityMap.ContainsKey(baseMatch.EntityKey) ? entityMap[baseMatch.EntityKey] : null;
+                        var splitSuffix = baseMatch.Suffix ?? "";
+                        var splitTable = !string.IsNullOrEmpty(splitSuffix)
+                            ? (entity?.TableName ?? "") + "_" + splitSuffix
+                            : "";
+                        var fieldInfo = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase)
+                        {
+                            ["searchKeyword"] = kw,
+                            ["name"] = kw,
+                            ["key"] = baseMatch.Key,
+                            ["fieldName"] = baseMatch.FieldName,
+                            ["table"] = entity?.TableName ?? "",
+                            ["splitSuffix"] = splitSuffix,
+                            ["splitTable"] = splitTable,
+                            ["langTable"] = "",
+                            ["entityKey"] = baseMatch.EntityKey,
+                            ["elementType"] = baseMatch.ElementType,
+                            ["elementTypeName"] = GetElementTypeName(baseMatch.ElementType),
+                            ["lookUpObjectID"] = baseMatch.LookUpObjectID,
+                            ["baseDataLangColumn"] = langColumn
+                        };
+                        matchedFields.Add(fieldInfo);
+                    }
+                    else
+                    {
+                        unmatchedKeywords.Add(kw);
+                    }
                 }
             }
 
@@ -1581,7 +1663,9 @@ namespace K3CloudDataDictionary.Cli.Services
             {
                 var elType = f.GetValueOrDefault("elementType")?.ToString() ?? "";
                 var lookUpOid = f.GetValueOrDefault("lookUpObjectID")?.ToString() ?? "";
-                if (elType == "13" && !string.IsNullOrEmpty(lookUpOid) && !baseDataJoins.ContainsKey(lookUpOid))
+                var srcFieldName = f.GetValueOrDefault("fieldName")?.ToString() ?? "";
+                // 跳过源字段物理列名为空的基础资料字段（如某些特殊字段类型）
+                if (elType == "13" && !string.IsNullOrEmpty(lookUpOid) && !string.IsNullOrEmpty(srcFieldName) && !baseDataJoins.ContainsKey(lookUpOid))
                 {
                     try
                     {
@@ -1600,7 +1684,7 @@ namespace K3CloudDataDictionary.Cli.Services
                                     ["viewAlias"] = GenerateBaseDataAlias(viewTable),
                                     ["pkField"] = viewPk,
                                     ["formId"] = viewFormId,
-                                    ["sourceField"] = f["fieldName"].ToString(),
+                                    ["sourceField"] = srcFieldName,
                                     ["sourceAlias"] = AliasForField(f)
                                 };
                             }
@@ -1644,14 +1728,31 @@ namespace K3CloudDataDictionary.Cli.Services
                 else if (elType == "13" && !string.IsNullOrEmpty(lookUpOid) && baseDataJoins.ContainsKey(lookUpOid))
                 {
                     var bdJoin = baseDataJoins[lookUpOid];
-                    var srcAlias = bdJoin["sourceAlias"].ToString();
                     var viewAlias = bdJoin["viewAlias"].ToString();
-                    selectCols.Add("    " + srcAlias + "." + fieldName + " AS [" + name + "ID]");
-                    selectCols.Add("    " + viewAlias + "_l.FNAME AS [" + name + "]");
+                    var langColumn = f.GetValueOrDefault("baseDataLangColumn")?.ToString() ?? "";
+                    if (!string.IsNullOrEmpty(langColumn))
+                    {
+                        // 显式请求名称/规格（如"物料名称"）：只从基础资料 _L 多语言表取对应列
+                        selectCols.Add("    " + viewAlias + "_l." + langColumn + " AS [" + name + "]");
+                    }
+                    else
+                    {
+                        var srcAlias = bdJoin["sourceAlias"].ToString();
+                        selectCols.Add("    " + srcAlias + "." + fieldName + " AS [" + name + "ID]");
+                        selectCols.Add("    " + viewAlias + "_l.FNAME AS [" + name + "]");
+                    }
                 }
                 else
                 {
-                    selectCols.Add("    " + AliasForField(f) + "." + fieldName + " AS [" + name + "]");
+                    // 普通列：跳过 fieldName 为空的字段（如某些特殊字段类型）
+                    if (!string.IsNullOrEmpty(fieldName))
+                    {
+                        selectCols.Add("    " + AliasForField(f) + "." + fieldName + " AS [" + name + "]");
+                    }
+                    else
+                    {
+                        unmatchedKeywords.Add(name + "（字段物理列名为空，已跳过）");
+                    }
                 }
             }
 
@@ -2017,6 +2118,196 @@ WHERE BLOCKED > 0
         }
 
         /// <summary>
+        /// 按生产订单查询领料汇总（按物料、仓库、单位分组）
+        /// </summary>
+        public List<Dictionary<string, object>> QueryMoPickSummary(string moBillNo)
+        {
+            string sql = @"
+SELECT e.FMOBILLNO                AS [生产订单号],
+       mat.FNUMBER                AS [物料编码],
+       mat_l.FNAME                AS [物料名称],
+       stk_l.FNAME                AS [仓库名称],
+       unit_l.FNAME               AS [单位],
+       SUM(e.FAPPQTY)             AS [领料数量合计],
+       SUM(e.FACTUALQTY)          AS [实发数量合计]
+FROM T_PRD_PICKMTRL h
+INNER JOIN T_PRD_PICKMTRLDATA e ON e.FID = h.FID
+LEFT JOIN T_BD_MATERIAL mat ON mat.FMATERIALID = e.FMATERIALID
+LEFT JOIN T_BD_MATERIAL_L mat_l ON mat_l.FMATERIALID = mat.FMATERIALID AND mat_l.FLOCALEID = 2052
+LEFT JOIN T_BD_STOCK stk ON stk.FSTOCKID = e.FSTOCKID
+LEFT JOIN T_BD_STOCK_L stk_l ON stk_l.FSTOCKID = stk.FSTOCKID AND stk_l.FLOCALEID = 2052
+LEFT JOIN T_BD_UNIT unit ON unit.FUNITID = e.FUNITID
+LEFT JOIN T_BD_UNIT_L unit_l ON unit_l.FUNITID = unit.FUNITID AND unit_l.FLOCALEID = 2052
+WHERE h.FDOCUMENTSTATUS = 'C' AND h.FCANCELSTATUS = 'A'";
+
+            var parameters = new Dictionary<string, object>();
+            if (!string.IsNullOrEmpty(moBillNo))
+            {
+                sql += " AND e.FMOBILLNO LIKE @MoBillNo";
+                parameters["@MoBillNo"] = "%" + moBillNo + "%";
+            }
+
+            sql += @"
+GROUP BY e.FMOBILLNO, mat.FNUMBER, mat_l.FNAME, stk_l.FNAME, unit_l.FNAME
+ORDER BY e.FMOBILLNO, mat.FNUMBER";
+
+            return ExecuteSql(sql, parameters);
+        }
+
+        /// <summary>
+        /// 按生产订单查询退料汇总（按物料、仓库、单位分组）
+        /// </summary>
+        public List<Dictionary<string, object>> QueryMoReturnSummary(string moBillNo)
+        {
+            string sql = @"
+SELECT e.FMOBILLNO                AS [生产订单号],
+       mat.FNUMBER                AS [物料编码],
+       mat_l.FNAME                AS [物料名称],
+       stk_l.FNAME                AS [仓库名称],
+       unit_l.FNAME               AS [单位],
+       SUM(e.FAPPQTY)             AS [退料数量合计],
+       SUM(e.FQTY)                AS [实退数量合计]
+FROM T_PRD_RETURNMTRL h
+INNER JOIN T_PRD_RETURNMTRLENTRY e ON e.FID = h.FID
+LEFT JOIN T_BD_MATERIAL mat ON mat.FMATERIALID = e.FMATERIALID
+LEFT JOIN T_BD_MATERIAL_L mat_l ON mat_l.FMATERIALID = mat.FMATERIALID AND mat_l.FLOCALEID = 2052
+LEFT JOIN T_BD_STOCK stk ON stk.FSTOCKID = e.FSTOCKID
+LEFT JOIN T_BD_STOCK_L stk_l ON stk_l.FSTOCKID = stk.FSTOCKID AND stk_l.FLOCALEID = 2052
+LEFT JOIN T_BD_UNIT unit ON unit.FUNITID = e.FUNITID
+LEFT JOIN T_BD_UNIT_L unit_l ON unit_l.FUNITID = unit.FUNITID AND unit_l.FLOCALEID = 2052
+WHERE h.FDOCUMENTSTATUS = 'C' AND h.FCANCELSTATUS = 'A'";
+
+            var parameters = new Dictionary<string, object>();
+            if (!string.IsNullOrEmpty(moBillNo))
+            {
+                sql += " AND e.FMOBILLNO LIKE @MoBillNo";
+                parameters["@MoBillNo"] = "%" + moBillNo + "%";
+            }
+
+            sql += @"
+GROUP BY e.FMOBILLNO, mat.FNUMBER, mat_l.FNAME, stk_l.FNAME, unit_l.FNAME
+ORDER BY e.FMOBILLNO, mat.FNUMBER";
+
+            return ExecuteSql(sql, parameters);
+        }
+
+        /// <summary>
+        /// 按生产订单查询入库汇总（按物料、仓库、单位分组）
+        /// </summary>
+        public List<Dictionary<string, object>> QueryMoInstockSummary(string moBillNo)
+        {
+            string sql = @"
+SELECT e.FMOBILLNO                AS [生产订单号],
+       mat.FNUMBER                AS [物料编码],
+       mat_l.FNAME                AS [物料名称],
+       stk_l.FNAME                AS [仓库名称],
+       unit_l.FNAME               AS [单位],
+       SUM(e.FMUSTQTY)            AS [应收数量合计],
+       SUM(e.FREALQTY)            AS [实收数量合计]
+FROM T_PRD_INSTOCK h
+INNER JOIN T_PRD_INSTOCKENTRY e ON e.FID = h.FID
+LEFT JOIN T_BD_MATERIAL mat ON mat.FMATERIALID = e.FMATERIALID
+LEFT JOIN T_BD_MATERIAL_L mat_l ON mat_l.FMATERIALID = mat.FMATERIALID AND mat_l.FLOCALEID = 2052
+LEFT JOIN T_BD_STOCK stk ON stk.FSTOCKID = e.FSTOCKID
+LEFT JOIN T_BD_STOCK_L stk_l ON stk_l.FSTOCKID = stk.FSTOCKID AND stk_l.FLOCALEID = 2052
+LEFT JOIN T_BD_UNIT unit ON unit.FUNITID = e.FUNITID
+LEFT JOIN T_BD_UNIT_L unit_l ON unit_l.FUNITID = unit.FUNITID AND unit_l.FLOCALEID = 2052
+WHERE h.FDOCUMENTSTATUS = 'C' AND h.FCANCELSTATUS = 'A'";
+
+            var parameters = new Dictionary<string, object>();
+            if (!string.IsNullOrEmpty(moBillNo))
+            {
+                sql += " AND e.FMOBILLNO LIKE @MoBillNo";
+                parameters["@MoBillNo"] = "%" + moBillNo + "%";
+            }
+
+            sql += @"
+GROUP BY e.FMOBILLNO, mat.FNUMBER, mat_l.FNAME, stk_l.FNAME, unit_l.FNAME
+ORDER BY e.FMOBILLNO, mat.FNUMBER";
+
+            return ExecuteSql(sql, parameters);
+        }
+
+        /// <summary>
+        /// 按单据编号查询任意表单（返回单据头与明细体数据）
+        /// </summary>
+        public Dictionary<string, object> QueryBillByNo(string formIdentifier, string billNo)
+        {
+            EnsureContext();
+            var result = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
+
+            var matchingFids = _allObjects.Keys
+                .Where(k => k.Equals(formIdentifier, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+            if (matchingFids.Count == 0)
+            {
+                result["error"] = "未找到表单: " + formIdentifier;
+                return result;
+            }
+
+            var fid = matchingFids[0];
+            var metadata = ExtractMetadata(fid);
+            if (metadata == null)
+            {
+                result["error"] = "无法提取表单元数据: " + formIdentifier;
+                return result;
+            }
+
+            var allFields = metadata.FieldsWithOid.Concat(metadata.FieldsWithoutOid).ToList();
+            var allEntities = metadata.EntitiesWithOid.Concat(metadata.EntitiesWithoutOid).ToList();
+
+            var headerEntity = allEntities.FirstOrDefault(e => !string.IsNullOrEmpty(e.TableName) && IsHeadEntity(e))
+                ?? allEntities.FirstOrDefault(e => !string.IsNullOrEmpty(e.TableName) && string.IsNullOrEmpty(e.Key))
+                ?? allEntities.FirstOrDefault(e => !string.IsNullOrEmpty(e.TableName));
+            var entryEntity = allEntities.FirstOrDefault(e => !string.IsNullOrEmpty(e.TableName) && IsEntryEntity(e));
+
+            if (headerEntity == null || string.IsNullOrEmpty(headerEntity.TableName))
+            {
+                result["error"] = "未找到表单头实体物理表: " + formIdentifier;
+                return result;
+            }
+
+            string billNoField = null, seqField = null;
+            foreach (var field in allFields)
+            {
+                if (field.ElementType == "12" || field.Key.Equals("FBillNo", StringComparison.OrdinalIgnoreCase))
+                    billNoField = field.FieldName;
+                if (seqField == null &&
+                    (field.Key.Equals("FSeq", StringComparison.OrdinalIgnoreCase) ||
+                     field.PropertyName.Equals("Seq", StringComparison.OrdinalIgnoreCase)))
+                    seqField = field.FieldName;
+            }
+            if (string.IsNullOrEmpty(billNoField))
+                billNoField = "FBillNo";
+
+            var headerPk = headerEntity.EffectivePkFieldName ?? "FID";
+            var headerTable = headerEntity.TableName;
+            var headerRows = ExecuteSql(
+                "SELECT * FROM " + headerTable + " WHERE " + billNoField + " = @BillNo",
+                new Dictionary<string, object> { ["@BillNo"] = billNo });
+
+            result["formIdentifier"] = formIdentifier;
+            result["formName"] = _allObjects[fid].FName;
+            result["headerTable"] = headerTable;
+            result["billNoField"] = billNoField;
+            result["headerRows"] = headerRows;
+
+            if (entryEntity != null && !string.IsNullOrEmpty(entryEntity.TableName))
+            {
+                var orderBy = !string.IsNullOrEmpty(seqField) ? " ORDER BY e." + seqField : "";
+                var entryRows = ExecuteSql(
+                    "SELECT e.* FROM " + entryEntity.TableName + " e"
+                    + " INNER JOIN " + headerTable + " h ON e." + headerPk + " = h." + headerPk
+                    + " WHERE h." + billNoField + " = @BillNo" + orderBy,
+                    new Dictionary<string, object> { ["@BillNo"] = billNo });
+                result["entryTable"] = entryEntity.TableName;
+                result["entryRows"] = entryRows;
+            }
+
+            return result;
+        }
+
+        /// <summary>
         /// 查询所有可用常用查询的列表
         /// </summary>
         public List<Dictionary<string, object>> GetAvailableQueries()
@@ -2034,6 +2325,30 @@ WHERE BLOCKED > 0
                     ["name"] = "blocking",
                     ["description"] = "查询数据库阻塞/死锁进程信息",
                     ["parameters"] = "无需参数"
+                },
+                new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["name"] = "mo-pick-summary",
+                    ["description"] = "按生产订单查询领料汇总（物料、仓库、单位分组）",
+                    ["parameters"] = "--mo <生产订单号，模糊匹配，可选>"
+                },
+                new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["name"] = "mo-return-summary",
+                    ["description"] = "按生产订单查询退料汇总（物料、仓库、单位分组）",
+                    ["parameters"] = "--mo <生产订单号，模糊匹配，可选>"
+                },
+                new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["name"] = "mo-instock-summary",
+                    ["description"] = "按生产订单查询入库汇总（物料、仓库、单位分组）",
+                    ["parameters"] = "--mo <生产订单号，模糊匹配，可选>"
+                },
+                new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["name"] = "bill-by-no",
+                    ["description"] = "按单据编号查询任意表单的头表与明细表数据",
+                    ["parameters"] = "--form <表单标识>, --no <单据编号>"
                 }
             };
         }

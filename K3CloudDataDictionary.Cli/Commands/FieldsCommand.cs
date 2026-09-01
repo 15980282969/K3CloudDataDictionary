@@ -8,6 +8,7 @@ namespace K3CloudDataDictionary.Cli.Commands
 {
     /// <summary>
     /// fields 命令：查询表单字段信息
+    /// 支持 --compare 参数对比单据头和明细体字段差异
     /// </summary>
     public static class FieldsCommand
     {
@@ -31,16 +32,41 @@ namespace K3CloudDataDictionary.Cli.Commands
                 return 1;
             }
 
+            // 检查是否为 compare 模式
+            var compare = Program.HasOption(args, "compare");
+            if (compare)
+            {
+                return ExecuteCompare(formIdentifier, args, options);
+            }
+
             // 获取可选参数
             var entityKey = Program.GetArgValue(args, "entity");
             var keyword = Program.GetArgValue(args, "keyword");
             var exact = Program.HasOption(args, "exact") || Program.HasOption(args, "e");
+            var typeFilter = Program.GetArgValue(args, "type");
+            var physical = Program.HasOption(args, "physical");
 
             try
             {
                 var connectionString = Program.ResolveConnectionString(options);
                 var service = new MetadataQueryService(connectionString);
-                var results = service.QueryFields(formIdentifier, entityKey, keyword, exact);
+                var results = service.QueryFields(formIdentifier, entityKey, keyword, exact, typeFilter);
+
+                // --physical 模式：只输出物理列名列表（纯文本，便于直接粘贴到 SQL 中）
+                if (physical)
+                {
+                    var columns = results
+                        .Where(r => !r.ContainsKey("_hint"))
+                        .Select(r => r.GetValueOrDefault("FFieldName")?.ToString())
+                        .Where(c => !string.IsNullOrEmpty(c))
+                        .Distinct(StringComparer.OrdinalIgnoreCase)
+                        .ToList();
+                    if (columns.Count > 0)
+                    {
+                        Console.WriteLine(string.Join(", ", columns));
+                        return 0;
+                    }
+                }
 
                 // 转换为更友好的格式
                 var output = new List<object>();
@@ -103,6 +129,29 @@ namespace K3CloudDataDictionary.Cli.Commands
             catch (Exception ex)
             {
                 JsonOutputWriter.WriteError("fields", ex.Message);
+                return 1;
+            }
+        }
+
+        /// <summary>
+        /// compare 模式：对比单据头和明细体字段差异
+        /// </summary>
+        private static int ExecuteCompare(string formIdentifier, string[] args, GlobalOptions options)
+        {
+            var keyword = Program.GetArgValue(args, "keyword");
+
+            try
+            {
+                var connectionString = Program.ResolveConnectionString(options);
+                var service = new MetadataQueryService(connectionString);
+                var result = service.CompareHeadEntryFields(formIdentifier, keyword);
+
+                JsonOutputWriter.WriteSuccess("fields compare", result);
+                return 0;
+            }
+            catch (Exception ex)
+            {
+                JsonOutputWriter.WriteError("fields compare", ex.Message);
                 return 1;
             }
         }
