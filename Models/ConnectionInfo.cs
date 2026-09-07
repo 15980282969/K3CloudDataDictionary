@@ -80,6 +80,17 @@ namespace K3CloudDataDictionary.Models
 
         private bool _isCurrent;
 
+        private string _lastSuccessfulConnection;
+
+        /// <summary>
+        /// 上次连接成功连接的时间戳（ISO 8601 格式）
+        /// </summary>
+        public string LastSuccessfulConnection
+        {
+            get => _lastSuccessfulConnection;
+            set { _lastSuccessfulConnection = value; OnPropertyChanged(); }
+        }
+
         /// <summary>
         /// 实际使用的本地数据文件名：优先使用 LocalDbFileName，否则用数据库名生成
         /// </summary>
@@ -129,7 +140,8 @@ namespace K3CloudDataDictionary.Models
                 Password = this.Password,
                 Database = this.Database,
                 IsDefault = this.IsDefault,
-                LocalDbFileName = this.LocalDbFileName
+                LocalDbFileName = this.LocalDbFileName,
+                LastSuccessfulConnection = this.LastSuccessfulConnection
             };
         }
 

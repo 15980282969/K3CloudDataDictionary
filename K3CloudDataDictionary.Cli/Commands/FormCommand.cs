@@ -33,56 +33,58 @@ namespace K3CloudDataDictionary.Cli.Commands
             try
             {
                 var connectionString = Program.ResolveConnectionString(options);
-                var service = new MetadataQueryService(connectionString);
-
-                // 查询表单信息
-                var formResults = service.QueryForm(formIdentifier);
-                if (formResults.Count == 0)
+                using (var service = new MetadataQueryService(connectionString))
                 {
-                    JsonOutputWriter.WriteError("form", $"未找到表单: {formIdentifier}");
-                    return 1;
-                }
 
-                // 查询实体列表
-                var entityResults = service.QueryEntities(formIdentifier);
-
-                // 构建输出
-                var formRow = formResults[0];
-                var entities = new List<object>();
-                foreach (var entity in entityResults)
-                {
-                    entities.Add(new
+                    // 查询表单信息
+                    var formResults = service.QueryForm(formIdentifier);
+                    if (formResults.Count == 0)
                     {
-                        entityKey = entity.GetValueOrDefault("FKey")?.ToString() ?? "",
-                        entityName = entity.GetValueOrDefault("FENTITYNAME")?.ToString() ?? "",
-                        table = entity.GetValueOrDefault("FTABLENAME")?.ToString() ?? "",
-                        entryName = entity.GetValueOrDefault("FEntryName")?.ToString() ?? "",
-                        elementType = entity.GetValueOrDefault("FELEMENTTYPENAME")?.ToString() ?? "",
-                        seqFieldKey = entity.GetValueOrDefault("FSEQFIELDKEY")?.ToString() ?? "",
-                        entryPkFieldName = entity.GetValueOrDefault("FENTRY_PK_FIELD_NAME")?.ToString() ?? "",
-                        serviceRuleCount = Convert.ToInt32(entity.GetValueOrDefault("FSERVICERULECOUNT") ?? 0),
-                        updateActionCount = Convert.ToInt32(entity.GetValueOrDefault("FUPDATEACTIONCOUNT") ?? 0)
-                    });
+                        JsonOutputWriter.WriteError("form", $"未找到表单: {formIdentifier}");
+                        return 1;
+                    }
+
+                    // 查询实体列表
+                    var entityResults = service.QueryEntities(formIdentifier);
+
+                    // 构建输出
+                    var formRow = formResults[0];
+                    var entities = new List<object>();
+                    foreach (var entity in entityResults)
+                    {
+                        entities.Add(new
+                        {
+                            entityKey = entity.GetValueOrDefault("FKey")?.ToString() ?? "",
+                            entityName = entity.GetValueOrDefault("FENTITYNAME")?.ToString() ?? "",
+                            table = entity.GetValueOrDefault("FTABLENAME")?.ToString() ?? "",
+                            entryName = entity.GetValueOrDefault("FEntryName")?.ToString() ?? "",
+                            elementType = entity.GetValueOrDefault("FELEMENTTYPENAME")?.ToString() ?? "",
+                            seqFieldKey = entity.GetValueOrDefault("FSEQFIELDKEY")?.ToString() ?? "",
+                            entryPkFieldName = entity.GetValueOrDefault("FENTRY_PK_FIELD_NAME")?.ToString() ?? "",
+                            serviceRuleCount = Convert.ToInt32(entity.GetValueOrDefault("FSERVICERULECOUNT") ?? 0),
+                            updateActionCount = Convert.ToInt32(entity.GetValueOrDefault("FUPDATEACTIONCOUNT") ?? 0)
+                        });
+                    }
+
+                    var output = new
+                    {
+                        formId = formRow.GetValueOrDefault("FFORMID")?.ToString() ?? "",
+                        formIdentifier = formRow.GetValueOrDefault("FFORMIDENTIFIER")?.ToString() ?? "",
+                        formName = formRow.GetValueOrDefault("FDJMC")?.ToString() ?? "",
+                        modelType = formRow.GetValueOrDefault("FELEMENTTYPENAME")?.ToString() ?? "",
+                        subsystem = formRow.GetValueOrDefault("FSUBSYSTEMNAME")?.ToString() ?? "",
+                        formPluginCount = Convert.ToInt32(formRow.GetValueOrDefault("FFORMPLUGINCOUNT") ?? 0),
+                        listPluginCount = Convert.ToInt32(formRow.GetValueOrDefault("FLISTPLUGINCOUNT") ?? 0),
+                        builderPluginCount = Convert.ToInt32(formRow.GetValueOrDefault("FBUILDERPLUGINCOUNT") ?? 0),
+                        updateActionCount = Convert.ToInt32(formRow.GetValueOrDefault("FUPDATEACTIONCOUNT") ?? 0),
+                        serviceRuleCount = Convert.ToInt32(formRow.GetValueOrDefault("FSERVICERULECOUNT") ?? 0),
+                        formOperationCount = Convert.ToInt32(formRow.GetValueOrDefault("FFORMOPERATIONCOUNT") ?? 0),
+                        entities = entities
+                    };
+
+                    JsonOutputWriter.WriteSuccess("form", output);
+                    return 0;
                 }
-
-                var output = new
-                {
-                    formId = formRow.GetValueOrDefault("FFORMID")?.ToString() ?? "",
-                    formIdentifier = formRow.GetValueOrDefault("FFORMIDENTIFIER")?.ToString() ?? "",
-                    formName = formRow.GetValueOrDefault("FDJMC")?.ToString() ?? "",
-                    modelType = formRow.GetValueOrDefault("FELEMENTTYPENAME")?.ToString() ?? "",
-                    subsystem = formRow.GetValueOrDefault("FSUBSYSTEMNAME")?.ToString() ?? "",
-                    formPluginCount = Convert.ToInt32(formRow.GetValueOrDefault("FFORMPLUGINCOUNT") ?? 0),
-                    listPluginCount = Convert.ToInt32(formRow.GetValueOrDefault("FLISTPLUGINCOUNT") ?? 0),
-                    builderPluginCount = Convert.ToInt32(formRow.GetValueOrDefault("FBUILDERPLUGINCOUNT") ?? 0),
-                    updateActionCount = Convert.ToInt32(formRow.GetValueOrDefault("FUPDATEACTIONCOUNT") ?? 0),
-                    serviceRuleCount = Convert.ToInt32(formRow.GetValueOrDefault("FSERVICERULECOUNT") ?? 0),
-                    formOperationCount = Convert.ToInt32(formRow.GetValueOrDefault("FFORMOPERATIONCOUNT") ?? 0),
-                    entities = entities
-                };
-
-                JsonOutputWriter.WriteSuccess("form", output);
-                return 0;
             }
             catch (Exception ex)
             {

@@ -33,26 +33,28 @@ namespace K3CloudDataDictionary.Cli.Commands
             try
             {
                 var connectionString = Program.ResolveConnectionString(options);
-                var service = new MetadataQueryService(connectionString);
-                var results = service.QueryAssistantData(lookUpObjectId);
-
-                // 转换为更友好的格式
-                var output = new List<object>();
-                foreach (var row in results)
+                using (var service = new MetadataQueryService(connectionString))
                 {
-                    output.Add(new
-                    {
-                        id = row.GetValueOrDefault("FID")?.ToString() ?? "",
-                        number = row.GetValueOrDefault("FNUMBER")?.ToString() ?? "",
-                        name = row.GetValueOrDefault("FNAME")?.ToString() ?? "",
-                        entryId = row.GetValueOrDefault("FENTRYID")?.ToString() ?? "",
-                        entryNumber = row.GetValueOrDefault("FENTRYNUMBER")?.ToString() ?? "",
-                        dataValue = row.GetValueOrDefault("FDATAVALUE")?.ToString() ?? ""
-                    });
-                }
+                    var results = service.QueryAssistantData(lookUpObjectId);
 
-                JsonOutputWriter.WriteSuccess("assistantdata", output);
-                return 0;
+                    // 转换为更友好的格式
+                    var output = new List<object>();
+                    foreach (var row in results)
+                    {
+                        output.Add(new
+                        {
+                            id = row.GetValueOrDefault("FID")?.ToString() ?? "",
+                            number = row.GetValueOrDefault("FNUMBER")?.ToString() ?? "",
+                            name = row.GetValueOrDefault("FNAME")?.ToString() ?? "",
+                            entryId = row.GetValueOrDefault("FENTRYID")?.ToString() ?? "",
+                            entryNumber = row.GetValueOrDefault("FENTRYNUMBER")?.ToString() ?? "",
+                            dataValue = row.GetValueOrDefault("FDATAVALUE")?.ToString() ?? ""
+                        });
+                    }
+
+                    JsonOutputWriter.WriteSuccess("assistantdata", output);
+                    return 0;
+                }
             }
             catch (Exception ex)
             {

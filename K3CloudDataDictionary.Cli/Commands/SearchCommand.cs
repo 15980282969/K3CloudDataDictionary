@@ -36,74 +36,84 @@ namespace K3CloudDataDictionary.Cli.Commands
             // 是否精确匹配
             var exact = Program.HasOption(args, "exact") || Program.HasOption(args, "e");
 
+            // 结果数量限制
+            int limit = 100;
+            var limitArg = Program.GetArgValue(args, "limit");
+            if (!string.IsNullOrEmpty(limitArg) && (!int.TryParse(limitArg, out limit) || limit <= 0))
+            {
+                JsonOutputWriter.WriteError("search", "--limit 必须是大于 0 的整数");
+                return 1;
+            }
+
             try
             {
                 var connectionString = Program.ResolveConnectionString(options);
-                var service = new MetadataQueryService(connectionString);
-
-                if (searchType == "table")
+                using (var service = new MetadataQueryService(connectionString))
                 {
-                    // 搜索表
-                    var results = service.SearchTables(keyword, exact);
-                    var output = new List<object>();
-                    foreach (var row in results)
+                    if (searchType == "table")
                     {
-                        output.Add(new
+                        // 搜索表
+                        var results = service.SearchTables(keyword, exact, limit);
+                        var output = new List<object>();
+                        foreach (var row in results)
                         {
-                            formId = row.GetValueOrDefault("FFORMID")?.ToString() ?? "",
-                            formIdentifier = row.GetValueOrDefault("FFORMIDENTIFIER")?.ToString() ?? "",
-                            formName = row.GetValueOrDefault("FDJMC")?.ToString() ?? "",
-                            entityKey = row.GetValueOrDefault("FKey")?.ToString() ?? "",
-                            entityName = row.GetValueOrDefault("FENTITYNAME")?.ToString() ?? "",
-                            table = row.GetValueOrDefault("FTABLENAME")?.ToString() ?? "",
-                            elementType = row.GetValueOrDefault("FELEMENTTYPENAME")?.ToString() ?? "",
-                            fieldCount = Convert.ToInt32(row.GetValueOrDefault("FFIELDCOUNT") ?? 0)
-                        });
-                    }
-                    JsonOutputWriter.WriteSuccess("search", output);
-                }
-                else
-                {
-                    // 搜索字段
-                    var results = service.SearchFields(keyword, exact);
-                    var output = new List<object>();
-                    foreach (var row in results)
-                    {
-                        var statusItems = row.GetValueOrDefault("FSTATUSITEMS");
-                        var fieldOutput = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase)
-                        {
-                            ["formName"] = row.GetValueOrDefault("FDJMC")?.ToString() ?? "",
-                            ["entityName"] = row.GetValueOrDefault("FENTITYNAME")?.ToString() ?? "",
-                            ["entityKey"] = row.GetValueOrDefault("FENTITYKEY")?.ToString() ?? "",
-                            ["ormEntityName"] = row.GetValueOrDefault("FENTRYNAME")?.ToString() ?? "",
-                            ["seqFieldKey"] = row.GetValueOrDefault("FSEQFIELDKEY")?.ToString() ?? "",
-                            ["entryPkFieldName"] = row.GetValueOrDefault("FENTRY_PK_FIELD_NAME")?.ToString() ?? "",
-                            ["table"] = row.GetValueOrDefault("FTABLENAME")?.ToString() ?? "",
-                            ["splitSuffix"] = row.GetValueOrDefault("FSUFFIX")?.ToString() ?? "",
-                            ["splitTable"] = row.GetValueOrDefault("FSPLITTABlE")?.ToString() ?? "",
-                            ["key"] = row.GetValueOrDefault("FKey")?.ToString() ?? "",
-                            ["name"] = row.GetValueOrDefault("FName")?.ToString() ?? "",
-                            ["fieldName"] = row.GetValueOrDefault("FFieldName")?.ToString() ?? "",
-                            ["propertyName"] = row.GetValueOrDefault("FPropertyName")?.ToString() ?? "",
-                            ["elementType"] = row.GetValueOrDefault("FELEMENTTYPENAME")?.ToString() ?? "",
-                            ["elementTypeName"] = row.GetValueOrDefault("FELEMENTTYPECNNAME")?.ToString() ?? "",
-                            ["tagName"] = row.GetValueOrDefault("FTagName")?.ToString() ?? "",
-                            ["lookUpObject"] = row.GetValueOrDefault("FLookUpObjectID")?.ToString() ?? "",
-                            ["enumType"] = row.GetValueOrDefault("FEnumType")?.ToString() ?? ""
-                        };
-
-                        // elementType=40 时，将 StatusItems 作为嵌套子对象
-                        if (statusItems != null)
-                        {
-                            fieldOutput["statusItems"] = statusItems;
+                            output.Add(new
+                            {
+                                formId = row.GetValueOrDefault("FFORMID")?.ToString() ?? "",
+                                formIdentifier = row.GetValueOrDefault("FFORMIDENTIFIER")?.ToString() ?? "",
+                                formName = row.GetValueOrDefault("FDJMC")?.ToString() ?? "",
+                                entityKey = row.GetValueOrDefault("FKey")?.ToString() ?? "",
+                                entityName = row.GetValueOrDefault("FENTITYNAME")?.ToString() ?? "",
+                                table = row.GetValueOrDefault("FTABLENAME")?.ToString() ?? "",
+                                elementType = row.GetValueOrDefault("FELEMENTTYPENAME")?.ToString() ?? "",
+                                fieldCount = Convert.ToInt32(row.GetValueOrDefault("FFIELDCOUNT") ?? 0)
+                            });
                         }
-
-                        output.Add(fieldOutput);
+                        JsonOutputWriter.WriteSuccess("search", output);
                     }
-                    JsonOutputWriter.WriteSuccess("search", output);
-                }
+                    else
+                    {
+                        // 搜索字段
+                        var results = service.SearchFields(keyword, exact, limit);
+                        var output = new List<object>();
+                        foreach (var row in results)
+                        {
+                            var statusItems = row.GetValueOrDefault("FSTATUSITEMS");
+                            var fieldOutput = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase)
+                            {
+                                ["formName"] = row.GetValueOrDefault("FDJMC")?.ToString() ?? "",
+                                ["entityName"] = row.GetValueOrDefault("FENTITYNAME")?.ToString() ?? "",
+                                ["entityKey"] = row.GetValueOrDefault("FENTITYKEY")?.ToString() ?? "",
+                                ["ormEntityName"] = row.GetValueOrDefault("FENTRYNAME")?.ToString() ?? "",
+                                ["seqFieldKey"] = row.GetValueOrDefault("FSEQFIELDKEY")?.ToString() ?? "",
+                                ["entryPkFieldName"] = row.GetValueOrDefault("FENTRY_PK_FIELD_NAME")?.ToString() ?? "",
+                                ["table"] = row.GetValueOrDefault("FTABLENAME")?.ToString() ?? "",
+                                ["splitSuffix"] = row.GetValueOrDefault("FSUFFIX")?.ToString() ?? "",
+                                ["splitTable"] = row.GetValueOrDefault("FSPLITTABlE")?.ToString() ?? "",
+                                ["key"] = row.GetValueOrDefault("FKey")?.ToString() ?? "",
+                                ["name"] = row.GetValueOrDefault("FName")?.ToString() ?? "",
+                                ["fieldName"] = row.GetValueOrDefault("FFieldName")?.ToString() ?? "",
+                                ["propertyName"] = row.GetValueOrDefault("FPropertyName")?.ToString() ?? "",
+                                ["elementType"] = row.GetValueOrDefault("FELEMENTTYPENAME")?.ToString() ?? "",
+                                ["elementTypeName"] = row.GetValueOrDefault("FELEMENTTYPECNNAME")?.ToString() ?? "",
+                                ["tagName"] = row.GetValueOrDefault("FTagName")?.ToString() ?? "",
+                                ["lookUpObject"] = row.GetValueOrDefault("FLookUpObjectID")?.ToString() ?? "",
+                                ["enumType"] = row.GetValueOrDefault("FEnumType")?.ToString() ?? ""
+                            };
 
-                return 0;
+                            // elementType=40 时，将 StatusItems 作为嵌套子对象
+                            if (statusItems != null)
+                            {
+                                fieldOutput["statusItems"] = statusItems;
+                            }
+
+                            output.Add(fieldOutput);
+                        }
+                        JsonOutputWriter.WriteSuccess("search", output);
+                    }
+
+                    return 0;
+                }
             }
             catch (Exception ex)
             {

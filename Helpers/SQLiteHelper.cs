@@ -49,6 +49,16 @@ namespace K3CloudDataDictionary.Helpers
                     }
                 }
                 catch { /* 列已存在则忽略 */ }
+
+                // 迁移：为旧表添加 LastSuccessfulConnection 列
+                try
+                {
+                    using (var cmd = new SQLiteCommand("ALTER TABLE Connections ADD COLUMN LastSuccessfulConnection TEXT", conn))
+                    {
+                        cmd.ExecuteNonQuery();
+                    }
+                }
+                catch { /* 列已存在则忽略 */ }
             }
         }
 
@@ -58,7 +68,7 @@ namespace K3CloudDataDictionary.Helpers
             using (var conn = new SQLiteConnection(ConnectionString))
             {
                 conn.Open();
-                string sql = "SELECT Id, Name, ServerIp, Port, UserName, Password, Database, IsDefault, LocalDbFileName FROM Connections ORDER BY Id";
+                string sql = "SELECT Id, Name, ServerIp, Port, UserName, Password, Database, IsDefault, LocalDbFileName, LastSuccessfulConnection FROM Connections ORDER BY Id";
                 using (var cmd = new SQLiteCommand(sql, conn))
                 using (var reader = cmd.ExecuteReader())
                 {
@@ -74,7 +84,8 @@ namespace K3CloudDataDictionary.Helpers
                             Password = PasswordHelper.Decrypt(reader.GetString(5)),
                             Database = reader.GetString(6),
                             IsDefault = reader.GetInt32(7) == 1,
-                            LocalDbFileName = reader.IsDBNull(8) ? null : reader.GetString(8)
+                            LocalDbFileName = reader.IsDBNull(8) ? null : reader.GetString(8),
+                            LastSuccessfulConnection = reader.IsDBNull(9) ? null : reader.GetString(9)
                         });
                     }
                 }
@@ -87,7 +98,7 @@ namespace K3CloudDataDictionary.Helpers
             using (var conn = new SQLiteConnection(ConnectionString))
             {
                 conn.Open();
-                string sql = "SELECT Id, Name, ServerIp, Port, UserName, Password, Database, IsDefault, LocalDbFileName FROM Connections WHERE IsDefault = 1 LIMIT 1";
+                string sql = "SELECT Id, Name, ServerIp, Port, UserName, Password, Database, IsDefault, LocalDbFileName, LastSuccessfulConnection FROM Connections WHERE IsDefault = 1 LIMIT 1";
                 using (var cmd = new SQLiteCommand(sql, conn))
                 using (var reader = cmd.ExecuteReader())
                 {
@@ -103,7 +114,8 @@ namespace K3CloudDataDictionary.Helpers
                             Password = PasswordHelper.Decrypt(reader.GetString(5)),
                             Database = reader.GetString(6),
                             IsDefault = reader.GetInt32(7) == 1,
-                            LocalDbFileName = reader.IsDBNull(8) ? null : reader.GetString(8)
+                            LocalDbFileName = reader.IsDBNull(8) ? null : reader.GetString(8),
+                            LastSuccessfulConnection = reader.IsDBNull(9) ? null : reader.GetString(9)
                         };
                     }
                 }
@@ -117,7 +129,7 @@ namespace K3CloudDataDictionary.Helpers
             {
                 conn.Open();
                 ClearDefaultFlag(conn);
-                string sql = "INSERT INTO Connections (Name, ServerIp, Port, UserName, Password, Database, IsDefault, LocalDbFileName) VALUES (@Name, @ServerIp, @Port, @UserName, @Password, @Database, @IsDefault, @LocalDbFileName)";
+                string sql = "INSERT INTO Connections (Name, ServerIp, Port, UserName, Password, Database, IsDefault, LocalDbFileName, LastSuccessfulConnection) VALUES (@Name, @ServerIp, @Port, @UserName, @Password, @Database, @IsDefault, @LocalDbFileName, @LastSuccessfulConnection)";
                 using (var cmd = new SQLiteCommand(sql, conn))
                 {
                     cmd.Parameters.AddWithValue("@Name", info.Name ?? "");
@@ -128,6 +140,7 @@ namespace K3CloudDataDictionary.Helpers
                     cmd.Parameters.AddWithValue("@Database", info.Database ?? "");
                     cmd.Parameters.AddWithValue("@IsDefault", info.IsDefault ? 1 : 0);
                     cmd.Parameters.AddWithValue("@LocalDbFileName", (object)info.LocalDbFileName ?? DBNull.Value);
+                    cmd.Parameters.AddWithValue("@LastSuccessfulConnection", (object)info.LastSuccessfulConnection ?? DBNull.Value);
                     cmd.ExecuteNonQuery();
                 }
                 using (var cmd = new SQLiteCommand("SELECT last_insert_rowid()", conn))
@@ -137,13 +150,46 @@ namespace K3CloudDataDictionary.Helpers
             }
         }
 
+        public static ConnectionInfo LoadById(int id)
+        {
+            using (var conn = new SQLiteConnection(ConnectionString))
+            {
+                conn.Open();
+                string sql = "SELECT Id, Name, ServerIp, Port, UserName, Password, Database, IsDefault, LocalDbFileName, LastSuccessfulConnection FROM Connections WHERE Id=@Id LIMIT 1";
+                using (var cmd = new SQLiteCommand(sql, conn))
+                {
+                    cmd.Parameters.AddWithValue("@Id", id);
+                    using (var reader = cmd.ExecuteReader())
+                    {
+                        if (reader.Read())
+                        {
+                            return new ConnectionInfo
+                            {
+                                Id = reader.GetInt32(0),
+                                Name = reader.GetString(1),
+                                ServerIp = reader.GetString(2),
+                                Port = reader.GetInt32(3),
+                                UserName = reader.GetString(4),
+                                Password = PasswordHelper.Decrypt(reader.GetString(5)),
+                                Database = reader.GetString(6),
+                                IsDefault = reader.GetInt32(7) == 1,
+                                LocalDbFileName = reader.IsDBNull(8) ? null : reader.GetString(8),
+                                LastSuccessfulConnection = reader.IsDBNull(9) ? null : reader.GetString(9)
+                            };
+                        }
+                    }
+                }
+            }
+            return null;
+        }
+
         public static void Update(ConnectionInfo info)
         {
             using (var conn = new SQLiteConnection(ConnectionString))
             {
                 conn.Open();
                 if (info.IsDefault) ClearDefaultFlag(conn);
-                string sql = "UPDATE Connections SET Name=@Name, ServerIp=@ServerIp, Port=@Port, UserName=@UserName, Password=@Password, Database=@Database, IsDefault=@IsDefault, LocalDbFileName=@LocalDbFileName WHERE Id=@Id";
+                string sql = "UPDATE Connections SET Name=@Name, ServerIp=@ServerIp, Port=@Port, UserName=@UserName, Password=@Password, Database=@Database, IsDefault=@IsDefault, LocalDbFileName=@LocalDbFileName, LastSuccessfulConnection=@LastSuccessfulConnection WHERE Id=@Id";
                 using (var cmd = new SQLiteCommand(sql, conn))
                 {
                     cmd.Parameters.AddWithValue("@Name", info.Name ?? "");
@@ -154,6 +200,7 @@ namespace K3CloudDataDictionary.Helpers
                     cmd.Parameters.AddWithValue("@Database", info.Database ?? "");
                     cmd.Parameters.AddWithValue("@IsDefault", info.IsDefault ? 1 : 0);
                     cmd.Parameters.AddWithValue("@LocalDbFileName", (object)info.LocalDbFileName ?? DBNull.Value);
+                    cmd.Parameters.AddWithValue("@LastSuccessfulConnection", (object)info.LastSuccessfulConnection ?? DBNull.Value);
                     cmd.Parameters.AddWithValue("@Id", info.Id);
                     cmd.ExecuteNonQuery();
                 }
@@ -181,6 +228,24 @@ namespace K3CloudDataDictionary.Helpers
                 ClearDefaultFlag(conn);
                 using (var cmd = new SQLiteCommand("UPDATE Connections SET IsDefault=1 WHERE Id=@Id", conn))
                 {
+                    cmd.Parameters.AddWithValue("@Id", id);
+                    cmd.ExecuteNonQuery();
+                }
+            }
+        }
+
+        /// <summary>
+        /// 记录连接成功连接的时间戳
+        /// </summary>
+        public static void RecordSuccessfulConnection(int id)
+        {
+            using (var conn = new SQLiteConnection(ConnectionString))
+            {
+                conn.Open();
+                string timestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
+                using (var cmd = new SQLiteCommand("UPDATE Connections SET LastSuccessfulConnection=@Timestamp WHERE Id=@Id", conn))
+                {
+                    cmd.Parameters.AddWithValue("@Timestamp", timestamp);
                     cmd.Parameters.AddWithValue("@Id", id);
                     cmd.ExecuteNonQuery();
                 }

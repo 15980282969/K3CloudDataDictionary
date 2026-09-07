@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Data.SqlClient;
 using System.Linq;
 using System.Text.RegularExpressions;
 using K3CloudDataDictionary.Cli.Services;
@@ -36,36 +37,38 @@ namespace K3CloudDataDictionary.Cli.Commands
             try
             {
                 var connectionString = Program.ResolveConnectionString(options);
-                var service = new MetadataQueryService(connectionString);
-
-                switch (queryName)
+                using (var service = new MetadataQueryService(connectionString))
                 {
-                    case "user-licenses":
-                        return ExecuteUserLicenses(queryArgs, service);
 
-                    case "blocking":
-                        return ExecuteBlocking(service);
+                    switch (queryName)
+                    {
+                        case "user-licenses":
+                            return ExecuteUserLicenses(queryArgs, service);
 
-                    case "mo-pick-summary":
-                        return ExecuteMoSummary(queryArgs, mo => service.QueryMoPickSummary(mo));
+                        case "blocking":
+                            return ExecuteBlocking(service);
 
-                    case "mo-return-summary":
-                        return ExecuteMoSummary(queryArgs, mo => service.QueryMoReturnSummary(mo));
+                        case "mo-pick-summary":
+                            return ExecuteMoSummary(queryArgs, mo => service.QueryMoPickSummary(mo));
 
-                    case "mo-instock-summary":
-                        return ExecuteMoSummary(queryArgs, mo => service.QueryMoInstockSummary(mo));
+                        case "mo-return-summary":
+                            return ExecuteMoSummary(queryArgs, mo => service.QueryMoReturnSummary(mo));
 
-                    case "bill-by-no":
-                        return ExecuteBillByNo(queryArgs, service);
+                        case "mo-instock-summary":
+                            return ExecuteMoSummary(queryArgs, mo => service.QueryMoInstockSummary(mo));
 
-                    case "list":
-                        var queries = service.GetAvailableQueries();
-                        JsonOutputWriter.WriteSuccess("query", queries);
-                        return 0;
+                        case "bill-by-no":
+                            return ExecuteBillByNo(queryArgs, service);
 
-                    default:
-                        JsonOutputWriter.WriteError("query", $"未知的查询名称: {queryName}。使用 'k3cli query list' 查看可用查询。");
-                        return 1;
+                        case "list":
+                            var queries = service.GetAvailableQueries();
+                            JsonOutputWriter.WriteSuccess("query", queries);
+                            return 0;
+
+                        default:
+                            JsonOutputWriter.WriteError("query", $"未知的查询名称: {queryName}。使用 'k3cli query list' 查看可用查询。");
+                            return 1;
+                    }
                 }
             }
             catch (Exception ex)
@@ -144,11 +147,31 @@ namespace K3CloudDataDictionary.Cli.Commands
                         parameters["@p" + (i + 1)] = values[i].Trim();
                 }
 
+                int timeout = 60;
+                var timeoutArg = Program.GetArgValue(args, "timeout");
+                if (!string.IsNullOrEmpty(timeoutArg) && (!int.TryParse(timeoutArg, out timeout) || timeout <= 0))
+                {
+                    JsonOutputWriter.WriteError("query", "--timeout 必须是大于 0 的整数（秒）");
+                    return 1;
+                }
+
                 var connectionString = Program.ResolveConnectionString(options);
-                var service = new MetadataQueryService(connectionString);
-                var results = service.ExecuteSql(sql, parameters);
-                JsonOutputWriter.WriteSuccess("query", results);
+                using (var service = new MetadataQueryService(connectionString))
+                {
+                    var results = service.ExecuteSql(sql, parameters, timeout);
+                    JsonOutputWriter.WriteSuccess("query", results);
+                }
                 return 0;
+            }
+            catch (SqlException ex) when (ex.Number == -2 || ex.Number == 4060 || ex.Number == 11 || ex.Number == 4053)
+            {
+                JsonOutputWriter.WriteError("query", $"数据库连接失败（错误码 {ex.Number}）: {ex.Message}");
+                return 2;
+            }
+            catch (SqlException ex)
+            {
+                JsonOutputWriter.WriteError("query", $"SQL 执行错误 [{ex.Number}]: {ex.Message}");
+                return 3;
             }
             catch (Exception ex)
             {

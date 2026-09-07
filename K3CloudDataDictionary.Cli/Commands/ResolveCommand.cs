@@ -33,24 +33,26 @@ namespace K3CloudDataDictionary.Cli.Commands
             try
             {
                 var connectionString = Program.ResolveConnectionString(options);
-                var service = new MetadataQueryService(connectionString);
-                var results = service.ResolveObject(objectId);
-
-                var output = new List<object>();
-                foreach (var row in results)
+                using (var service = new MetadataQueryService(connectionString))
                 {
-                    output.Add(new
-                    {
-                        lookupId = row.GetValueOrDefault("FID")?.ToString() ?? "",
-                        formId = row.GetValueOrDefault("FFORMID")?.ToString() ?? "",
-                        tableName = row.GetValueOrDefault("FTABLENAME")?.ToString() ?? "",
-                        pkFieldName = row.GetValueOrDefault("FPKFIELDNAME")?.ToString() ?? "",
-                        orgFieldName = row.GetValueOrDefault("FORGFIELDNAME")?.ToString() ?? ""
-                    });
-                }
+                    var results = service.ResolveObject(objectId);
 
-                JsonOutputWriter.WriteSuccess("resolve", output);
-                return 0;
+                    var output = new List<object>();
+                    foreach (var row in results)
+                    {
+                        output.Add(new
+                        {
+                            lookupId = row.GetValueOrDefault("FID")?.ToString() ?? "",
+                            formId = row.GetValueOrDefault("FFORMID")?.ToString() ?? "",
+                            tableName = row.GetValueOrDefault("FTABLENAME")?.ToString() ?? "",
+                            pkFieldName = row.GetValueOrDefault("FPKFIELDNAME")?.ToString() ?? "",
+                            orgFieldName = row.GetValueOrDefault("FORGFIELDNAME")?.ToString() ?? ""
+                        });
+                    }
+
+                    JsonOutputWriter.WriteSuccess("resolve", output);
+                    return 0;
+                }
             }
             catch (Exception ex)
             {

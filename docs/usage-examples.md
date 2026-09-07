@@ -479,6 +479,19 @@ k3cli billstatus --form PUR_PurchaseOrder --field FDocumentStatus --pretty
 k3cli billstatus --form PUR_PurchaseOrder --keyword "已审核" --pretty
 ```
 
+#### 状态值中文注释说明
+
+`billstatus` 命令输出的每个状态项都包含 `annotation` 字段，提供中文注释和常用标识：
+
+| 状态值 | 中文注释 | 常用标识 |
+|--------|----------|----------|
+| Z | 暂存 | ← 常用 |
+| A | 待审核 | ← 常用 |
+| B | 审核中 | - |
+| C | 已审核 | ← 常用 |
+| D | 重新审核 | - |
+| E | 已驳回 | ← 常用 |
+
 输出示例：
 
 ```json
@@ -498,11 +511,12 @@ k3cli billstatus --form PUR_PurchaseOrder --keyword "已审核" --pretty
       "elementType": "40",
       "elementTypeName": "BillStatusField",
       "statusItems": [
-        { "value": "Z", "name": "暂存" },
-        { "value": "A", "name": "创建" },
-        { "value": "B", "name": "已审核" },
-        { "value": "C", "name": "已反审" },
-        { "value": "D", "name": "重新审核" }
+        { "value": "Z", "name": "暂存", "annotation": "暂存 ← 常用" },
+        { "value": "A", "name": "创建", "annotation": "待审核 ← 常用" },
+        { "value": "B", "name": "已审核", "annotation": "审核中" },
+        { "value": "C", "name": "已反审", "annotation": "已审核 ← 常用" },
+        { "value": "D", "name": "重新审核", "annotation": "重新审核" },
+        { "value": "E", "name": "已驳回", "annotation": "已驳回 ← 常用" }
       ]
     }
   ],
@@ -1142,19 +1156,456 @@ WHERE FEntryID = (
 
 ---
 
+## 案例：单据头→明细字段批量同步（sql sync 命令）
+
+### 场景说明
+
+在金蝶 K3Cloud 中，部分自定义字段同时存在于单据头和明细体中（如"追加采购原因"），但数据可能只填写在单据头，明细体为空。`sql sync` 命令可自动生成将单据头字段值批量同步到明细体的 SQL 语句，仅当单据头不为空且明细为空时更新，避免覆盖已有数据。
+
+> **安全说明**：`sql sync` 命令仅生成 SQL 模板文本，不会执行任何写操作。输出的 SQL 需要复制到数据库管理工具中手动执行。
+
+### 参数说明
+
+| 参数 | 必填 | 说明 |
+|------|------|------|
+| `--form <identifier>` | 是 | 表单标识，如 `PUR_Requisition` |
+| `--field <keyword>` | 是 | 字段关键词，支持中文名、字段 Key、物理列名 |
+| `--connection, -c <id>` | 否 | 指定连接 ID |
+| `--pretty` | 否 | 格式化 JSON 输出 |
+
+### 使用示例
+
+#### 基本用法：按中文名称同步
+
+```bash
+k3cli sql sync --form PUR_Requisition --field 追加采购原因 --pretty
+```
+
+#### 按字段 Key 同步
+
+```bash
+k3cli sql sync --form PUR_Requisition --field F_ROV_ZJCGYY --pretty
+```
+
+#### 同步委外订单的字段
+
+```bash
+k3cli sql sync --form SUB_SUBREQORDER --field 追加采购原因 --pretty
+```
+
+### 输出示例
+
+```json
+{
+  "success": true,
+  "command": "sql sync",
+  "data": {
+    "formIdentifier": "PUR_Requisition",
+    "formName": "采购申请单",
+    "fieldMapping": {
+      "headField": {
+        "name": "追加采购原因",
+        "key": "F_ROV_ZJCGYY",
+        "fieldName": "F_ROV_ZJCGYY",
+        "table": "T_PUR_Requisition",
+        "entityKey": "Requisition"
+      },
+      "entryField": {
+        "name": "追加采购原因",
+        "key": "F_RHHE_ZJCGYY",
+        "fieldName": "F_RHHE_ZJCGYY",
+        "table": "T_PUR_ReqEntry",
+        "entityKey": "ReqEntry"
+      }
+    },
+    "updateSql": "UPDATE T_PUR_ReqEntry\nSET F_RHHE_ZJCGYY = h.F_ROV_ZJCGYY\nFROM T_PUR_ReqEntry d\nINNER JOIN T_PUR_Requisition h ON d.FID = h.FID\nWHERE h.F_ROV_ZJCGYY IS NOT NULL\n  AND h.F_ROV_ZJCGYY <> ''\n  AND (d.F_RHHE_ZJCGYY IS NULL OR d.F_RHHE_ZJCGYY = '');",
+    "previewSql": "SELECT d.FENTRYID, d.FID, h.F_ROV_ZJCGYY AS HeadValue, d.F_RHHE_ZJCGYY AS DetailValue\nFROM T_PUR_ReqEntry d\nINNER JOIN T_PUR_Requisition h ON d.FID = h.FID\nWHERE h.F_ROV_ZJCGYY IS NOT NULL\n  AND h.F_ROV_ZJCGYY <> ''\n  AND (d.F_RHHE_ZJCGYY IS NULL OR d.F_RHHE_ZJCGYY = '');",
+    "hint": "建议先执行 previewSql 预览受影响的数据，确认无误后再执行 updateSql。"
+  }
+}
+```
+
+### 输出字段说明
+
+| 字段 | 含义 |
+|------|------|
+| `formIdentifier` | 表单标识 |
+| `formName` | 表单名称 |
+| `fieldMapping.headField` | 单据头字段信息（名称、Key、物理列名、所在表） |
+| `fieldMapping.entryField` | 明细体字段信息（名称、Key、物理列名、所在表） |
+| `updateSql` | 可直接使用的 UPDATE 同步 SQL |
+| `previewSql` | 预览受影响数据的 SELECT SQL |
+| `hint` | 操作建议 |
+
+### 典型使用流程
+
+```
+1. 先用 fields --compare 确认字段在单据头和明细体中的分布
+   k3cli fields --form PUR_Requisition --compare --keyword 追加采购原因 --pretty
+
+2. 用 sql sync 生成同步 SQL
+   k3cli sql sync --form PUR_Requisition --field 追加采购原因 --pretty
+
+3. 复制 previewSql 到 SSMS 预览受影响的数据
+
+4. 确认无误后执行 updateSql
+```
+
+### 注意事项
+
+1. `sql sync` 命令**仅生成文本**，不会执行任何 SQL
+2. 生成的 SQL 使用 `FROM ... INNER JOIN` 语法（SQL Server 扩展 UPDATE 语法）
+3. 同步条件为：单据头字段 `IS NOT NULL AND <> ''`，且明细字段 `IS NULL OR = ''`
+4. 若单据头和明细体的物理列名不同，命令会自动识别各自的列名
+5. 建议先执行 `previewSql` 预览数据，确认无误后再执行 `updateSql`
+6. 如果字段在明细体中不存在，命令会返回错误提示
+
+---
+
+## 案例：对比单据头和明细体字段（fields --compare）
+
+### 场景说明
+
+在编写单据头→明细同步 SQL 之前，需要了解哪些字段仅存在于单据头、哪些仅存在于明细体、哪些两者都有。`fields --compare` 参数可快速对比单据头和明细体的字段分布，帮助定位需要同步的字段。
+
+### 参数说明
+
+| 参数 | 必填 | 说明 |
+|------|------|------|
+| `--form <identifier>` | 是 | 表单标识 |
+| `--compare` | 是 | 启用对比模式 |
+| `--keyword <keyword>` | 否 | 按关键词过滤对比结果 |
+| `--connection, -c <id>` | 否 | 指定连接 ID |
+| `--pretty` | 否 | 格式化 JSON 输出 |
+
+### 使用示例
+
+#### 对比所有字段
+
+```bash
+k3cli fields --form PUR_Requisition --compare --pretty
+```
+
+#### 按关键词过滤
+
+```bash
+k3cli fields --form PUR_Requisition --compare --keyword 追加采购 --pretty
+```
+
+### 输出示例
+
+```json
+{
+  "success": true,
+  "command": "fields compare",
+  "data": {
+    "formIdentifier": "PUR_Requisition",
+    "formName": "采购申请单",
+    "headEntity": {
+      "key": "Requisition",
+      "name": "基本信息",
+      "table": "T_PUR_Requisition"
+    },
+    "entryEntity": {
+      "key": "ReqEntry",
+      "name": "明细信息",
+      "table": "T_PUR_ReqEntry"
+    },
+    "headOnlyCount": 8,
+    "entryOnlyCount": 35,
+    "bothCount": 3,
+    "headOnly": [
+      { "name": "补单天数", "key": "F_ROV_BDTS", "fieldName": "F_ROV_BDTS", "table": "T_PUR_Requisition" },
+      { "name": "补单原因", "key": "F_ROV_BDYY", "fieldName": "F_ROV_BDYY", "table": "T_PUR_Requisition" },
+      { "name": "追加采购原因", "key": "F_ROV_ZJCGYY", "fieldName": "F_ROV_ZJCGYY", "table": "T_PUR_Requisition" }
+    ],
+    "entryOnly": [
+      { "name": "行号", "key": "F_ROV_HH", "fieldName": "F_ROV_HH", "table": "T_PUR_ReqEntry" },
+      { "name": "采购员", "key": "F_ROV_PURCHASERID", "fieldName": "F_ROV_PURCHASERID", "table": "T_PUR_ReqEntry" }
+    ],
+    "both": [
+      { "name": "制单超期天数", "key": "F_ROV_ZDCQTS", "fieldName": "F_ROV_ZDCQTS", "headTable": "T_PUR_Requisition", "entryTable": "T_PUR_ReqEntry" }
+    ]
+  }
+}
+```
+
+### 输出字段说明
+
+| 字段 | 含义 |
+|------|------|
+| `headEntity` | 单据头实体信息（Key、名称、物理表） |
+| `entryEntity` | 明细体实体信息（Key、名称、物理表） |
+| `headOnlyCount` | 仅单据头有的字段数量 |
+| `entryOnlyCount` | 仅明细体有的字段数量 |
+| `bothCount` | 两者都有的字段数量 |
+| `headOnly` | 仅单据头有的字段列表 |
+| `entryOnly` | 仅明细体有的字段列表 |
+| `both` | 两者都有的字段列表 |
+
+### 典型使用场景
+
+1. **字段同步前分析**：用 `--compare` 查看哪些字段仅在单据头，然后用 `sql sync` 生成同步 SQL
+2. **字段分布概览**：快速了解表单的字段在头/明细中的分布情况
+3. **关键词过滤**：用 `--keyword` 缩小范围，快速定位特定字段
+
+### 注意事项
+
+1. 对比基于字段名称（Name）匹配，同名字段会被归类到 `both`
+2. 如果单据头和明细体中同名字段的物理列名不同，`both` 列表会分别显示各自的表名
+3. 对比结果可配合 `sql sync` 命令使用，快速完成字段同步
+
+---
+
+## 案例：多关键词批量查询字段
+
+### 场景说明
+
+当需要同时查询多个字段信息时，无需逐条执行命令。`fields` 命令的 `--keyword` 参数支持逗号（`,`）或分号（`;`）分隔的多关键词批量查询，系统会拆分关键词并对每个关键词独立查询，最终返回所有匹配结果的合并集合。
+
+### 使用示例
+
+#### 使用逗号分隔多个关键词
+
+```bash
+k3cli fields --form SUB_SUBREQORDER --keyword "追加采购原因,修改类别,单据状态" --pretty
+```
+
+#### 使用分号分隔多个关键词
+
+```bash
+k3cli fields --form PUR_PurchaseOrder --keyword "物料;供应商;日期" --pretty
+```
+
+#### 混合使用中英文分隔符
+
+```bash
+# 以下写法均有效
+k3cli fields --form PUR_PurchaseOrder --keyword "物料编码,供应商" --pretty
+k3cli fields --form PUR_PurchaseOrder --keyword "物料编码；供应商" --pretty
+k3cli fields --form PUR_PurchaseOrder --keyword "物料编码，供应商" --pretty
+```
+
+### 输出示例
+
+```json
+{
+  "success": true,
+  "command": "fields",
+  "data": [
+    {
+      "formName": "采购申请单",
+      "entityName": "基本信息",
+      "table": "T_PUR_Requisition",
+      "key": "F_ROV_ZJCGYY",
+      "name": "追加采购原因",
+      "fieldName": "F_ROV_ZJCGYY",
+      "elementType": "1",
+      "elementTypeName": "文本"
+    },
+    {
+      "formName": "采购申请单",
+      "entityName": "明细信息",
+      "table": "T_PUR_ReqEntry",
+      "key": "F_RHHE_ZJCGYY",
+      "name": "追加采购原因",
+      "fieldName": "F_RHHE_ZJCGYY",
+      "elementType": "1",
+      "elementTypeName": "文本"
+    },
+    {
+      "formName": "采购申请单",
+      "entityName": "基本信息",
+      "table": "T_PUR_Requisition",
+      "key": "FDocumentStatus",
+      "name": "单据状态",
+      "fieldName": "FDOCUMENTSTATUS",
+      "elementType": "40",
+      "elementTypeName": "单据状态"
+    }
+  ],
+  "count": 3
+}
+```
+
+### 匹配规则
+
+1. 多关键词之间为"**或**"关系，匹配任意一个即返回
+2. 每个关键词独立进行模糊匹配（或精确匹配，配合 `--exact`）
+3. 支持的分隔符：英文逗号 `,`、中文逗号 `，`、英文分号 `;`、中文分号 `；`
+4. 空关键词会被自动忽略
+
+### 配合精确匹配使用
+
+```bash
+# 精确匹配多个字段（字段名必须完全相等）
+k3cli fields --form PUR_PurchaseOrder --keyword "FMaterialId,FSupplierId" --exact --pretty
+```
+
+---
+
+## 案例：按字段类型过滤（fields --type）
+
+### 场景说明
+
+当表单字段较多时，可能需要只查看特定类型的字段。`--type` 参数支持按字段所属实体类型或字段属性进行过滤。
+
+### 参数说明
+
+| 类型值 | 说明 |
+|--------|------|
+| `entry` | 只显示明细实体（单据体）字段 |
+| `head` | 只显示头部实体（单据头）字段 |
+| `oid` | 只显示 OID 相关字段 |
+| `normal` | 只显示普通业务字段（非 OID） |
+
+### 使用示例
+
+#### 只显示明细体字段
+
+```bash
+k3cli fields --form PUR_PurchaseOrder --type entry --pretty
+```
+
+#### 只显示单据头字段
+
+```bash
+k3cli fields --form PUR_PurchaseOrder --type head --pretty
+```
+
+#### 只显示普通业务字段（排除 OID）
+
+```bash
+k3cli fields --form PUR_PurchaseOrder --type normal --pretty
+```
+
+#### 组合使用：明细体 + 关键词过滤
+
+```bash
+k3cli fields --form PUR_PurchaseOrder --type entry --keyword "物料" --pretty
+```
+
+### 典型使用场景
+
+1. **快速了解明细字段**：使用 `--type entry` 快速查看单据体所有字段
+2. **单据头字段分析**：使用 `--type head` 查看单据头字段分布
+3. **配合其他参数**：可与 `--keyword`、`--entity` 等参数组合使用
+
+---
+
+## 案例：连接管理功能增强
+
+### 场景说明
+
+CLI 工具现在支持更完善的连接管理功能，包括自动连接检测、连接历史追踪和简化的连接测试。
+
+### 3.1 自动连接检测
+
+执行任何查询命令（`fields`、`search`、`form` 等）前，系统会自动检测连接可达性。若连接失败，会显示明确的错误提示。
+
+```bash
+k3cli fields --form PUR_PurchaseOrder --pretty
+```
+
+输出示例（连接失败时）：
+
+```
+正在检测连接: 采购系统 (AISC001)...
+连接检测失败: 网络相关或特定于实例的错误...
+网络连接失败，请检查 VPN 是否已开启或数据库连接配置是否正确
+```
+
+### 3.2 连接历史追踪
+
+`connections list` 输出新增 `lastSuccessfulConnection` 字段，显示上次连接成功的时间戳。
+
+```bash
+k3cli connections list --pretty
+```
+
+输出示例：
+
+```json
+{
+  "success": true,
+  "command": "connections",
+  "data": [
+    {
+      "id": 1,
+      "name": "采购系统",
+      "server": "192.168.1.100,1433",
+      "database": "AISC001",
+      "user": "sa",
+      "isDefault": true,
+      "displayName": "采购系统 (AISC001)",
+      "lastSuccessfulConnection": "2026-07-29 10:30:00"
+    },
+    {
+      "id": 2,
+      "name": "测试环境",
+      "server": "192.168.1.200,1433",
+      "database": "AISC_TEST",
+      "user": "sa",
+      "isDefault": false,
+      "displayName": "测试环境 (AISC_TEST)",
+      "lastSuccessfulConnection": "从未连接"
+    }
+  ],
+  "count": 2
+}
+```
+
+### 3.3 默认连接测试
+
+`connections test` 命令现在支持不带 `--id` 参数，默认测试当前设置的默认连接。
+
+```bash
+# 测试默认连接（无需指定 --id）
+k3cli connections test
+
+# 测试指定连接
+k3cli connections test --id 2
+```
+
+输出示例：
+
+```json
+{
+  "success": true,
+  "command": "connections",
+  "data": {
+    "connectionId": 1,
+    "name": "采购系统",
+    "server": "192.168.1.100,1433",
+    "database": "AISC001",
+    "success": true,
+    "message": "连接成功",
+    "lastSuccessfulConnection": "2026-07-29 10:35:00"
+  }
+}
+```
+
+### 连接管理最佳实践
+
+1. **定期检查连接状态**：使用 `connections list --pretty` 查看上次成功连接时间
+2. **快速验证连接**：使用 `connections test` 测试默认连接是否正常
+3. **多环境管理**：使用 `connections test --id <id>` 测试不同环境的连接
+
+---
+
 ## 命令速查表
 
 | 命令 | 用途 | 关键参数 |
 |------|------|---------|
-| `fields` | 查询表单字段（支持括号容错+实体提示） | `--form`, `--entity`, `--keyword`, `--exact` |
+| `fields` | 查询表单字段（支持多关键词+类型过滤） | `--form`, `--entity`, `--keyword`, `--exact`, `--type` |
 | `search` | 搜索表单或字段 | `--keyword`, `--type field\|table`, `--exact` |
 | `form` | 查询表单元数据 | `--id` |
 | `billtype` | 查询单据类型（列表/详情） | `--form`, `--id`, `--keyword` |
-| `billstatus` | 查询单据状态枚举值 | `--form`, `--field`, `--keyword` |
+| `billstatus` | 查询单据状态枚举值（含中文注释） | `--form`, `--field`, `--keyword` |
 | `enum` | 查询下拉列表枚举值 | `--id` (enumType) |
 | `assistantdata` | 查询辅助资料选项 | `--id` (lookUpObject) |
 | `resolve` | 解析 lookUpObject 对应表单 | `--id` (lookUpObject) |
-| `connections` | 管理数据库连接 | `list`, `add`, `test`, `set-default` |
+| `connections` | 管理数据库连接（含自动检测+历史追踪） | `list`, `add`, `test`, `set-default` |
 | `probe` | 探测物理表列（字典未收录时使用） | `--table`, `--keyword` |
 | `sql` | 生成 SQL 辅助信息（模板文本，不执行） | `--form`, `--fields` |
 
@@ -1383,3 +1834,144 @@ k3cli query user-licenses --org "荣耀" --user "Harrison" --pretty
 2. 查询结果中的列名使用中文别名（如"组织名称"、"用户名称"）
 3. 过滤参数支持模糊匹配（LIKE %keyword%）
 4. 新增查询需要重新编译 CLI 工具
+
+---
+
+## 案例：查询数据库阻塞/死锁（blocking 查询）
+
+### 场景说明
+
+当数据库出现性能问题或用户反馈操作卡顿时，可以使用 `blocking` 查询快速定位阻塞链，找出哪些进程在阻塞其他进程，以及被阻塞的 SQL 语句内容。
+
+### 使用方式
+
+```bash
+# 查询当前所有阻塞/死锁进程
+k3cli query blocking --pretty
+```
+
+### 输出示例
+
+```json
+{
+  "success": true,
+  "command": "query",
+  "data": [
+    {
+      "SPID": 55,
+      "BLOCKED": 0,
+      "WAITTIME": 0,
+      "LASTWAITTYPE": "",
+      "WAITRESOURCE": "",
+      "OPEN_TRAN": 1,
+      "STATUS": "sleeping",
+      "DBID": 10,
+      "CPU": 1250,
+      "PHYSICAL_IO": 0,
+      "MEMUSAGE": 2,
+      "LOGIN_TIME": "2026-07-10 09:30:00",
+      "LAST_BATCH": "2026-07-10 10:15:00",
+      "HOSTNAME": "APP-SERVER-01",
+      "program_name": ".Net SqlClient Data Provider",
+      "HOSTPROCESS": "12345",
+      "CMD": "AWAITING COMMAND",
+      "NT_DOMAIN": "DOMAIN",
+      "NT_USERNAME": "user01",
+      "NET_ADDRESS": "00:11:22:33:44:55",
+      "NET_LIBRARY": "TCP/IP",
+      "LOGINAME": "sa",
+      "TEXT": "UPDATE T_PUR_POOrder SET FDOCUMENTSTATUS = 'B' WHERE FID = 100001"
+    },
+    {
+      "SPID": 62,
+      "BLOCKED": 55,
+      "WAITTIME": 30000,
+      "LASTWAITTYPE": "LCK_M_X",
+      "WAITRESOURCE": "KEY: 10:...",
+      "OPEN_TRAN": 0,
+      "STATUS": "suspended",
+      "DBID": 10,
+      "CPU": 500,
+      "PHYSICAL_IO": 0,
+      "MEMUSAGE": 2,
+      "LOGIN_TIME": "2026-07-10 09:30:00",
+      "LAST_BATCH": "2026-07-10 10:15:30",
+      "HOSTNAME": "APP-SERVER-02",
+      "program_name": ".Net SqlClient Data Provider",
+      "HOSTPROCESS": "12346",
+      "CMD": "SELECT",
+      "NT_DOMAIN": "DOMAIN",
+      "NT_USERNAME": "user02",
+      "NET_ADDRESS": "00:11:22:33:44:66",
+      "NET_LIBRARY": "TCP/IP",
+      "LOGINAME": "sa",
+      "TEXT": "SELECT * FROM T_PUR_POOrder WHERE FID = 100001"
+    }
+  ],
+  "count": 2
+}
+```
+
+### 输出字段说明
+
+| 字段 | 含义 | 排查要点 |
+|------|------|---------|
+| `SPID` | 进程 ID | 唯一标识每个连接 |
+| `BLOCKED` | 被谁阻塞（0=未被阻塞） | **> 0 表示该进程被 SPID=BLOCKED 值的进程阻塞** |
+| `WAITTIME` | 等待时间（毫秒） | 值越大说明阻塞越严重 |
+| `LASTWAITTYPE` | 等待类型 | `LCK_M_X` = 排他锁等待，`LCK_M_S` = 共享锁等待 |
+| `WAITRESOURCE` | 等待的资源 | 被锁定的具体资源标识 |
+| `OPEN_TRAN` | 未提交事务数 | **> 0 表示有未提交事务，可能是阻塞源头** |
+| `STATUS` | 进程状态 | `sleeping` + `OPEN_TRAN > 0` = 持有锁但未操作 |
+| `LOGINAME` | 登录名 | 定位是哪个用户/应用发起的 |
+| `HOSTNAME` | 主机名 | 定位是哪台服务器发起的 |
+| `program_name` | 程序名称 | 定位是哪个应用发起的 |
+| `TEXT` | 执行的 SQL 文本 | **最关键字段，显示阻塞相关的 SQL 语句** |
+
+### 阻塞链分析
+
+从输出中可以构建阻塞链：
+
+```
+SPID 55 (BLOCKED=0, OPEN_TRAN=1)  ← 阻塞源头
+  └── SPID 62 (BLOCKED=55, WAITTIME=30000)  ← 被阻塞
+```
+
+**分析步骤**：
+
+1. 找到 `BLOCKED = 0` 且 `OPEN_TRAN > 0` 的进程 → **阻塞源头**
+2. 查看其 `TEXT` 字段 → 确认正在执行的 SQL
+3. 找到 `BLOCKED > 0` 的进程 → **被阻塞的进程**
+4. 根据 `WAITTIME` 判断阻塞严重程度
+
+### 常见阻塞场景
+
+| 场景 | 特征 | 处理建议 |
+|------|------|---------|
+| 长事务未提交 | `STATUS=sleeping`, `OPEN_TRAN>0`, `LASTWAITTYPE` 为空 | 找到应用端提交或回滚事务 |
+| 锁等待 | `LASTWAITTYPE=LCK_M_X` 或 `LCK_M_S` | 优化 SQL 减少锁范围 |
+| 死锁 | 多个进程互相阻塞 | SQL Server 会自动选择牺牲者 |
+| 索引缺失导致表锁 | `WAITRESOURCE` 显示表级锁 | 添加合适的索引 |
+
+### 权限要求
+
+执行 `blocking` 查询需要当前登录用户具有 **`VIEW SERVER STATE`** 权限。
+
+```sql
+-- 授予权限（需要 sysadmin 角色执行）
+GRANT VIEW SERVER STATE TO [用户名];
+```
+
+如果权限不足，会返回错误：
+```
+拒绝了对对象 'server' (数据库 'master')的 VIEW SERVER STATE 权限。
+用户没有执行此操作的权限。
+```
+
+### 注意事项
+
+1. `blocking` 查询**无需额外参数**，直接执行即可
+2. 查询结果包含**阻塞链中的所有进程**（阻塞者和被阻塞者）
+3. `TEXT` 字段显示的是进程最近执行的 SQL，不一定是当前正在执行的
+4. 如果没有阻塞，返回空结果 `{"count": 0}`
+5. 该查询访问 `master` 数据库的系统视图，需要相应权限

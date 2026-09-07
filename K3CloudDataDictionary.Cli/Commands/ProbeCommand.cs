@@ -34,70 +34,72 @@ namespace K3CloudDataDictionary.Cli.Commands
             try
             {
                 var connectionString = Program.ResolveConnectionString(options);
-                var service = new MetadataQueryService(connectionString);
-
-                // 判断是否包含通配符
-                bool isPattern = tableName.Contains("*");
-                List<Dictionary<string, object>> results;
-
-                if (isPattern)
+                using (var service = new MetadataQueryService(connectionString))
                 {
-                    // 批量模式匹配
-                    results = service.ProbePhysicalColumnsByPattern(tableName, keyword);
-                }
-                else
-                {
-                    // 单表探测
-                    results = service.ProbePhysicalColumns(tableName, keyword);
-                }
 
-                // 检查是否有视图检测提示
-                string viewHint = null;
-                var output = new List<object>();
-                foreach (var row in results)
-                {
-                    // 跳过提示行，单独处理
-                    if (row.ContainsKey("_hint"))
+                    // 判断是否包含通配符
+                    bool isPattern = tableName.Contains("*");
+                    List<Dictionary<string, object>> results;
+
+                    if (isPattern)
                     {
-                        viewHint = row.GetValueOrDefault("message")?.ToString();
-                        continue;
+                        // 批量模式匹配
+                        results = service.ProbePhysicalColumnsByPattern(tableName, keyword);
+                    }
+                    else
+                    {
+                        // 单表探测
+                        results = service.ProbePhysicalColumns(tableName, keyword);
                     }
 
-                    var item = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase)
+                    // 检查是否有视图检测提示
+                    string viewHint = null;
+                    var output = new List<object>();
+                    foreach (var row in results)
                     {
-                        ["columnName"] = row.GetValueOrDefault("columnName")?.ToString() ?? "",
-                        ["dataType"] = row.GetValueOrDefault("dataType")?.ToString() ?? "",
-                        ["maxLength"] = row.GetValueOrDefault("maxLength"),
-                        ["precision"] = row.GetValueOrDefault("precision"),
-                        ["scale"] = row.GetValueOrDefault("scale"),
-                        ["isNullable"] = row.GetValueOrDefault("isNullable")
-                    };
+                        // 跳过提示行，单独处理
+                        if (row.ContainsKey("_hint"))
+                        {
+                            viewHint = row.GetValueOrDefault("message")?.ToString();
+                            continue;
+                        }
 
-                    // 批量模式时附加表名
-                    if (isPattern && row.ContainsKey("table"))
-                    {
-                        item["table"] = row.GetValueOrDefault("table")?.ToString() ?? "";
+                        var item = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase)
+                        {
+                            ["columnName"] = row.GetValueOrDefault("columnName")?.ToString() ?? "",
+                            ["dataType"] = row.GetValueOrDefault("dataType")?.ToString() ?? "",
+                            ["maxLength"] = row.GetValueOrDefault("maxLength"),
+                            ["precision"] = row.GetValueOrDefault("precision"),
+                            ["scale"] = row.GetValueOrDefault("scale"),
+                            ["isNullable"] = row.GetValueOrDefault("isNullable")
+                        };
+
+                        // 批量模式时附加表名
+                        if (isPattern && row.ContainsKey("table"))
+                        {
+                            item["table"] = row.GetValueOrDefault("table")?.ToString() ?? "";
+                        }
+
+                        output.Add(item);
                     }
 
-                    output.Add(item);
-                }
-
-                // 如果检测到视图，在输出中附加提示信息
-                if (viewHint != null)
-                {
-                    var resultObj = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase)
+                    // 如果检测到视图，在输出中附加提示信息
+                    if (viewHint != null)
                     {
-                        ["hint"] = "view_detected",
-                        ["message"] = viewHint,
-                        ["columns"] = output
-                    };
-                    JsonOutputWriter.WriteSuccess("probe", resultObj);
+                        var resultObj = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase)
+                        {
+                            ["hint"] = "view_detected",
+                            ["message"] = viewHint,
+                            ["columns"] = output
+                        };
+                        JsonOutputWriter.WriteSuccess("probe", resultObj);
+                    }
+                    else
+                    {
+                        JsonOutputWriter.WriteSuccess("probe", output);
+                    }
+                    return 0;
                 }
-                else
-                {
-                    JsonOutputWriter.WriteSuccess("probe", output);
-                }
-                return 0;
             }
             catch (Exception ex)
             {

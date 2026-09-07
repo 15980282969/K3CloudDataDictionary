@@ -37,38 +37,40 @@ namespace K3CloudDataDictionary.Cli.Commands
             try
             {
                 var connectionString = Program.ResolveConnectionString(options);
-                var service = new MetadataQueryService(connectionString);
-                var results = service.QueryBillStatusItems(formIdentifier, fieldKey, keyword);
-
-                var output = new List<object>();
-                foreach (var row in results)
+                using (var service = new MetadataQueryService(connectionString))
                 {
-                    var statusItems = row.GetValueOrDefault("FSTATUSITEMS");
-                    var fieldOutput = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase)
-                    {
-                        ["formId"] = row.GetValueOrDefault("FFORMID")?.ToString() ?? "",
-                        ["formName"] = row.GetValueOrDefault("FDJMC")?.ToString() ?? "",
-                        ["entityName"] = row.GetValueOrDefault("FENTITYNAME")?.ToString() ?? "",
-                        ["table"] = row.GetValueOrDefault("FTABLENAME")?.ToString() ?? "",
-                        ["fieldKey"] = row.GetValueOrDefault("FKey")?.ToString() ?? "",
-                        ["fieldName"] = row.GetValueOrDefault("FName")?.ToString() ?? "",
-                        ["dbFieldName"] = row.GetValueOrDefault("FFieldName")?.ToString() ?? "",
-                        ["propertyName"] = row.GetValueOrDefault("FPropertyName")?.ToString() ?? "",
-                        ["elementType"] = row.GetValueOrDefault("FELEMENTTYPE")?.ToString() ?? "",
-                        ["elementTypeName"] = row.GetValueOrDefault("FELEMENTTYPENAME")?.ToString() ?? ""
-                    };
+                    var results = service.QueryBillStatusItems(formIdentifier, fieldKey, keyword);
 
-                    // 将 statusItems 作为嵌套子对象
-                    if (statusItems != null)
+                    var output = new List<object>();
+                    foreach (var row in results)
                     {
-                        fieldOutput["statusItems"] = statusItems;
+                        var statusItems = row.GetValueOrDefault("FSTATUSITEMS");
+                        var fieldOutput = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase)
+                        {
+                            ["formId"] = row.GetValueOrDefault("FFORMID")?.ToString() ?? "",
+                            ["formName"] = row.GetValueOrDefault("FDJMC")?.ToString() ?? "",
+                            ["entityName"] = row.GetValueOrDefault("FENTITYNAME")?.ToString() ?? "",
+                            ["table"] = row.GetValueOrDefault("FTABLENAME")?.ToString() ?? "",
+                            ["fieldKey"] = row.GetValueOrDefault("FKey")?.ToString() ?? "",
+                            ["fieldName"] = row.GetValueOrDefault("FName")?.ToString() ?? "",
+                            ["dbFieldName"] = row.GetValueOrDefault("FFieldName")?.ToString() ?? "",
+                            ["propertyName"] = row.GetValueOrDefault("FPropertyName")?.ToString() ?? "",
+                            ["elementType"] = row.GetValueOrDefault("FELEMENTTYPE")?.ToString() ?? "",
+                            ["elementTypeName"] = row.GetValueOrDefault("FELEMENTTYPENAME")?.ToString() ?? ""
+                        };
+
+                        // 将 statusItems 作为嵌套子对象
+                        if (statusItems != null)
+                        {
+                            fieldOutput["statusItems"] = statusItems;
+                        }
+
+                        output.Add(fieldOutput);
                     }
 
-                    output.Add(fieldOutput);
+                    JsonOutputWriter.WriteSuccess("billstatus", output);
+                    return 0;
                 }
-
-                JsonOutputWriter.WriteSuccess("billstatus", output);
-                return 0;
             }
             catch (Exception ex)
             {

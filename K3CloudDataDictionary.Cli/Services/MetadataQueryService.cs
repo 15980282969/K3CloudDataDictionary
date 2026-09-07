@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Data;
 using System.Data.SqlClient;
 using System.Linq;
 using System.Text.RegularExpressions;
@@ -10,18 +11,51 @@ namespace K3CloudDataDictionary.Cli.Services
     /// <summary>
     /// 元数据查询服务 - 直接连接 SQL Server 实时查询
     /// </summary>
-    public class MetadataQueryService
+    public class MetadataQueryService : IDisposable
     {
         private readonly string _connectionString;
+        private SqlConnection _sharedConnection;
         private MetadataContext _context;
         private Dictionary<string, ObjectBasicInfo> _allObjects;
         private Dictionary<string, string> _elementTypeNames;
         private HashSet<string> _lkTableCache; // LK 表检测结果缓存
         private bool _lkDetectionTimedOut; // LK 检测是否超时
+        private Dictionary<string, MetadataResult> _metadataCache = new Dictionary<string, MetadataResult>(StringComparer.OrdinalIgnoreCase);
 
         public MetadataQueryService(string connectionString)
         {
             _connectionString = connectionString;
+        }
+
+        /// <summary>
+        /// 获取共享连接（按需打开，复用同一连接）
+        /// </summary>
+        private SqlConnection GetConnection()
+        {
+            if (_sharedConnection == null)
+            {
+                _sharedConnection = new SqlConnection(_connectionString);
+                _sharedConnection.Open();
+            }
+            else if (_sharedConnection.State != ConnectionState.Open)
+            {
+                _sharedConnection.Open();
+            }
+            return _sharedConnection;
+        }
+
+        /// <summary>
+        /// 释放共享连接
+        /// </summary>
+        public void Dispose()
+        {
+            if (_sharedConnection != null)
+            {
+                if (_sharedConnection.State == ConnectionState.Open)
+                    _sharedConnection.Close();
+                _sharedConnection.Dispose();
+                _sharedConnection = null;
+            }
         }
 
         /// <summary>
@@ -89,7 +123,7 @@ namespace K3CloudDataDictionary.Cli.Services
         {
             if (_context == null)
             {
-                Console.Error.WriteLine("正在加载元数据上下文...");
+                Console.Error.WriteLine("正在加载元数据上下文（首次查询可能需要 5-10 秒）...");
                 _context = new MetadataContext(_connectionString);
                 _allObjects = LoadAllObjectBasicInfo();
                 _elementTypeNames = LoadElementTypeNames();
@@ -105,22 +139,19 @@ namespace K3CloudDataDictionary.Cli.Services
             var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             string sql = "SELECT FID, FNAME FROM T_MDL_ELEMENTTYPE_L WHERE FLOCALEID = 2052";
 
-            using (var conn = new SqlConnection(_connectionString))
+            var conn = GetConnection();
+            using (var cmd = new SqlCommand(sql, conn))
             {
-                conn.Open();
-                using (var cmd = new SqlCommand(sql, conn))
+                cmd.CommandTimeout = 30;
+                using (var reader = cmd.ExecuteReader())
                 {
-                    cmd.CommandTimeout = 30;
-                    using (var reader = cmd.ExecuteReader())
+                    while (reader.Read())
                     {
-                        while (reader.Read())
+                        var fid = reader["FID"]?.ToString() ?? "";
+                        var fname = reader["FNAME"]?.ToString() ?? "";
+                        if (!string.IsNullOrEmpty(fid))
                         {
-                            var fid = reader["FID"]?.ToString() ?? "";
-                            var fname = reader["FNAME"]?.ToString() ?? "";
-                            if (!string.IsNullOrEmpty(fid))
-                            {
-                                result[fid] = fname;
-                            }
+                            result[fid] = fname;
                         }
                     }
                 }
@@ -183,26 +214,23 @@ namespace K3CloudDataDictionary.Cli.Services
                                 FROM T_Meta_LookupClass 
                                 WHERE FID = @ObjectId";
 
-            using (var conn = new SqlConnection(_connectionString))
+            var conn = GetConnection();
+            using (var cmd = new SqlCommand(lookupSql, conn))
             {
-                conn.Open();
-                using (var cmd = new SqlCommand(lookupSql, conn))
+                cmd.Parameters.AddWithValue("@ObjectId", objectId);
+                cmd.CommandTimeout = 30;
+                using (var reader = cmd.ExecuteReader())
                 {
-                    cmd.Parameters.AddWithValue("@ObjectId", objectId);
-                    cmd.CommandTimeout = 30;
-                    using (var reader = cmd.ExecuteReader())
+                    while (reader.Read())
                     {
-                        while (reader.Read())
+                        results.Add(new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase)
                         {
-                            results.Add(new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase)
-                            {
-                                ["FID"] = reader["FID"]?.ToString() ?? "",
-                                ["FFORMID"] = reader["FFORMID"]?.ToString() ?? "",
-                                ["FTABLENAME"] = reader["FTABLENAME"]?.ToString() ?? "",
-                                ["FPKFIELDNAME"] = reader["FPKFIELDNAME"]?.ToString() ?? "",
-                                ["FORGFIELDNAME"] = reader["FORGFIELDNAME"]?.ToString() ?? ""
-                            });
-                        }
+                            ["FID"] = reader["FID"]?.ToString() ?? "",
+                            ["FFORMID"] = reader["FFORMID"]?.ToString() ?? "",
+                            ["FTABLENAME"] = reader["FTABLENAME"]?.ToString() ?? "",
+                            ["FPKFIELDNAME"] = reader["FPKFIELDNAME"]?.ToString() ?? "",
+                            ["FORGFIELDNAME"] = reader["FORGFIELDNAME"]?.ToString() ?? ""
+                        });
                     }
                 }
             }
@@ -222,32 +250,29 @@ namespace K3CloudDataDictionary.Cli.Services
                            INNER JOIN T_META_OBJECTTYPE_L L ON A.FID = L.FID AND L.FLOCALEID = 2052 
                            WHERE A.FMODELTYPEID IN (400, 100)";
 
-            using (var conn = new SqlConnection(_connectionString))
+            var conn = GetConnection();
+            using (var cmd = new SqlCommand(sql, conn))
             {
-                conn.Open();
-                using (var cmd = new SqlCommand(sql, conn))
+                cmd.CommandTimeout = 60;
+                using (var reader = cmd.ExecuteReader())
                 {
-                    cmd.CommandTimeout = 60;
-                    using (var reader = cmd.ExecuteReader())
+                    while (reader.Read())
                     {
-                        while (reader.Read())
+                        var info = new ObjectBasicInfo
                         {
-                            var info = new ObjectBasicInfo
-                            {
-                                FId = reader["FID"]?.ToString() ?? "",
-                                FName = reader["FNAME"]?.ToString() ?? "",
-                                FSubSysId = reader["FSUBSYSID"]?.ToString() ?? "",
-                                FBaseObjectId = reader["FBASEOBJECTID"]?.ToString() ?? "",
-                                FModelTypeId = reader["FMODELTYPEID"]?.ToString() ?? "",
-                                FInheritPath = reader["FINHERITPATH"]?.ToString() ?? "",
-                                FVersion = reader["FVERSION"]?.ToString() ?? "",
-                                FMainVersion = reader["FMAINVERSION"]?.ToString() ?? "",
-                                FDevType = reader["FDEVTYPE"]?.ToString() ?? ""
-                            };
-                            if (!string.IsNullOrEmpty(info.FId))
-                            {
-                                result[info.FId] = info;
-                            }
+                            FId = reader["FID"]?.ToString() ?? "",
+                            FName = reader["FNAME"]?.ToString() ?? "",
+                            FSubSysId = reader["FSUBSYSID"]?.ToString() ?? "",
+                            FBaseObjectId = reader["FBASEOBJECTID"]?.ToString() ?? "",
+                            FModelTypeId = reader["FMODELTYPEID"]?.ToString() ?? "",
+                            FInheritPath = reader["FINHERITPATH"]?.ToString() ?? "",
+                            FVersion = reader["FVERSION"]?.ToString() ?? "",
+                            FMainVersion = reader["FMAINVERSION"]?.ToString() ?? "",
+                            FDevType = reader["FDEVTYPE"]?.ToString() ?? ""
+                        };
+                        if (!string.IsNullOrEmpty(info.FId))
+                        {
+                            result[info.FId] = info;
                         }
                     }
                 }
@@ -586,7 +611,8 @@ namespace K3CloudDataDictionary.Cli.Services
         /// </summary>
         /// <param name="keyword">搜索关键词</param>
         /// <param name="exact">true=精确匹配（完全相等），false=模糊匹配（包含）</param>
-        public List<Dictionary<string, object>> SearchFields(string keyword, bool exact = false)
+        /// <param name="limit">最大返回结果数（默认 100）</param>
+        public List<Dictionary<string, object>> SearchFields(string keyword, bool exact = false, int limit = 100)
         {
             EnsureContext();
             var results = new List<Dictionary<string, object>>();
@@ -678,7 +704,7 @@ namespace K3CloudDataDictionary.Cli.Services
                             });
 
                             // 限制结果数量
-                            if (results.Count >= 100) break;
+                            if (results.Count >= limit) break;
                         }
                     }
                 }
@@ -687,7 +713,7 @@ namespace K3CloudDataDictionary.Cli.Services
                     Console.Error.WriteLine($"搜索 {fid} 时出错: {ex.Message}");
                 }
 
-                if (results.Count >= 100) break;
+                if (results.Count >= limit) break;
             }
 
             return results;
@@ -698,7 +724,8 @@ namespace K3CloudDataDictionary.Cli.Services
         /// </summary>
         /// <param name="keyword">搜索关键词</param>
         /// <param name="exact">true=精确匹配（完全相等），false=模糊匹配（包含）</param>
-        public List<Dictionary<string, object>> SearchTables(string keyword, bool exact = false)
+        /// <param name="limit">最大返回结果数（默认 100）</param>
+        public List<Dictionary<string, object>> SearchTables(string keyword, bool exact = false, int limit = 100)
         {
             EnsureContext();
             var results = new List<Dictionary<string, object>>();
@@ -750,7 +777,7 @@ namespace K3CloudDataDictionary.Cli.Services
                                 ["FFIELDCOUNT"] = 0
                             });
 
-                            if (results.Count >= 100) break;
+                            if (results.Count >= limit) break;
                         }
                     }
                 }
@@ -759,7 +786,7 @@ namespace K3CloudDataDictionary.Cli.Services
                     Console.Error.WriteLine($"搜索表 {fid} 时出错: {ex.Message}");
                 }
 
-                if (results.Count >= 100) break;
+                if (results.Count >= limit) break;
             }
 
             return results;
@@ -807,26 +834,23 @@ namespace K3CloudDataDictionary.Cli.Services
 
             sql += " ORDER BY a.FNUMBER";
 
-            using (var conn = new SqlConnection(_connectionString))
+            var conn = GetConnection();
+            using (var cmd = new SqlCommand(sql, conn))
             {
-                conn.Open();
-                using (var cmd = new SqlCommand(sql, conn))
+                cmd.Parameters.AddRange(parameters.ToArray());
+                cmd.CommandTimeout = 30;
+                using (var reader = cmd.ExecuteReader())
                 {
-                    cmd.Parameters.AddRange(parameters.ToArray());
-                    cmd.CommandTimeout = 30;
-                    using (var reader = cmd.ExecuteReader())
+                    while (reader.Read())
                     {
-                        while (reader.Read())
+                        results.Add(new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase)
                         {
-                            results.Add(new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase)
-                            {
-                                ["FBILLTYPEID"] = reader["FBILLTYPEID"]?.ToString() ?? "",
-                                ["FBILLFORMID"] = reader["FBILLFORMID"]?.ToString() ?? "",
-                                ["FNUMBER"] = reader["FNUMBER"]?.ToString() ?? "",
-                                ["FNAME"] = reader["FNAME"]?.ToString() ?? "",
-                                ["FDESCRIPTION"] = reader["FDESCRIPTION"]?.ToString() ?? ""
-                            });
-                        }
+                            ["FBILLTYPEID"] = reader["FBILLTYPEID"]?.ToString() ?? "",
+                            ["FBILLFORMID"] = reader["FBILLFORMID"]?.ToString() ?? "",
+                            ["FNUMBER"] = reader["FNUMBER"]?.ToString() ?? "",
+                            ["FNAME"] = reader["FNAME"]?.ToString() ?? "",
+                            ["FDESCRIPTION"] = reader["FDESCRIPTION"]?.ToString() ?? ""
+                        });
                     }
                 }
             }
@@ -855,27 +879,24 @@ namespace K3CloudDataDictionary.Cli.Services
                            WHERE a.FID = @FID
                            ORDER BY c.FNUMBER";
 
-            using (var conn = new SqlConnection(_connectionString))
+            var conn = GetConnection();
+            using (var cmd = new SqlCommand(sql, conn))
             {
-                conn.Open();
-                using (var cmd = new SqlCommand(sql, conn))
+                cmd.Parameters.AddWithValue("@FID", lookUpObjectId);
+                cmd.CommandTimeout = 30;
+                using (var reader = cmd.ExecuteReader())
                 {
-                    cmd.Parameters.AddWithValue("@FID", lookUpObjectId);
-                    cmd.CommandTimeout = 30;
-                    using (var reader = cmd.ExecuteReader())
+                    while (reader.Read())
                     {
-                        while (reader.Read())
+                        results.Add(new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase)
                         {
-                            results.Add(new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase)
-                            {
-                                ["FID"] = reader["FID"]?.ToString() ?? "",
-                                ["FNUMBER"] = reader["FNUMBER"]?.ToString() ?? "",
-                                ["FNAME"] = reader["FNAME"]?.ToString() ?? "",
-                                ["FENTRYID"] = reader["FENTRYID"]?.ToString() ?? "",
-                                ["FENTRYNUMBER"] = reader["FENTRYNUMBER"]?.ToString() ?? "",
-                                ["FDATAVALUE"] = reader["FDATAVALUE"]?.ToString() ?? ""
-                            });
-                        }
+                            ["FID"] = reader["FID"]?.ToString() ?? "",
+                            ["FNUMBER"] = reader["FNUMBER"]?.ToString() ?? "",
+                            ["FNAME"] = reader["FNAME"]?.ToString() ?? "",
+                            ["FENTRYID"] = reader["FENTRYID"]?.ToString() ?? "",
+                            ["FENTRYNUMBER"] = reader["FENTRYNUMBER"]?.ToString() ?? "",
+                            ["FDATAVALUE"] = reader["FDATAVALUE"]?.ToString() ?? ""
+                        });
                     }
                 }
             }
@@ -904,26 +925,23 @@ namespace K3CloudDataDictionary.Cli.Services
                            WHERE t1.FID = @FID
                            ORDER BY t3.FVALUE";
 
-            using (var conn = new SqlConnection(_connectionString))
+            var conn = GetConnection();
+            using (var cmd = new SqlCommand(sql, conn))
             {
-                conn.Open();
-                using (var cmd = new SqlCommand(sql, conn))
+                cmd.Parameters.AddWithValue("@FID", enumTypeId);
+                cmd.CommandTimeout = 30;
+                using (var reader = cmd.ExecuteReader())
                 {
-                    cmd.Parameters.AddWithValue("@FID", enumTypeId);
-                    cmd.CommandTimeout = 30;
-                    using (var reader = cmd.ExecuteReader())
+                    while (reader.Read())
                     {
-                        while (reader.Read())
+                        results.Add(new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase)
                         {
-                            results.Add(new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase)
-                            {
-                                ["FID"] = reader["FID"]?.ToString() ?? "",
-                                ["FNAME"] = reader["FNAME"]?.ToString() ?? "",
-                                ["FVALUE"] = reader["FVALUE"]?.ToString() ?? "",
-                                ["FENUMID"] = reader["FENUMID"]?.ToString() ?? "",
-                                ["FCAPTION"] = reader["FCAPTION"]?.ToString() ?? ""
-                            });
-                        }
+                            ["FID"] = reader["FID"]?.ToString() ?? "",
+                            ["FNAME"] = reader["FNAME"]?.ToString() ?? "",
+                            ["FVALUE"] = reader["FVALUE"]?.ToString() ?? "",
+                            ["FENUMID"] = reader["FENUMID"]?.ToString() ?? "",
+                            ["FCAPTION"] = reader["FCAPTION"]?.ToString() ?? ""
+                        });
                     }
                 }
             }
@@ -1038,25 +1056,62 @@ namespace K3CloudDataDictionary.Cli.Services
             var results = new List<Dictionary<string, object>>();
             if (string.IsNullOrEmpty(tableName)) return results;
 
-            using (var conn = new SqlConnection(_connectionString))
-            {
-                conn.Open();
+            var conn = GetConnection();
 
-                // 先尝试从 sys.tables 查询物理表
-                string sql = @"SELECT c.name AS ColumnName, tp.name AS DataType,
-                                      c.max_length, c.precision, c.scale, c.is_nullable
-                               FROM sys.columns c
-                               INNER JOIN sys.tables t_obj ON c.object_id = t_obj.object_id
-                               INNER JOIN sys.schemas s ON t_obj.schema_id = s.schema_id
-                               INNER JOIN sys.types tp ON c.user_type_id = tp.user_type_id
-                               WHERE (s.name + '.' + t_obj.name = @TableName OR t_obj.name = @TableName)";
+            // 先尝试从 sys.tables 查询物理表
+            string sql = @"SELECT c.name AS ColumnName, tp.name AS DataType,
+                                  c.max_length, c.precision, c.scale, c.is_nullable
+                           FROM sys.columns c
+                           INNER JOIN sys.tables t_obj ON c.object_id = t_obj.object_id
+                           INNER JOIN sys.schemas s ON t_obj.schema_id = s.schema_id
+                           INNER JOIN sys.types tp ON c.user_type_id = tp.user_type_id
+                           WHERE (s.name + '.' + t_obj.name = @TableName OR t_obj.name = @TableName)";
+
+            if (!string.IsNullOrEmpty(keyword))
+                sql += " AND c.name LIKE @Keyword";
+
+            sql += " ORDER BY c.column_id";
+
+            using (var cmd = new SqlCommand(sql, conn))
+            {
+                cmd.Parameters.AddWithValue("@TableName", tableName);
+                if (!string.IsNullOrEmpty(keyword))
+                    cmd.Parameters.AddWithValue("@Keyword", "%" + keyword + "%");
+                cmd.CommandTimeout = 30;
+                using (var reader = cmd.ExecuteReader())
+                {
+                    while (reader.Read())
+                    {
+                        results.Add(new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase)
+                        {
+                            ["columnName"] = reader["ColumnName"]?.ToString() ?? "",
+                            ["dataType"] = reader["DataType"]?.ToString() ?? "",
+                            ["maxLength"] = Convert.ToInt32(reader["max_length"] ?? 0),
+                            ["precision"] = Convert.ToInt32(reader["precision"] ?? 0),
+                            ["scale"] = Convert.ToInt32(reader["scale"] ?? 0),
+                            ["isNullable"] = reader["is_nullable"] != null && (bool)reader["is_nullable"]
+                        });
+                    }
+                }
+            }
+
+            // 物理表无结果时，检查是否为视图
+            if (results.Count == 0)
+            {
+                string viewSql = @"SELECT c.name AS ColumnName, tp.name AS DataType,
+                                          c.max_length, c.precision, c.scale, c.is_nullable
+                                   FROM sys.columns c
+                                   INNER JOIN sys.views v ON c.object_id = v.object_id
+                                   INNER JOIN sys.schemas s ON v.schema_id = s.schema_id
+                                   INNER JOIN sys.types tp ON c.user_type_id = tp.user_type_id
+                                   WHERE (s.name + '.' + v.name = @TableName OR v.name = @TableName)";
 
                 if (!string.IsNullOrEmpty(keyword))
-                    sql += " AND c.name LIKE @Keyword";
+                    viewSql += " AND c.name LIKE @Keyword";
 
-                sql += " ORDER BY c.column_id";
+                viewSql += " ORDER BY c.column_id";
 
-                using (var cmd = new SqlCommand(sql, conn))
+                using (var cmd = new SqlCommand(viewSql, conn))
                 {
                     cmd.Parameters.AddWithValue("@TableName", tableName);
                     if (!string.IsNullOrEmpty(keyword))
@@ -1079,54 +1134,14 @@ namespace K3CloudDataDictionary.Cli.Services
                     }
                 }
 
-                // 物理表无结果时，检查是否为视图
-                if (results.Count == 0)
+                // 如果是视图，添加提示信息
+                if (results.Count > 0)
                 {
-                    string viewSql = @"SELECT c.name AS ColumnName, tp.name AS DataType,
-                                              c.max_length, c.precision, c.scale, c.is_nullable
-                                       FROM sys.columns c
-                                       INNER JOIN sys.views v ON c.object_id = v.object_id
-                                       INNER JOIN sys.schemas s ON v.schema_id = s.schema_id
-                                       INNER JOIN sys.types tp ON c.user_type_id = tp.user_type_id
-                                       WHERE (s.name + '.' + v.name = @TableName OR v.name = @TableName)";
-
-                    if (!string.IsNullOrEmpty(keyword))
-                        viewSql += " AND c.name LIKE @Keyword";
-
-                    viewSql += " ORDER BY c.column_id";
-
-                    using (var cmd = new SqlCommand(viewSql, conn))
+                    results.Insert(0, new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase)
                     {
-                        cmd.Parameters.AddWithValue("@TableName", tableName);
-                        if (!string.IsNullOrEmpty(keyword))
-                            cmd.Parameters.AddWithValue("@Keyword", "%" + keyword + "%");
-                        cmd.CommandTimeout = 30;
-                        using (var reader = cmd.ExecuteReader())
-                        {
-                            while (reader.Read())
-                            {
-                                results.Add(new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase)
-                                {
-                                    ["columnName"] = reader["ColumnName"]?.ToString() ?? "",
-                                    ["dataType"] = reader["DataType"]?.ToString() ?? "",
-                                    ["maxLength"] = Convert.ToInt32(reader["max_length"] ?? 0),
-                                    ["precision"] = Convert.ToInt32(reader["precision"] ?? 0),
-                                    ["scale"] = Convert.ToInt32(reader["scale"] ?? 0),
-                                    ["isNullable"] = reader["is_nullable"] != null && (bool)reader["is_nullable"]
-                                });
-                            }
-                        }
-                    }
-
-                    // 如果是视图，添加提示信息
-                    if (results.Count > 0)
-                    {
-                        results.Insert(0, new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase)
-                        {
-                            ["_hint"] = "view_detected",
-                            ["message"] = $"{tableName} is a view, not a physical table. Columns listed below are from the view definition."
-                        });
-                    }
+                        ["_hint"] = "view_detected",
+                        ["message"] = $"{tableName} is a view, not a physical table. Columns listed below are from the view definition."
+                    });
                 }
             }
             return results;
@@ -1157,30 +1172,27 @@ namespace K3CloudDataDictionary.Cli.Services
 
             sql += " ORDER BY t.name, c.column_id";
 
-            using (var conn = new SqlConnection(_connectionString))
+            var conn = GetConnection();
+            using (var cmd = new SqlCommand(sql, conn))
             {
-                conn.Open();
-                using (var cmd = new SqlCommand(sql, conn))
+                cmd.Parameters.AddWithValue("@TablePattern", likePattern);
+                if (!string.IsNullOrEmpty(keyword))
+                    cmd.Parameters.AddWithValue("@Keyword", "%" + keyword + "%");
+                cmd.CommandTimeout = 30;
+                using (var reader = cmd.ExecuteReader())
                 {
-                    cmd.Parameters.AddWithValue("@TablePattern", likePattern);
-                    if (!string.IsNullOrEmpty(keyword))
-                        cmd.Parameters.AddWithValue("@Keyword", "%" + keyword + "%");
-                    cmd.CommandTimeout = 30;
-                    using (var reader = cmd.ExecuteReader())
+                    while (reader.Read())
                     {
-                        while (reader.Read())
+                        results.Add(new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase)
                         {
-                            results.Add(new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase)
-                            {
-                                ["table"] = reader["TableName"]?.ToString() ?? "",
-                                ["columnName"] = reader["ColumnName"]?.ToString() ?? "",
-                                ["dataType"] = reader["DataType"]?.ToString() ?? "",
-                                ["maxLength"] = Convert.ToInt32(reader["max_length"] ?? 0),
-                                ["precision"] = Convert.ToInt32(reader["precision"] ?? 0),
-                                ["scale"] = Convert.ToInt32(reader["scale"] ?? 0),
-                                ["isNullable"] = reader["is_nullable"] != null && (bool)reader["is_nullable"]
-                            });
-                        }
+                            ["table"] = reader["TableName"]?.ToString() ?? "",
+                            ["columnName"] = reader["ColumnName"]?.ToString() ?? "",
+                            ["dataType"] = reader["DataType"]?.ToString() ?? "",
+                            ["maxLength"] = Convert.ToInt32(reader["max_length"] ?? 0),
+                            ["precision"] = Convert.ToInt32(reader["precision"] ?? 0),
+                            ["scale"] = Convert.ToInt32(reader["scale"] ?? 0),
+                            ["isNullable"] = reader["is_nullable"] != null && (bool)reader["is_nullable"]
+                        });
                     }
                 }
             }
@@ -1220,17 +1232,14 @@ namespace K3CloudDataDictionary.Cli.Services
                            INNER JOIN sys.tables t ON c.object_id = t.object_id
                            WHERE t.name = @TableName AND c.name = @FieldName";
 
-            using (var conn = new SqlConnection(_connectionString))
+            var conn = GetConnection();
+            using (var cmd = new SqlCommand(sql, conn))
             {
-                conn.Open();
-                using (var cmd = new SqlCommand(sql, conn))
-                {
-                    cmd.Parameters.AddWithValue("@TableName", tableName);
-                    cmd.Parameters.AddWithValue("@FieldName", baseFieldName);
-                    cmd.CommandTimeout = 10;
-                    var result = cmd.ExecuteScalar();
-                    if (result != null) suggestions.Add(result.ToString());
-                }
+                cmd.Parameters.AddWithValue("@TableName", tableName);
+                cmd.Parameters.AddWithValue("@FieldName", baseFieldName);
+                cmd.CommandTimeout = 10;
+                var result = cmd.ExecuteScalar();
+                if (result != null) suggestions.Add(result.ToString());
             }
             return suggestions;
         }
@@ -1349,21 +1358,18 @@ namespace K3CloudDataDictionary.Cli.Services
 
             try
             {
-                using (var conn = new SqlConnection(_connectionString))
+                var conn = GetConnection();
+                using (var cmd = new SqlCommand(sql, conn))
                 {
-                    conn.Open();
-                    using (var cmd = new SqlCommand(sql, conn))
+                    cmd.Parameters.AddRange(parameters.ToArray());
+                    cmd.CommandTimeout = 5; // 短超时 5 秒
+                    using (var reader = cmd.ExecuteReader())
                     {
-                        cmd.Parameters.AddRange(parameters.ToArray());
-                        cmd.CommandTimeout = 5; // 短超时 5 秒
-                        using (var reader = cmd.ExecuteReader())
+                        while (reader.Read())
                         {
-                            while (reader.Read())
-                            {
-                                var name = reader["name"]?.ToString() ?? "";
-                                existing.Add(name);
-                                _lkTableCache.Add(name);
-                            }
+                            var name = reader["name"]?.ToString() ?? "";
+                            existing.Add(name);
+                            _lkTableCache.Add(name);
                         }
                     }
                 }
@@ -1457,12 +1463,13 @@ namespace K3CloudDataDictionary.Cli.Services
                 var kwLower = kw.ToLowerInvariant();
 
                 var match = allFields.FirstOrDefault(f =>
-                    f.Key.Equals(kw, StringComparison.OrdinalIgnoreCase) ||
-                    f.FieldName.Equals(kw, StringComparison.OrdinalIgnoreCase) ||
-                    f.Name.Equals(kw, StringComparison.OrdinalIgnoreCase) ||
-                    NormalizedContains(f.Name, normalizedKw) ||
-                    f.Key.ToLowerInvariant().Contains(kwLower) ||
-                    f.FieldName.ToLowerInvariant().Contains(kwLower));
+                    !string.IsNullOrEmpty(f.FieldName) && // 跳过虚拟属性（fieldName 为空）
+                    (f.Key.Equals(kw, StringComparison.OrdinalIgnoreCase) ||
+                     f.FieldName.Equals(kw, StringComparison.OrdinalIgnoreCase) ||
+                     f.Name.Equals(kw, StringComparison.OrdinalIgnoreCase) ||
+                     NormalizedContains(f.Name, normalizedKw) ||
+                     f.Key.ToLowerInvariant().Contains(kwLower) ||
+                     f.FieldName.ToLowerInvariant().Contains(kwLower)));
 
                 if (match != null)
                 {
@@ -1511,6 +1518,7 @@ namespace K3CloudDataDictionary.Cli.Services
                         var baseLower = baseKw.ToLowerInvariant();
                         baseMatch = allFields.FirstOrDefault(f =>
                             f.ElementType == "13" &&
+                            !string.IsNullOrEmpty(f.FieldName) && // 跳过虚拟属性（fieldName 为空）
                             (f.Name.Equals(baseKw, StringComparison.OrdinalIgnoreCase) ||
                              NormalizedContains(f.Name, normalizedBase) ||
                              f.Key.ToLowerInvariant().Contains(baseLower) ||
@@ -1951,10 +1959,13 @@ namespace K3CloudDataDictionary.Cli.Services
         }
 
         /// <summary>
-        /// 提取指定 FID 的完整元数据
+        /// 提取指定 FID 的完整元数据（带缓存）
         /// </summary>
         private MetadataResult ExtractMetadata(string fid)
         {
+            if (_metadataCache.ContainsKey(fid))
+                return _metadataCache[fid];
+
             var fullChain = _context.BuildFullChain(fid);
             if (fullChain.Count == 0) return null;
 
@@ -1962,40 +1973,38 @@ namespace K3CloudDataDictionary.Cli.Services
             var xmlCache = MetadataDbHelper.LoadKernelXmlBatch(_connectionString, fullChain);
 
             // 提取元数据
-            return MetadataExtractor.ExtractByFid(_context, fid, xmlCache);
+            var result = MetadataExtractor.ExtractByFid(_context, fid, xmlCache);
+            _metadataCache[fid] = result;
+            return result;
         }
 
         /// <summary>
         /// 执行通用 SQL 查询（用于常用代码查询功能）
         /// </summary>
-        public List<Dictionary<string, object>> ExecuteSql(string sql, Dictionary<string, object> parameters = null)
+        public List<Dictionary<string, object>> ExecuteSql(string sql, Dictionary<string, object> parameters = null, int timeout = 60)
         {
             var results = new List<Dictionary<string, object>>();
-
-            using (var conn = new SqlConnection(_connectionString))
+            var conn = GetConnection();
+            using (var cmd = new SqlCommand(sql, conn))
             {
-                conn.Open();
-                using (var cmd = new SqlCommand(sql, conn))
+                if (parameters != null)
                 {
-                    if (parameters != null)
+                    foreach (var kvp in parameters)
                     {
-                        foreach (var kvp in parameters)
-                        {
-                            cmd.Parameters.AddWithValue(kvp.Key, kvp.Value);
-                        }
+                        cmd.Parameters.AddWithValue(kvp.Key, kvp.Value);
                     }
-                    cmd.CommandTimeout = 60;
-                    using (var reader = cmd.ExecuteReader())
+                }
+                cmd.CommandTimeout = timeout;
+                using (var reader = cmd.ExecuteReader())
+                {
+                    while (reader.Read())
                     {
-                        while (reader.Read())
+                        var row = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
+                        for (int i = 0; i < reader.FieldCount; i++)
                         {
-                            var row = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
-                            for (int i = 0; i < reader.FieldCount; i++)
-                            {
-                                row[reader.GetName(i)] = reader.GetValue(i) == DBNull.Value ? "" : reader.GetValue(i);
-                            }
-                            results.Add(row);
+                            row[reader.GetName(i)] = reader.GetValue(i) == DBNull.Value ? "" : reader.GetValue(i);
                         }
+                        results.Add(row);
                     }
                 }
             }

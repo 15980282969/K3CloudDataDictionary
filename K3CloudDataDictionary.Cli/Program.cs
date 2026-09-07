@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Data.SqlClient;
 using K3CloudDataDictionary.Cli.Commands;
 using K3CloudDataDictionary.Cli.Services;
 using K3CloudDataDictionary.Helpers;
@@ -93,6 +94,18 @@ namespace K3CloudDataDictionary.Cli
                         Console.Error.WriteLine("使用 'k3cli help' 查看帮助");
                         return 1;
                 }
+            }
+            catch (SqlException ex) when (ex.Number == -2 || ex.Number == 4060 || ex.Number == 11 || ex.Number == 4053)
+            {
+                // 连接错误：超时、登录失败、网络不可达等
+                JsonOutputWriter.WriteError(command, $"数据库连接失败（错误码 {ex.Number}）: {ex.Message}");
+                return 2;
+            }
+            catch (SqlException ex)
+            {
+                // SQL 执行错误：语法错误、对象不存在、权限不足等
+                JsonOutputWriter.WriteError(command, $"SQL 执行错误 [{ex.Number}]: {ex.Message}");
+                return 3;
             }
             catch (Exception ex)
             {
@@ -186,7 +199,10 @@ namespace K3CloudDataDictionary.Cli
                 return defaultConn.ConnectionString;
             }
 
-            throw new Exception("没有默认连接。请使用 --connection 参数指定连接，或先配置默认连接。使用 'k3cli connections add' 添加连接。");
+            throw new Exception(
+                "没有默认连接。请执行以下命令之一：\n" +
+                "  k3cli connections add --server <ip> --db <database> --user <username> --default\n" +
+                "  k3cli connections set-default --id <connectionId>");
         }
 
         /// <summary>

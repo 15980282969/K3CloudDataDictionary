@@ -36,24 +36,26 @@ namespace K3CloudDataDictionary.Cli.Commands
             try
             {
                 var connectionString = Program.ResolveConnectionString(options);
-                var service = new MetadataQueryService(connectionString);
-                var results = service.QueryBillTypes(formIdentifier, billTypeId, keyword);
-
-                var output = new List<object>();
-                foreach (var row in results)
+                using (var service = new MetadataQueryService(connectionString))
                 {
-                    output.Add(new
-                    {
-                        billTypeId = row.GetValueOrDefault("FBILLTYPEID")?.ToString() ?? "",
-                        billFormId = row.GetValueOrDefault("FBILLFORMID")?.ToString() ?? "",
-                        number = row.GetValueOrDefault("FNUMBER")?.ToString() ?? "",
-                        name = row.GetValueOrDefault("FNAME")?.ToString() ?? "",
-                        description = row.GetValueOrDefault("FDESCRIPTION")?.ToString() ?? ""
-                    });
-                }
+                    var results = service.QueryBillTypes(formIdentifier, billTypeId, keyword);
 
-                JsonOutputWriter.WriteSuccess("billtype", output);
-                return 0;
+                    var output = new List<object>();
+                    foreach (var row in results)
+                    {
+                        output.Add(new
+                        {
+                            billTypeId = row.GetValueOrDefault("FBILLTYPEID")?.ToString() ?? "",
+                            billFormId = row.GetValueOrDefault("FBILLFORMID")?.ToString() ?? "",
+                            number = row.GetValueOrDefault("FNUMBER")?.ToString() ?? "",
+                            name = row.GetValueOrDefault("FNAME")?.ToString() ?? "",
+                            description = row.GetValueOrDefault("FDESCRIPTION")?.ToString() ?? ""
+                        });
+                    }
+
+                    JsonOutputWriter.WriteSuccess("billtype", output);
+                    return 0;
+                }
             }
             catch (Exception ex)
             {

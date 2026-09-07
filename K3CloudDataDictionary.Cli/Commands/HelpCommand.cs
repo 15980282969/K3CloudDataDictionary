@@ -154,6 +154,7 @@ namespace K3CloudDataDictionary.Cli.Commands
   --type <field|table>      搜索类型：field（字段）或 table（表），默认 table
   --exact, -e               精确匹配模式（完全相等，不区分大小写）
                             默认使用模糊匹配（包含关键词）
+  --limit <n>               最大返回结果数（默认 100）
   --connection, -c <id>     指定连接 ID
   --pretty                  格式化 JSON 输出
 
@@ -166,6 +167,9 @@ namespace K3CloudDataDictionary.Cli.Commands
   # 精确搜索
   k3cli search --keyword ""FMaterialId"" --exact
   k3cli search --keyword ""物料"" -e --type field
+
+  # 限制返回数量
+  k3cli search --keyword ""物料"" --limit 50
 ");
         }
 
@@ -495,6 +499,7 @@ bill-by-no 选项:
 --sql 选项:
   --sql <SELECT 语句>     要执行的只读 SQL（必须以 SELECT 开头，仅允许单语句）
   --params <值1,值2>      参数值，逗号分隔，按位置映射为 @p1、@p2...
+  --timeout <秒>          查询超时时间（默认 60 秒）
 
 示例:
   # 列出所有可用查询

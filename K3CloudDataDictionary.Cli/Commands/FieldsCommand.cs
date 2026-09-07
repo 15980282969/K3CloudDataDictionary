@@ -27,7 +27,7 @@ namespace K3CloudDataDictionary.Cli.Commands
             var formIdentifier = Program.GetArgValue(args, "form");
             if (string.IsNullOrEmpty(formIdentifier))
             {
-                JsonOutputWriter.WriteError("fields", "缺少必填参数 --form <identifier>");
+                JsonOutputWriter.WriteError("fields", "缺少必填参数 --form <identifier>\n示例: k3cli fields --form PUR_PurchaseOrder");
                 HelpCommand.ShowFieldsHelp();
                 return 1;
             }
@@ -49,8 +49,9 @@ namespace K3CloudDataDictionary.Cli.Commands
             try
             {
                 var connectionString = Program.ResolveConnectionString(options);
-                var service = new MetadataQueryService(connectionString);
-                var results = service.QueryFields(formIdentifier, entityKey, keyword, exact, typeFilter);
+                using (var service = new MetadataQueryService(connectionString))
+                {
+                    var results = service.QueryFields(formIdentifier, entityKey, keyword, exact, typeFilter);
 
                 // --physical 模式：只输出物理列名列表（纯文本，便于直接粘贴到 SQL 中）
                 if (physical)
@@ -125,6 +126,7 @@ namespace K3CloudDataDictionary.Cli.Commands
 
                 JsonOutputWriter.WriteSuccess("fields", output);
                 return 0;
+                }
             }
             catch (Exception ex)
             {
@@ -143,11 +145,13 @@ namespace K3CloudDataDictionary.Cli.Commands
             try
             {
                 var connectionString = Program.ResolveConnectionString(options);
-                var service = new MetadataQueryService(connectionString);
-                var result = service.CompareHeadEntryFields(formIdentifier, keyword);
+                using (var service = new MetadataQueryService(connectionString))
+                {
+                    var result = service.CompareHeadEntryFields(formIdentifier, keyword);
 
-                JsonOutputWriter.WriteSuccess("fields compare", result);
-                return 0;
+                    JsonOutputWriter.WriteSuccess("fields compare", result);
+                    return 0;
+                }
             }
             catch (Exception ex)
             {

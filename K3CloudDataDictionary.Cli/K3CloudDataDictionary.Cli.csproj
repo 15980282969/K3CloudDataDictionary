@@ -45,4 +45,10 @@
     <Compile Include="..\Views\MetadataExtractor.cs" Link="Shared\Views\MetadataExtractor.cs" />
     <Compile Include="..\Views\PluginInfo.cs" Link="Shared\Views\PluginInfo.cs" />
   </ItemGroup>
+  <!-- dotnet publish 后自动将 x64\SQLite.Interop.dll 复制到发布根目录 -->
+  <Target Name="CopySQLiteInteropAfterPublish" AfterTargets="Publish">
+    <Copy SourceFiles="$(OutputPath)x64\SQLite.Interop.dll"
+          DestinationFolder="$(PublishDir)"
+          SkipUnchangedFiles="true" />
+  </Target>
 </Project>
