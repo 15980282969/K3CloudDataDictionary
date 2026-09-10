@@ -500,6 +500,7 @@ bill-by-no 选项:
 
 role-permissions / user-role-permissions 选项:
   --user <用户ID>          用户ID（可选，不传则查询全部已启用用户）
+  --form <表单标识>        表单标识（可选，如 FIN_YFD_SYS，仅 user-role-permissions 支持）
   --connection, -c <id>   指定连接 ID
   --pretty                格式化 JSON 输出
 
@@ -549,6 +550,9 @@ role-permissions / user-role-permissions 选项:
 
   # 查询全部用户的角色权限明细
   k3cli query user-role-permissions --pretty
+
+  # 按表单标识过滤（只返回指定表单的权限）
+  k3cli query user-role-permissions --user 110792 --form FIN_YFD_SYS --pretty
 ");
         }
     }

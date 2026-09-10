@@ -151,7 +151,9 @@ namespace K3CloudDataDictionary.Cli.Commands
                 userId = parsed;
             }
 
-            var results = service.QueryUserRolePermissions(userId);
+            var formIdentifier = Program.GetArgValue(args, "form");
+
+            var results = service.QueryUserRolePermissions(userId, formIdentifier);
             JsonOutputWriter.WriteSuccess("query", results);
             return 0;
         }

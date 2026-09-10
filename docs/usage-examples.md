@@ -1872,6 +1872,9 @@ k3cli query user-role-permissions --user 110792 --pretty
 
 # 查询全部已启用用户的角色权限明细
 k3cli query user-role-permissions --pretty
+
+# 按表单标识过滤（只返回指定表单的权限对象记录）
+k3cli query user-role-permissions --user 110792 --form FIN_YFD_SYS --pretty
 ```
 
 #### 输出字段说明
@@ -1923,6 +1926,7 @@ k3cli query user-role-permissions --pretty
 - 查询结果已按用户名称、组织编码、业务领域、子系统、业务对象、权限项名称、权限状态排序
 - 仅返回已启用（`FFORBIDSTATUS = 'A'`）的用户，已禁用的用户不显示
 - 不传 `--user` 参数时返回所有已启用用户的权限明细，数据量可能较大，建议指定用户ID
+- 使用 `--form <表单标识>` 可按表单过滤，只返回该表单对应的权限对象记录（如 `FIN_YFD_SYS` 应付单）
 - 权限状态为"有权"表示该用户通过角色拥有对应权限项，"禁止"表示显式禁止，"无权"表示未授权
 
 ### 添加新查询
