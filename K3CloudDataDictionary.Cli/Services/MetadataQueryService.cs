@@ -2387,6 +2387,7 @@ FROM (
         t2.FName                         AS FTopClassName,
         s2.FName                         AS FSubSystemName,
         o2.FName                         AS FObjectTypeName,
+        o1.FID                           AS FObjectNumber,
         p4.FName                         AS FPermissionItemName,
         p2.FPERMISSIONSTATUS             AS FPermissionStatusNumber,
         CASE p2.FPERMISSIONSTATUS
