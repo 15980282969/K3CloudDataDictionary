@@ -2366,7 +2366,7 @@ ORDER BY r1.FNumber, t2.FName, s2.FName, o2.FName, p3.FSEQ";
         /// <summary>
         /// 查询指定用户在各组织下的角色权限明细（用户、组织、角色、业务对象、权限项、权限状态）
         /// </summary>
-        public List<Dictionary<string, object>> QueryUserRolePermissions(long? userId = null, string formIdentifier = null)
+        public List<Dictionary<string, object>> QueryUserRolePermissions(long? userId = null, string formIdentifier = null, string permissionItem = null, int? limit = null)
         {
             string sql = @"
 SELECT
@@ -2426,7 +2426,18 @@ FROM (
                 sql += " AND o1.FID = @FormId";
                 parameters["@FormId"] = formIdentifier;
             }
+            if (!string.IsNullOrEmpty(permissionItem))
+            {
+                sql += " AND p4.FName LIKE @PermissionItem";
+                parameters["@PermissionItem"] = "%" + permissionItem + "%";
+            }
             sql += ") t1 ORDER BY FUserName, FOrgNumber, FTopClassName, FSubSystemName, FObjectTypeName, FPermissionItemName, FPermissionStatusName";
+
+            if (limit.HasValue && limit.Value > 0)
+            {
+                sql += " OFFSET 0 ROWS FETCH NEXT @Limit ROWS ONLY";
+                parameters["@Limit"] = limit.Value;
+            }
 
             return ExecuteSql(sql, parameters);
         }
@@ -2484,7 +2495,7 @@ FROM (
                 {
                     ["name"] = "user-role-permissions",
                     ["description"] = "查询指定用户在各组织下的角色权限明细（用户、组织、角色、业务对象、权限项、权限状态）",
-                    ["parameters"] = "--user <用户ID，可选>, --form <表单标识，可选>"
+                    ["parameters"] = "--user <用户ID>, --form <表单标识>, --permission <权限项>, --limit <条数>（均可选）"
                 }
             };
         }

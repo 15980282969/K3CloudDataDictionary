@@ -500,7 +500,9 @@ bill-by-no 选项:
 
 role-permissions / user-role-permissions 选项:
   --user <用户ID>          用户ID（可选，不传则查询全部已启用用户）
-  --form <表单标识>        表单标识（可选，如 FIN_YFD_SYS，仅 user-role-permissions 支持）
+  --form <表单标识>        表单标识（可选，如 CN_PAYAPPLY，仅 user-role-permissions 支持）
+  --permission <权限项>    权限项名称模糊匹配（可选，如 ""新增""、""查看""）
+  --limit <条数>           限制返回条数（可选，如 100）
   --connection, -c <id>   指定连接 ID
   --pretty                格式化 JSON 输出
 
@@ -552,7 +554,16 @@ role-permissions / user-role-permissions 选项:
   k3cli query user-role-permissions --pretty
 
   # 按表单标识过滤（只返回指定表单的权限）
-  k3cli query user-role-permissions --user 110792 --form FIN_YFD_SYS --pretty
+  k3cli query user-role-permissions --user 110792 --form CN_PAYAPPLY --pretty
+
+  # 按权限项过滤（只返回包含""新增""的权限）
+  k3cli query user-role-permissions --user 110792 --permission ""新增"" --pretty
+
+  # 限制返回条数（只返回前 100 条）
+  k3cli query user-role-permissions --user 110792 --limit 100 --pretty
+
+  # 组合使用：按表单 + 权限项 + 限制条数
+  k3cli query user-role-permissions --user 110792 --form CN_PAYAPPLY --permission ""查看"" --limit 50 --pretty
 ");
         }
     }

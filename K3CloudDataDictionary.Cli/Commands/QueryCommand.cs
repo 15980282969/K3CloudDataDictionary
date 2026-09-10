@@ -152,8 +152,21 @@ namespace K3CloudDataDictionary.Cli.Commands
             }
 
             var formIdentifier = Program.GetArgValue(args, "form");
+            var permissionItem = Program.GetArgValue(args, "permission");
 
-            var results = service.QueryUserRolePermissions(userId, formIdentifier);
+            int? limit = null;
+            var limitArg = Program.GetArgValue(args, "limit");
+            if (!string.IsNullOrEmpty(limitArg))
+            {
+                if (!int.TryParse(limitArg, out int parsedLimit) || parsedLimit <= 0)
+                {
+                    JsonOutputWriter.WriteError("query", "--limit 必须是大于 0 的整数");
+                    return 1;
+                }
+                limit = parsedLimit;
+            }
+
+            var results = service.QueryUserRolePermissions(userId, formIdentifier, permissionItem, limit);
             JsonOutputWriter.WriteSuccess("query", results);
             return 0;
         }

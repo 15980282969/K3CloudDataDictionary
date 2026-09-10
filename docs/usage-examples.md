@@ -1874,7 +1874,16 @@ k3cli query user-role-permissions --user 110792 --pretty
 k3cli query user-role-permissions --pretty
 
 # 按表单标识过滤（只返回指定表单的权限对象记录）
-k3cli query user-role-permissions --user 110792 --form FIN_YFD_SYS --pretty
+k3cli query user-role-permissions --user 110792 --form CN_PAYAPPLY --pretty
+
+# 按权限项名称模糊过滤（如只查"新增"权限）
+k3cli query user-role-permissions --user 110792 --permission "新增" --pretty
+
+# 限制返回条数（避免数据量过大）
+k3cli query user-role-permissions --user 110792 --limit 100 --pretty
+
+# 组合使用：按表单 + 权限项 + 限制条数
+k3cli query user-role-permissions --user 110792 --form CN_PAYAPPLY --permission "查看" --limit 50 --pretty
 ```
 
 #### 输出字段说明
@@ -1889,7 +1898,8 @@ k3cli query user-role-permissions --user 110792 --form FIN_YFD_SYS --pretty
 | `FRoleName` | 角色名称 |
 | `FTopClassName` | 业务领域（顶级分类）名称 |
 | `FSubSystemName` | 子系统名称 |
-| `FObjectTypeName` | 业务对象名称 |
+| `FObjectTypeName` | 业务对象名称（如"付款申请单"） |
+| `FObjectNumber` | 业务对象标识（如 `CN_PAYAPPLY`，用于 `--form` 过滤） |
 | `FPermissionItemName` | 权限项名称（如 查看、新增、修改） |
 | `FPermissionStatusName` | 权限状态（有权 / 禁止 / 无权） |
 | `FIDENTITYID` | 行序号（按用户、组织、业务领域、子系统、业务对象、权限项排序） |
@@ -1926,7 +1936,9 @@ k3cli query user-role-permissions --user 110792 --form FIN_YFD_SYS --pretty
 - 查询结果已按用户名称、组织编码、业务领域、子系统、业务对象、权限项名称、权限状态排序
 - 仅返回已启用（`FFORBIDSTATUS = 'A'`）的用户，已禁用的用户不显示
 - 不传 `--user` 参数时返回所有已启用用户的权限明细，数据量可能较大，建议指定用户ID
-- 使用 `--form <表单标识>` 可按表单过滤，只返回该表单对应的权限对象记录（如 `FIN_YFD_SYS` 应付单）
+- 使用 `--form <表单标识>` 可按表单过滤，只返回该表单对应的权限对象记录（如 `CN_PAYAPPLY` 付款申请单）
+- 使用 `--permission <权限项>` 可按权限项名称模糊过滤（如 "新增"、"查看"、"审核"）
+- 使用 `--limit <条数>` 可限制返回条数，避免输出过大（如 `--limit 100`）
 - 权限状态为"有权"表示该用户通过角色拥有对应权限项，"禁止"表示显式禁止，"无权"表示未授权
 
 ### 添加新查询
