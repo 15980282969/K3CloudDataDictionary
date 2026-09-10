@@ -478,6 +478,8 @@ delete 选项:
   mo-return-summary       按生产订单查询退料汇总（物料、仓库、单位分组）
   mo-instock-summary      按生产订单查询入库汇总（物料、仓库、单位分组）
   bill-by-no              按单据编号查询任意表单的头表与明细表数据
+  role-permissions        查询各角色的功能权限明细（业务领域、子系统、业务对象、权限项、权限状态）
+  user-role-permissions   查询指定用户在各组织下的角色权限明细（用户、组织、角色、业务对象、权限项、权限状态）
 
 user-licenses 选项:
   --org <keyword>         按组织名称模糊过滤
@@ -495,6 +497,11 @@ mo-pick-summary / mo-return-summary / mo-instock-summary 选项:
 bill-by-no 选项:
   --form <表单标识>        表单标识（必填），如 STK_MisDelivery
   --no <单据编号>          单据编号（必填）
+
+role-permissions / user-role-permissions 选项:
+  --user <用户ID>          用户ID（可选，不传则查询全部已启用用户）
+  --connection, -c <id>   指定连接 ID
+  --pretty                格式化 JSON 输出
 
 --sql 选项:
   --sql <SELECT 语句>     要执行的只读 SQL（必须以 SELECT 开头，仅允许单语句）
@@ -533,6 +540,15 @@ bill-by-no 选项:
 
   # 按单据编号查任意表单
   k3cli query bill-by-no --form STK_MisDelivery --no ""QTCK121553"" --pretty
+
+  # 查询各角色的功能权限明细
+  k3cli query role-permissions --pretty
+
+  # 查询指定用户的角色权限明细
+  k3cli query user-role-permissions --user 110792 --pretty
+
+  # 查询全部用户的角色权限明细
+  k3cli query user-role-permissions --pretty
 ");
         }
     }

@@ -60,6 +60,12 @@ namespace K3CloudDataDictionary.Cli.Commands
                         case "bill-by-no":
                             return ExecuteBillByNo(queryArgs, service);
 
+                        case "role-permissions":
+                            return ExecuteRolePermissions(service);
+
+                        case "user-role-permissions":
+                            return ExecuteUserRolePermissions(queryArgs, service);
+
                         case "list":
                             var queries = service.GetAvailableQueries();
                             JsonOutputWriter.WriteSuccess("query", queries);
@@ -121,6 +127,32 @@ namespace K3CloudDataDictionary.Cli.Commands
             }
 
             JsonOutputWriter.WriteSuccess("query", result);
+            return 0;
+        }
+
+        private static int ExecuteRolePermissions(MetadataQueryService service)
+        {
+            var results = service.QueryRolePermissions();
+            JsonOutputWriter.WriteSuccess("query", results);
+            return 0;
+        }
+
+        private static int ExecuteUserRolePermissions(string[] args, MetadataQueryService service)
+        {
+            var userIdArg = Program.GetArgValue(args, "user");
+            long? userId = null;
+            if (!string.IsNullOrEmpty(userIdArg))
+            {
+                if (!long.TryParse(userIdArg, out long parsed))
+                {
+                    JsonOutputWriter.WriteError("query", "--user 必须是有效的用户ID（整数）");
+                    return 1;
+                }
+                userId = parsed;
+            }
+
+            var results = service.QueryUserRolePermissions(userId);
+            JsonOutputWriter.WriteSuccess("query", results);
             return 0;
         }
 

@@ -2317,6 +2317,115 @@ ORDER BY e.FMOBILLNO, mat.FNUMBER";
         }
 
         /// <summary>
+        /// 查询各角色的功能权限明细（业务领域、子系统、业务对象、权限项、权限状态）
+        /// </summary>
+        public List<Dictionary<string, object>> QueryRolePermissions()
+        {
+            string sql = @"
+SELECT DISTINCT
+    r1.FNumber        AS FRoleNumber,
+    r2.FName          AS FRoleName,
+    r1.FRoleID,
+    t1.FTOPCLASSID,
+    t2.FName          AS FTopClassName,
+    s1.FNUMBER        AS FSubSystemNumber,
+    s2.FName          AS FSubSystemName,
+    o1.FID            AS FObjectTypeID,
+    o2.FName          AS FObjectTypeName,
+    p3.FNumber        AS FPermissionItemNumber,
+    p4.FName          AS FPermissionItemName,
+    p3.FSEQ           AS FPermissionItemIndex,
+    p2.FPERMISSIONSTATUS AS FPermissionStatusNumber,
+    CASE p2.FPERMISSIONSTATUS
+        WHEN '0' THEN '有权'
+        WHEN '2' THEN '禁止'
+        ELSE '无权'
+    END               AS FPermissionStatusName,
+    CASE r1.FFORBIDSTATUS
+        WHEN 'B' THEN '是'
+        ELSE '否'
+    END               AS FForbidStatusName
+FROM t_sec_FuncPermission p1
+INNER JOIN t_sec_funcPermissionEntry p2 ON p1.FItemID = p2.FItemID
+INNER JOIN T_SEC_PERMISSIONITEM p3 ON p2.FPermissionItemID = p3.FItemID
+LEFT  JOIN T_SEC_PERMISSIONITEM_l p4 ON p3.FItemID = p4.FItemID AND p4.FLOCALEID = 2052
+INNER JOIN t_sec_role r1 ON p1.FRoleID = r1.FRoleID
+LEFT  JOIN t_sec_role_l r2 ON r2.FRoleID = r1.FRoleID AND r2.FLOCALEID = 2052
+INNER JOIN t_meta_objectType o1 ON p1.FObjectTypeID = o1.FID AND o1.fdevtype != 2
+LEFT  JOIN v_meta_objectType_l o2 ON p1.FObjectTypeId = o2.FID AND o2.FLOCALEID = 2052
+INNER JOIN t_meta_subsystem s1 ON o1.FSUBSYSID = s1.FID
+LEFT  JOIN t_meta_subsystem_l s2 ON s1.FID = s2.FID AND s2.FLOCALEID = 2052
+INNER JOIN T_META_TOPCLASS t1 ON t1.FTOPCLASSID = s1.FTOPCLASSID
+LEFT  JOIN T_META_TOPCLASS_L t2 ON t2.FTOPCLASSID = t1.FTOPCLASSID AND t2.FLOCALEID = 2052
+WHERE r1.FFORBIDSTATUS = 'A'
+ORDER BY r1.FNumber, t2.FName, s2.FName, o2.FName, p3.FSEQ";
+
+            return ExecuteSql(sql, null);
+        }
+
+        /// <summary>
+        /// 查询指定用户在各组织下的角色权限明细（用户、组织、角色、业务对象、权限项、权限状态）
+        /// </summary>
+        public List<Dictionary<string, object>> QueryUserRolePermissions(long? userId = null)
+        {
+            string sql = @"
+SELECT
+    t1.*,
+    ROW_NUMBER() OVER(ORDER BY FUserName ASC, FOrgNumber ASC, FTopClassName ASC,
+        FSubSystemName ASC, FObjectTypeName ASC, FPermissionItemName ASC, FPermissionStatusName ASC) AS FIDENTITYID
+FROM (
+    SELECT
+        u.FName                          AS FUserName,
+        u.FUserID,
+        u.FFORBIDSTATUS,
+        CASE u.FFORBIDSTATUS WHEN 'B' THEN '是' ELSE '否' END AS FForbidStatusName,
+        org1.FNumber                     AS FOrgNumber,
+        org2.FName                       AS FOrgName,
+        uo.FOrgID,
+        r2.FName                         AS FRoleName,
+        p1.FRoleID,
+        t2.FName                         AS FTopClassName,
+        s2.FName                         AS FSubSystemName,
+        o2.FName                         AS FObjectTypeName,
+        p4.FName                         AS FPermissionItemName,
+        p2.FPERMISSIONSTATUS             AS FPermissionStatusNumber,
+        CASE p2.FPERMISSIONSTATUS
+            WHEN '0' THEN '有权'
+            WHEN '2' THEN '禁止'
+            ELSE '无权'
+        END                              AS FPermissionStatusName,
+        p3.FSEQ
+    FROM t_sec_FuncPermission p1
+    INNER JOIN t_sec_funcPermissionEntry p2 ON p1.FItemID = p2.FItemID
+    INNER JOIN T_SEC_PERMISSIONITEM p3 ON p2.FPermissionItemID = p3.FItemID
+    INNER JOIN T_SEC_PERMISSIONITEM_l p4 ON p3.FItemID = p4.FItemID AND p4.FLOCALEID = 2052
+    INNER JOIN t_sec_role r1 ON p1.FRoleID = r1.FRoleID
+    INNER JOIN t_sec_role_l r2 ON r2.FRoleID = r1.FRoleID AND r2.FLOCALEID = 2052
+    INNER JOIN t_sec_userrolemap uor ON uor.FROLEID = p1.FRoleID
+    INNER JOIN T_SEC_USERORG uo ON uo.FENTITYID = uor.FENTITYID
+    INNER JOIN t_sec_User u ON uo.FUserID = u.FUserID
+    INNER JOIN t_org_organizations org1 ON org1.FOrgID = uo.FOrgID
+    INNER JOIN t_org_organizations_l org2 ON org1.FOrgID = org2.FOrgID AND org2.FLOCALEID = 2052
+    INNER JOIN t_meta_objectType o1 ON p1.FObjectTypeID = o1.FID AND o1.fdevtype <> 2
+    INNER JOIN t_meta_objectType_l o2 ON p1.FObjectTypeId = o2.FID AND o2.FLOCALEID = 2052
+    INNER JOIN t_meta_subsystem s1 ON o1.FSUBSYSID = s1.FID
+    INNER JOIN t_meta_subsystem_l s2 ON o1.FSUBSYSID = s2.FID AND s2.FLOCALEID = 2052
+    INNER JOIN T_META_TOPCLASS_L t2 ON t2.FTOPCLASSID = s1.FTOPCLASSID AND t2.FLOCALEID = 2052
+    WHERE o1.FDevType <> 2
+      AND u.FFORBIDSTATUS = 'A'";
+
+            var parameters = new Dictionary<string, object>();
+            if (userId.HasValue)
+            {
+                sql += " AND u.FUserID = @UserId";
+                parameters["@UserId"] = userId.Value;
+            }
+            sql += ") t1 ORDER BY FUserName, FOrgNumber, FTopClassName, FSubSystemName, FObjectTypeName, FPermissionItemName, FPermissionStatusName";
+
+            return ExecuteSql(sql, parameters);
+        }
+
+        /// <summary>
         /// 查询所有可用常用查询的列表
         /// </summary>
         public List<Dictionary<string, object>> GetAvailableQueries()
@@ -2358,6 +2467,18 @@ ORDER BY e.FMOBILLNO, mat.FNUMBER";
                     ["name"] = "bill-by-no",
                     ["description"] = "按单据编号查询任意表单的头表与明细表数据",
                     ["parameters"] = "--form <表单标识>, --no <单据编号>"
+                },
+                new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["name"] = "role-permissions",
+                    ["description"] = "查询各角色的功能权限明细（业务领域、子系统、业务对象、权限项、权限状态）",
+                    ["parameters"] = "无需参数"
+                },
+                new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["name"] = "user-role-permissions",
+                    ["description"] = "查询指定用户在各组织下的角色权限明细（用户、组织、角色、业务对象、权限项、权限状态）",
+                    ["parameters"] = "--user <用户ID，可选，不传则查询全部>"
                 }
             };
         }

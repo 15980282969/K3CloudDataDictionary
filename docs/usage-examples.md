@@ -1797,6 +1797,134 @@ k3cli query user-licenses --org "荣耀" --user "Harrison" --pretty
 | `DSStock` | 动态安全库存 | `YDTM` | 移动条码 |
 | `MobileReport` | 移动工序报工 | | |
 
+### 案例：查询角色功能权限（role-permissions 查询）
+
+#### 场景说明
+
+当需要审计或排查某个角色的功能权限配置时，可以使用 `role-permissions` 查询一次性获取所有已启用角色的完整权限明细，包括业务领域、子系统、业务对象、权限项及权限状态。
+
+#### 使用方式
+
+```bash
+# 查询所有角色的功能权限明细
+k3cli query role-permissions --pretty
+```
+
+#### 输出字段说明
+
+| 字段 | 说明 |
+|------|------|
+| `FRoleNumber` | 角色编码 |
+| `FRoleName` | 角色名称 |
+| `FRoleID` | 角色内码 |
+| `FTopClassName` | 业务领域（顶级分类）名称 |
+| `FSubSystemNumber` | 子系统编码 |
+| `FSubSystemName` | 子系统名称 |
+| `FObjectTypeName` | 业务对象名称 |
+| `FPermissionItemNumber` | 权限项编码（如 BOS_VIEW、BOS_NEW） |
+| `FPermissionItemName` | 权限项名称（如 查看、新增） |
+| `FPermissionStatusName` | 权限状态（有权 / 禁止 / 无权） |
+| `FForbidStatusName` | 角色是否禁用（是 / 否） |
+
+#### 输出示例
+
+```json
+{
+  "success": true,
+  "command": "query",
+  "data": [
+    {
+      "FRoleNumber": "BD01_SYS",
+      "FRoleName": "administrator",
+      "FRoleID": 6,
+      "FTopClassName": "财务会计",
+      "FSubSystemNumber": "ER",
+      "FSubSystemName": "费用管理",
+      "FObjectTypeName": "掌上报销自定义字段设置",
+      "FPermissionItemNumber": "BOS_NEW",
+      "FPermissionItemName": "新增",
+      "FPermissionItemIndex": 1,
+      "FPermissionStatusName": "有权",
+      "FForbidStatusName": "否"
+    }
+  ],
+  "count": 1
+}
+```
+
+#### 注意事项
+
+- 查询结果已按角色编码、业务领域、子系统、业务对象、权限项序号排序
+- 仅返回已启用（`FFORBIDSTATUS = 'A'`）的角色，已禁用的角色不显示
+- 权限状态为"有权"表示该角色拥有对应权限项，"禁止"表示显式禁止，"无权"表示未授权
+
+### 案例：查询用户角色权限（user-role-permissions 查询）
+
+#### 场景说明
+
+当需要审计或排查某个具体用户在各个组织下通过角色继承的功能权限时，可以使用 `user-role-permissions` 查询。与 `role-permissions` 不同，此查询关联了用户-角色关系表（`t_sec_userrolemap`）和用户组织关系表（`T_SEC_USERORG`），能够展示用户在每个组织下通过角色获得的具体权限明细。
+
+#### 使用方式
+
+```bash
+# 查询指定用户的角色权限明细
+k3cli query user-role-permissions --user 110792 --pretty
+
+# 查询全部已启用用户的角色权限明细
+k3cli query user-role-permissions --pretty
+```
+
+#### 输出字段说明
+
+| 字段 | 说明 |
+|------|------|
+| `FUserName` | 用户名称 |
+| `FUserID` | 用户内码 |
+| `FForbidStatusName` | 用户是否禁用（是 / 否） |
+| `FOrgNumber` | 组织编码 |
+| `FOrgName` | 组织名称 |
+| `FRoleName` | 角色名称 |
+| `FTopClassName` | 业务领域（顶级分类）名称 |
+| `FSubSystemName` | 子系统名称 |
+| `FObjectTypeName` | 业务对象名称 |
+| `FPermissionItemName` | 权限项名称（如 查看、新增、修改） |
+| `FPermissionStatusName` | 权限状态（有权 / 禁止 / 无权） |
+| `FIDENTITYID` | 行序号（按用户、组织、业务领域、子系统、业务对象、权限项排序） |
+
+#### 输出示例
+
+```json
+{
+  "success": true,
+  "command": "query",
+  "data": [
+    {
+      "FUserName": "陈爱芳",
+      "FUserID": 110792,
+      "FForbidStatusName": "否",
+      "FOrgNumber": "100",
+      "FOrgName": "福建荣耀健康科技股份有限公司",
+      "FRoleName": "资产管理员",
+      "FTopClassName": "BOS",
+      "FSubSystemName": "应用框架",
+      "FObjectTypeName": "编码规则",
+      "FPermissionItemName": "查看",
+      "FPermissionStatusNumber": 0,
+      "FPermissionStatusName": "有权",
+      "FIDENTITYID": 1
+    }
+  ],
+  "count": 1
+}
+```
+
+#### 注意事项
+
+- 查询结果已按用户名称、组织编码、业务领域、子系统、业务对象、权限项名称、权限状态排序
+- 仅返回已启用（`FFORBIDSTATUS = 'A'`）的用户，已禁用的用户不显示
+- 不传 `--user` 参数时返回所有已启用用户的权限明细，数据量可能较大，建议指定用户ID
+- 权限状态为"有权"表示该用户通过角色拥有对应权限项，"禁止"表示显式禁止，"无权"表示未授权
+
 ### 添加新查询
 
 要添加新的常用查询，需要修改以下文件：
