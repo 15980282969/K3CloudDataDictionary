@@ -2,6 +2,7 @@
 bin/
 obj/
 out/
+publish/
 
 ## Visual Studio
 .vs/
@@ -19,6 +20,11 @@ packages/
 
 ## Local data
 data/
+
+## Local tool caches (.qoder/repowiki 是入库的，只有 better-loop 是运行时产物)
+.codegraph/
+.qoder/better-loop/
+.vscode/
 
 ## OS files
 Thumbs.db
