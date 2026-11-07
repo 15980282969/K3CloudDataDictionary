@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Data;
 using System.Data.SqlClient;
 using System.Linq;
+using System.Text;
 using System.Text.RegularExpressions;
 using K3CloudDataDictionary.Views;
 
@@ -121,14 +122,22 @@ namespace K3CloudDataDictionary.Cli.Services
         /// </summary>
         private void EnsureContext()
         {
-            if (_context == null)
+            if (_context != null) return;
+
+            if (DictionaryCache.TryLoad(GetConnection(), out var cachedObjects, out var cachedElementTypes))
             {
-                Console.Error.WriteLine("正在加载元数据上下文（首次查询可能需要 5-10 秒）...");
-                _context = new MetadataContext(_connectionString);
+                _allObjects = cachedObjects;
+                _elementTypeNames = cachedElementTypes;
+            }
+            else
+            {
+                Console.Error.WriteLine("正在加载元数据字典（首次查询可能需要 5-10 秒）...");
                 _allObjects = LoadAllObjectBasicInfo();
                 _elementTypeNames = LoadElementTypeNames();
-                Console.Error.WriteLine($"已加载 {_allObjects.Count} 个对象");
+                DictionaryCache.Save(GetConnection(), _allObjects, _elementTypeNames);
             }
+
+            _context = new MetadataContext(_allObjects);
         }
 
         /// <summary>
@@ -2011,6 +2020,66 @@ namespace K3CloudDataDictionary.Cli.Services
             return results;
         }
 
+        /// <summary>许可分组代码 → 中文名称</summary>
+        private static readonly Dictionary<string, string> LicenseGroupNames = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            { "FIN", "财务会计云" },
+            { "SCM", "供应链云" },
+            { "FIN_SCM", "财务会计+供应链" },
+            { "MFG", "智能制造云" },
+            { "FIN_SCM_MFG", "财务会计+供应链+标准制造" },
+            { "MFG_AdvMFG", "高级制造云" },
+            { "FIN_SCM_MFG_AdvMFG", "财务会计+供应链+高级制造" },
+            { "MA", "管理会计云" },
+            { "BMCloud", "预算管理云" },
+            { "CRCloud", "合并报表云" },
+            { "QM", "质量管理云" },
+            { "B2C_EBus", "B2C电商云" },
+            { "AllChannels", "全渠道营销云" },
+            { "BBC", "BBC营销云" },
+            { "CRM", "客户关系管理" },
+            { "SupplierCollaboration", "供应协同云" },
+            { "EmployeeService", "员工服务云" },
+            { "PLM", "PLM云" },
+            { "BI", "经营分析" },
+            { "QING", "数据服务云" },
+            { "BOS", "BOS运行平台" },
+            { "BOS_Indie", "BOS运行时-独立开发" },
+            { "BOS_Integration", "BOS运行平台-融合开发" },
+            { "BOS_ISV", "行业产品BOS运行平台" },
+            { "BOS_Mobile", "移动BOS运行平台" },
+            { "Pro", "专业应用组" },
+            { "All", "全员应用组" },
+            { "ViewOnly", "仅查询应用" },
+            { "K3Cloud_ERP_RI", "零售云" },
+            { "SmartShop", "智能导购助手" },
+            { "WisdomWorkshop", "智慧车间MES云" },
+            { "DeviceCloud", "设备云" },
+            { "EKanban", "电子看板" },
+            { "Kanban", "数字大屏" },
+            { "DSStock", "动态安全库存" },
+            { "YDTM", "移动条码" },
+            { "MobileReport", "移动工序报工" }
+        };
+
+        /// <summary>
+        /// 生成把许可分组代码翻译为中文名称的 SQL CASE 表达式
+        /// </summary>
+        private static string LicenseGroupCaseSql(string expression)
+        {
+            var sb = new StringBuilder($"CASE {expression}");
+            foreach (var item in LicenseGroupNames)
+                sb.Append($" WHEN '{item.Key}' THEN '{item.Value}'");
+            sb.Append($" ELSE {expression} END");
+            return sb.ToString();
+        }
+
+        private static string LicenseGroupName(string code)
+        {
+            code = (code ?? "").Trim();
+            return LicenseGroupNames.TryGetValue(code, out var name) ? name : code;
+        }
+
         /// <summary>
         /// 查询用户许可分配
         /// </summary>
@@ -2022,46 +2091,8 @@ SELECT org_l.FNAME               AS [组织名称],
        u.FUSERID                 AS [用户ID],
        u.FNAME                   AS [用户名称],
        LTRIM(RTRIM(app.value))   AS [许可分组代码],
-       CASE LTRIM(RTRIM(app.value))
-           WHEN 'FIN' THEN '财务会计云'
-           WHEN 'SCM' THEN '供应链云'
-           WHEN 'FIN_SCM' THEN '财务会计+供应链'
-           WHEN 'MFG' THEN '智能制造云'
-           WHEN 'FIN_SCM_MFG' THEN '财务会计+供应链+标准制造'
-           WHEN 'MFG_AdvMFG' THEN '高级制造云'
-           WHEN 'FIN_SCM_MFG_AdvMFG' THEN '财务会计+供应链+高级制造'
-           WHEN 'MA' THEN '管理会计云'
-           WHEN 'BMCloud' THEN '预算管理云'
-           WHEN 'CRCloud' THEN '合并报表云'
-           WHEN 'QM' THEN '质量管理云'
-           WHEN 'B2C_EBus' THEN 'B2C电商云'
-           WHEN 'AllChannels' THEN '全渠道营销云'
-           WHEN 'BBC' THEN 'BBC营销云'
-           WHEN 'CRM' THEN '客户关系管理'
-           WHEN 'SupplierCollaboration' THEN '供应协同云'
-           WHEN 'EmployeeService' THEN '员工服务云'
-           WHEN 'PLM' THEN 'PLM云'
-           WHEN 'BI' THEN '经营分析'
-           WHEN 'QING' THEN '数据服务云'
-           WHEN 'BOS' THEN 'BOS运行平台'
-           WHEN 'BOS_Indie' THEN 'BOS运行时-独立开发'
-           WHEN 'BOS_Integration' THEN 'BOS运行平台-融合开发'
-           WHEN 'BOS_ISV' THEN '行业产品BOS运行平台'
-           WHEN 'BOS_Mobile' THEN '移动BOS运行平台'
-           WHEN 'Pro' THEN '专业应用组'
-           WHEN 'All' THEN '全员应用组'
-           WHEN 'ViewOnly' THEN '仅查询应用'
-           WHEN 'K3Cloud_ERP_RI' THEN '零售云'
-           WHEN 'SmartShop' THEN '智能导购助手'
-           WHEN 'WisdomWorkshop' THEN '智慧车间MES云'
-           WHEN 'DeviceCloud' THEN '设备云'
-           WHEN 'EKanban' THEN '电子看板'
-           WHEN 'Kanban' THEN '数字大屏'
-           WHEN 'DSStock' THEN '动态安全库存'
-           WHEN 'YDTM' THEN '移动条码'
-           WHEN 'MobileReport' THEN '移动工序报工'
-           ELSE LTRIM(RTRIM(app.value))
-           END                   AS [许可分组名称]
+       " + LicenseGroupCaseSql("LTRIM(RTRIM(app.value))") + @"
+                                   AS [许可分组名称]
 FROM T_SEC_USER u
 INNER JOIN T_SEC_USERORG uo ON uo.FUSERID = u.FUSERID
 INNER JOIN T_ORG_ORGANIZATIONS org ON org.FORGID = uo.FORGID
@@ -2368,12 +2399,56 @@ ORDER BY r1.FNumber, t2.FName, s2.FName, o2.FName, p3.FSEQ";
         /// </summary>
         public List<Dictionary<string, object>> QueryUserRolePermissions(long? userId = null, string formIdentifier = null, string permissionItem = null, int? limit = null)
         {
+            var parameters = new Dictionary<string, object>();
             string sql = @"
 SELECT
     t1.*,
     ROW_NUMBER() OVER(ORDER BY FUserName ASC, FOrgNumber ASC, FTopClassName ASC,
         FSubSystemName ASC, FObjectTypeName ASC, FPermissionItemName ASC, FPermissionStatusName ASC) AS FIDENTITYID
-FROM (
+FROM (" + BuildUserRolePermissionInnerSql(userId, formIdentifier, permissionItem, parameters) + @") t1
+ORDER BY FUserName, FOrgNumber, FTopClassName, FSubSystemName, FObjectTypeName, FPermissionItemName, FPermissionStatusName";
+
+            if (limit.HasValue && limit.Value > 0)
+            {
+                sql += " OFFSET 0 ROWS FETCH NEXT @Limit ROWS ONLY";
+                parameters["@Limit"] = limit.Value;
+            }
+
+            return ExecuteSql(sql, parameters);
+        }
+
+        /// <summary>
+        /// 按组织 + 角色分组统计用户的权限条数（明细行数千条时用于快速确认角色范围）
+        /// </summary>
+        public List<Dictionary<string, object>> QueryUserRolePermissionSummary(long? userId = null, string formIdentifier = null, string permissionItem = null)
+        {
+            var parameters = new Dictionary<string, object>();
+            string sql = @"
+SELECT
+    t1.FUserName,
+    t1.FUserID,
+    t1.FForbidStatusName,
+    t1.FOrgNumber,
+    t1.FOrgName,
+    t1.FRoleName,
+    COUNT(*)                                              AS FPermissionRowCount,
+    COUNT(DISTINCT t1.FObjectNumber)                      AS FObjectCount,
+    SUM(CASE WHEN t1.FPermissionStatusNumber = '0' THEN 1 ELSE 0 END) AS FAllowCount,
+    SUM(CASE WHEN t1.FPermissionStatusNumber = '2' THEN 1 ELSE 0 END) AS FDenyCount,
+    SUM(CASE WHEN t1.FPermissionStatusNumber = '1' THEN 1 ELSE 0 END) AS FInheritCount
+FROM (" + BuildUserRolePermissionInnerSql(userId, formIdentifier, permissionItem, parameters) + @") t1
+GROUP BY t1.FUserName, t1.FUserID, t1.FForbidStatusName, t1.FOrgNumber, t1.FOrgName, t1.FRoleName
+ORDER BY t1.FUserName, t1.FOrgNumber, t1.FRoleName";
+
+            return ExecuteSql(sql, parameters);
+        }
+
+        /// <summary>
+        /// 构造角色权限明细的内层查询（可被明细和分组统计复用）
+        /// </summary>
+        private static string BuildUserRolePermissionInnerSql(long? userId, string formIdentifier, string permissionItem, Dictionary<string, object> parameters)
+        {
+            string sql = @"
     SELECT
         u.FName                          AS FUserName,
         u.FUserID,
@@ -2412,14 +2487,18 @@ FROM (
     INNER JOIN t_meta_subsystem s1 ON o1.FSUBSYSID = s1.FID
     INNER JOIN t_meta_subsystem_l s2 ON o1.FSUBSYSID = s2.FID AND s2.FLOCALEID = 2052
     INNER JOIN T_META_TOPCLASS_L t2 ON t2.FTOPCLASSID = s1.FTOPCLASSID AND t2.FLOCALEID = 2052
-    WHERE o1.FDevType <> 2
-      AND u.FFORBIDSTATUS = 'A'";
+    WHERE o1.FDevType <> 2";
 
-            var parameters = new Dictionary<string, object>();
             if (userId.HasValue)
             {
+                // 显式指定用户时不过滤禁用账号：离职核查场景下账号往往已被禁用，
+                // 禁用状态由 FForbidStatusName 列输出
                 sql += " AND u.FUserID = @UserId";
                 parameters["@UserId"] = userId.Value;
+            }
+            else
+            {
+                sql += " AND u.FFORBIDSTATUS = 'A'";
             }
             if (!string.IsNullOrEmpty(formIdentifier))
             {
@@ -2431,15 +2510,346 @@ FROM (
                 sql += " AND p4.FName LIKE @PermissionItem";
                 parameters["@PermissionItem"] = "%" + permissionItem + "%";
             }
-            sql += ") t1 ORDER BY FUserName, FOrgNumber, FTopClassName, FSubSystemName, FObjectTypeName, FPermissionItemName, FPermissionStatusName";
 
+            return sql;
+        }
+
+        /// <summary>
+        /// 按工号查询其名下固定资产卡片（使用人线 + 保管人线），并给出全部资产类别对照
+        /// 卡片表按变更版本存多行，因此先按内码取最新版本再判定归属，避免同一资产被放大成多行
+        /// </summary>
+        public Dictionary<string, object> QueryStaffAssets(string staffNumber, string categoryKeyword, int? limit)
+        {
+            var result = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
+            var parameters = new Dictionary<string, object> { ["@StaffNo"] = staffNumber };
+
+            var innerCodes = ExecuteSql(@"
+SELECT N'人员 BD_NEWSTAFF' AS [来源表单], s.FSTAFFID AS [内码], s.FNUMBER AS [工号], ISNULL(l.FNAME, '') AS [名称]
+FROM T_BD_STAFF s
+LEFT JOIN T_BD_STAFF_L l ON l.FSTAFFID = s.FSTAFFID AND l.FLOCALEID = 2052
+WHERE s.FNUMBER = @StaffNo
+UNION ALL
+SELECT N'员工 BD_Empinfo', e.FID, ISNULL(e.FSTAFFNUMBER, ''), ISNULL(l.FNAME, '')
+FROM T_HR_EMPINFO e
+LEFT JOIN T_HR_EMPINFO_L l ON l.FID = e.FID AND l.FLOCALEID = 2052
+WHERE e.FSTAFFNUMBER = @StaffNo
+ORDER BY 1, 2", parameters);
+
+            result["工号"] = staffNumber;
+            result["内码"] = innerCodes;
+
+            if (innerCodes.Count == 0)
+            {
+                result["提示"] = $"工号 {staffNumber} 在人员(T_BD_STAFF.FNUMBER)和员工(T_HR_EMPINFO.FSTAFFNUMBER)中都不存在";
+                result["资产"] = new List<Dictionary<string, object>>();
+                result["类别对照"] = new List<Dictionary<string, object>>();
+                return result;
+            }
+
+            var typeFilter = ResolveAssetType(categoryKeyword);
+            if (typeFilter.TypeId.HasValue)
+            {
+                result["资产类别"] = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["内码"] = typeFilter.TypeId.Value,
+                    ["编码"] = typeFilter.Number,
+                    ["名称"] = typeFilter.Name
+                };
+            }
+
+            var sql = BuildStaffAssetSql(typeFilter.TypeId);
             if (limit.HasValue && limit.Value > 0)
             {
                 sql += " OFFSET 0 ROWS FETCH NEXT @Limit ROWS ONLY";
                 parameters["@Limit"] = limit.Value;
             }
 
-            return ExecuteSql(sql, parameters);
+            result["资产"] = ExecuteSql(sql, parameters);
+            result["类别对照"] = ExecuteSql(BuildStaffAssetCategorySql(), parameters);
+            result["口径"] = new[]
+            {
+                "内码全收集：工号在 T_BD_STAFF 可对应多个内码，使用人线按该工号的全部内码匹配",
+                "版本去重：T_FA_CARD 每个变更版本一行，按 FALTERID 取最新；V_FA_ASSET 按 fid 取最新",
+                "保管人线：T_FA_CARDDETAIL 无资产内码列，只能按 FASSETNO = 卡片 FNUMBER 关联",
+                "类别过滤：V_FA_ASSET 无资产类别列，类别取自最新卡片版本的 FASSETTYPEID"
+            };
+            return result;
+        }
+
+        private static string BuildStaffAssetSql(int? typeId)
+        {
+            var sql = @"
+SELECT
+    a.[资产内码], a.[资产编码], a.[卡片编号], a.[资产名称],
+    a.[资产类别编码], a.[资产类别], a.[归属线],
+    a.[使用人工号], a.[使用人], a.[保管人工号], a.[保管人],
+    a.[使用部门], a.[所有权组织],
+    a.[卡片当前状态], a.[资产状态], a.[数量], a.[原值],
+    a.[单据状态], a.[禁用状态]
+FROM (" + StaffAssetInnerSql() + @") a
+WHERE a.rn = 1
+  AND (a.[使用人工号] = @StaffNo
+       OR EXISTS (SELECT 1 FROM T_FA_CARDDETAIL d
+                  WHERE d.FASSETNO = a.[资产编码]
+                    AND (d.FKEEPERID IN (SELECT FID FROM T_HR_EMPINFO WHERE FSTAFFNUMBER = @StaffNo)
+                         OR d.F_RHHE_YG IN (SELECT FID FROM T_HR_EMPINFO WHERE FSTAFFNUMBER = @StaffNo))))";
+
+            if (typeId.HasValue)
+                sql += "\n  AND a.[资产类别内码] = " + typeId.Value;
+
+            return sql + "\nORDER BY a.[资产类别], a.[资产编码]";
+        }
+
+        private static string BuildStaffAssetCategorySql()
+        {
+            return @"
+SELECT a.[资产类别], a.[资产类别编码], COUNT(*) AS [卡片数], SUM(a.[数量]) AS [数量合计], SUM(a.[原值]) AS [原值合计]
+FROM (" + StaffAssetInnerSql() + @") a
+WHERE a.rn = 1
+  AND (a.[使用人工号] = @StaffNo
+       OR EXISTS (SELECT 1 FROM T_FA_CARDDETAIL d
+                  WHERE d.FASSETNO = a.[资产编码]
+                    AND (d.FKEEPERID IN (SELECT FID FROM T_HR_EMPINFO WHERE FSTAFFNUMBER = @StaffNo)
+                         OR d.F_RHHE_YG IN (SELECT FID FROM T_HR_EMPINFO WHERE FSTAFFNUMBER = @StaffNo))))
+GROUP BY a.[资产类别], a.[资产类别编码]
+ORDER BY [卡片数] DESC";
+        }
+
+        /// <summary>
+        /// 工号名下资产的公共内层查询：卡片与使用分配各按版本取最新一行，并标记该资产与工号的两条归属线
+        /// </summary>
+        private static string StaffAssetInnerSql()
+        {
+            return @"
+    SELECT
+        v.FASSETID                                  AS [资产内码],
+        v.FASSETNO                                  AS [资产编码],
+        v.FNUMBER                                   AS [卡片编号],
+        cl.FNAME                                    AS [资产名称],
+        tp.FNUMBER                                  AS [资产类别编码],
+        tpl.FNAME                                   AS [资产类别],
+        cd.FASSETTYPEID                             AS [资产类别内码],
+        CASE WHEN v.FUSERID IN (SELECT FSTAFFID FROM T_BD_STAFF WHERE FNUMBER = @StaffNo)
+               AND EXISTS (SELECT 1 FROM T_FA_CARDDETAIL d
+                           WHERE d.FASSETNO = v.FASSETNO
+                             AND (d.FKEEPERID IN (SELECT FID FROM T_HR_EMPINFO WHERE FSTAFFNUMBER = @StaffNo)
+                                  OR d.F_RHHE_YG IN (SELECT FID FROM T_HR_EMPINFO WHERE FSTAFFNUMBER = @StaffNo)))
+             THEN N'使用人+保管人'
+             WHEN v.FUSERID IN (SELECT FSTAFFID FROM T_BD_STAFF WHERE FNUMBER = @StaffNo) THEN N'使用人'
+             ELSE N'保管人' END                      AS [归属线],
+        us.FNUMBER                                  AS [使用人工号],
+        usl.FNAME                                   AS [使用人],
+        kp.FSTAFFNUMBER                             AS [保管人工号],
+        kpl.FNAME                                   AS [保管人],
+        dep.FNAME                                   AS [使用部门],
+        org.FNAME                                   AS [所有权组织],
+        CASE v.FASSETCURSTATUS
+            WHEN '1' THEN N'当期新增' WHEN '2' THEN N'一般变动' WHEN '3' THEN N'部分清理'
+            WHEN '4' THEN N'全部清理' WHEN '5' THEN N'拆分处置' WHEN '6' THEN N'合并处置'
+            ELSE v.FASSETCURSTATUS END              AS [卡片当前状态],
+        stl.FNAME                                   AS [资产状态],
+        cd.FQUANTITY                                AS [数量],
+        cd.FORIGINALVALUE                           AS [原值],
+        v.FDOCUMENTSTATUS                           AS [单据状态],
+        v.FFORBIDSTATUS                             AS [禁用状态],
+        ROW_NUMBER() OVER (PARTITION BY v.FASSETID ORDER BY v.fid DESC) AS rn
+    FROM V_FA_ASSET v
+    CROSS APPLY (
+        SELECT TOP 1 c.FALTERID, c.FASSETTYPEID, c.FASSETSTATUSID, c.FQUANTITY, c.FORIGINALVALUE
+        FROM T_FA_CARD c
+        WHERE c.FASSETID = v.FASSETID
+        ORDER BY c.FALTERID DESC
+    ) cd
+    LEFT JOIN T_FA_CARD_L cl            ON cl.FALTERID = cd.FALTERID AND cl.FLOCALEID = 2052
+    LEFT JOIN T_FA_ASSETTYPE tp         ON tp.FID = cd.FASSETTYPEID
+    LEFT JOIN T_FA_ASSETTYPE_L tpl      ON tpl.FID = cd.FASSETTYPEID AND tpl.FLOCALEID = 2052
+    LEFT JOIN T_BD_STAFF us             ON us.FSTAFFID = v.FUSERID
+    LEFT JOIN T_BD_STAFF_L usl          ON usl.FSTAFFID = v.FUSERID AND usl.FLOCALEID = 2052
+    OUTER APPLY (
+        SELECT TOP 1 d.FKEEPERID, d.F_RHHE_YG
+        FROM T_FA_CARDDETAIL d
+        WHERE d.FASSETNO = v.FASSETNO AND (d.FKEEPERID > 0 OR d.F_RHHE_YG > 0)
+        ORDER BY CASE WHEN d.FKEEPERID IN (SELECT FID FROM T_HR_EMPINFO WHERE FSTAFFNUMBER = @StaffNo) THEN 0 ELSE 1 END,
+                 d.FID
+    ) dk
+    LEFT JOIN T_HR_EMPINFO kp           ON kp.FID = COALESCE(NULLIF(dk.FKEEPERID, 0), dk.F_RHHE_YG)
+    LEFT JOIN T_HR_EMPINFO_L kpl        ON kpl.FID = kp.FID AND kpl.FLOCALEID = 2052
+    LEFT JOIN T_BD_DEPARTMENT_L dep     ON dep.FDEPTID = v.FUSEDEPTID AND dep.FLOCALEID = 2052
+    LEFT JOIN T_ORG_ORGANIZATIONS_L org ON org.FORGID = v.FOWNERORGID AND org.FLOCALEID = 2052
+    LEFT JOIN T_FA_STATUS_L stl         ON stl.FID = cd.FASSETSTATUSID AND stl.FLOCALEID = 2052";
+        }
+
+        /// <summary>
+        /// 解析资产类别入参：支持类别名称、类别编码和类别内码，未传时不过滤；无法唯一定位时抛出异常
+        /// </summary>
+        private (int? TypeId, string Number, string Name) ResolveAssetType(string keyword)
+        {
+            if (string.IsNullOrWhiteSpace(keyword))
+                return (null, null, null);
+
+            var rows = ExecuteSql(@"
+SELECT t.FID, t.FNUMBER, ISNULL(l.FNAME, '') AS FNAME
+FROM T_FA_ASSETTYPE t
+LEFT JOIN T_FA_ASSETTYPE_L l ON l.FID = t.FID AND l.FLOCALEID = 2052", null);
+
+            var matched = rows.Where(r => string.Equals(r["FNAME"]?.ToString(), keyword, StringComparison.OrdinalIgnoreCase)
+                                           || string.Equals(r["FNUMBER"]?.ToString(), keyword, StringComparison.OrdinalIgnoreCase))
+                              .ToList();
+
+            if (matched.Count == 0 && int.TryParse(keyword, out int id))
+                matched = rows.Where(r => Convert.ToInt32(r["FID"]) == id).ToList();
+
+            if (matched.Count == 0)
+                matched = rows.Where(r => NormalizeKeyword(r["FNAME"]?.ToString() ?? "").Contains(NormalizeKeyword(keyword))).ToList();
+
+            if (matched.Count == 0)
+                throw new ArgumentException($"未找到资产类别「{keyword}」，可选：" + string.Join("、", rows.Select(r => $"{r["FNAME"]}({r["FNUMBER"]})")));
+
+            if (matched.Count > 1)
+                throw new ArgumentException($"资产类别「{keyword}」匹配到多个，请用编码或内码指定：" + string.Join("、", matched.Select(r => $"{r["FNAME"]}({r["FNUMBER"]}, 内码{r["FID"]})")));
+
+            return (Convert.ToInt32(matched[0]["FID"]), matched[0]["FNUMBER"]?.ToString(), matched[0]["FNAME"]?.ToString());
+        }
+
+        /// <summary>
+        /// 离职核查一次取齐：账号状态、许可分组、角色权限汇总、名下资产清单
+        /// </summary>
+        public Dictionary<string, object> QueryStaffOffboardProfile(string staffNumber, string categoryKeyword)
+        {
+            var result = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase) { ["工号"] = staffNumber };
+
+            var profile = ExecuteSql(@"
+SELECT e.FID                                            AS [员工内码],
+       ISNULL(el.FNAME, '')                             AS [员工姓名],
+       CASE e.FFORBIDSTATUS WHEN 'B' THEN N'是' ELSE N'否' END AS [已禁用],
+       LTRIM(RTRIM(ISNULL(e.FEMPLOYSTATUS, '')))        AS [用工状态],
+       ISNULL(e.FMOBILE, '')                            AS [手机号],
+       ISNULL(e.FUserId, 0)                             AS [员工表登记的用户ID]
+FROM T_HR_EMPINFO e
+LEFT JOIN T_HR_EMPINFO_L el ON el.FID = e.FID AND el.FLOCALEID = 2052
+WHERE e.FSTAFFNUMBER = @StaffNo",
+                new Dictionary<string, object> { ["@StaffNo"] = staffNumber });
+
+            result["员工档案"] = profile;
+
+            var candidates = ExecuteSql(BuildOffboardAccountSql(),
+                new Dictionary<string, object> { ["@StaffNo"] = staffNumber });
+
+            var route = candidates.Count == 0 ? 0 : candidates.Min(a => Convert.ToInt32(a["路由"]));
+            var accounts = candidates
+                .Where(a => Convert.ToInt32(a["路由"]) == route)
+                .Select(a =>
+                {
+                    a.Remove("路由");
+                    return a;
+                })
+                .ToList();
+
+            result["账号匹配方式"] = OffboardAccountRouteName(route);
+            result["账号"] = accounts;
+            result["许可分组"] = accounts
+                .SelectMany(a => (a["许可分组代码"]?.ToString() ?? "").Split(','))
+                .Select(c => c.Trim())
+                .Where(c => c.Length > 0)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Select(c => new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["代码"] = c,
+                    ["名称"] = LicenseGroupName(c)
+                })
+                .ToList();
+
+            var roleSummary = new List<Dictionary<string, object>>();
+            foreach (var account in accounts)
+            {
+                if (!long.TryParse(account["用户ID"]?.ToString(), out long uid) || uid <= 0) continue;
+                roleSummary.AddRange(QueryUserRolePermissionSummary(uid));
+            }
+            result["角色汇总"] = roleSummary;
+
+            var assets = QueryStaffAssets(staffNumber, categoryKeyword, null);
+            if (assets.ContainsKey("提示"))
+            {
+                result["提示"] = assets["提示"];
+                result["资产"] = assets["资产"];
+                return result;
+            }
+
+            result["资产类别"] = assets.TryGetValue("资产类别", out var cat) ? cat : null;
+            result["资产"] = assets["资产"];
+            result["类别对照"] = assets["类别对照"];
+
+            var notes = new List<string>(ToStringList(assets["口径"]))
+            {
+                "账号匹配按 员工外键(FUserId) → 手机号(FMOBILE↔FPHONE/FUSERACCOUNT) → 姓名 三级退让，取第一个命中的级别，实际用的级别见「账号匹配方式」",
+                "按姓名匹配时同名账号会全部列出，需人工确认；匹配不到账号时「账号」为空，不代表该人没有账号，可能是账套未维护 员工↔账号 关联",
+                "用工状态、员工禁用、账号禁用是三个独立开关，为空或为「否」不代表已离职；权限明细用 --user <用户ID> 不带 --summary 展开"
+            };
+            result["口径"] = notes;
+            return result;
+        }
+
+        /// <summary>把 string[] / List&lt;string&gt; 统一成 List&lt;string&gt;</summary>
+        private static List<string> ToStringList(object value)
+        {
+            if (value is string[] arr) return arr.ToList();
+            return value as List<string> ?? new List<string>();
+        }
+
+        /// <summary>离职核查账号匹配级别名称</summary>
+        private static string OffboardAccountRouteName(int route)
+        {            switch (route)
+            {
+                case 1: return "员工外键（T_HR_EMPINFO.FUserId → T_SEC_USER.FUSERID）";
+                case 2: return "手机号（T_HR_EMPINFO.FMOBILE → T_SEC_USER.FPHONE/FUSERACCOUNT）";
+                case 3: return "姓名（T_SEC_USER.FNAME = 人员/员工名称，同名需人工确认）";
+                default: return "未匹配到账号";
+            }
+        }
+
+        /// <summary>
+        /// 按工号查找候选账号：三种关联方式各出一批，路由列用于优先级退让
+        /// </summary>
+        private static string BuildOffboardAccountSql()
+        {
+            const string userCols = @"
+       u.FUSERID                                        AS [用户ID],
+       ISNULL(u.FNAME, '')                              AS [用户名称],
+       CASE u.FFORBIDSTATUS WHEN 'A' THEN N'启用'
+            WHEN 'B' THEN N'禁用'
+            ELSE ISNULL(u.FFORBIDSTATUS, '') END        AS [账号状态],
+       ISNULL(u.FISLOCK, '')                            AS [是否锁定],
+       ISNULL(u.FLOGINCOUNT, 0)                         AS [登录次数],
+       CONVERT(NVARCHAR(19), u.FENABLETIME, 120)        AS [启用时间],
+       CONVERT(NVARCHAR(19), u.FDISABLETIME, 120)       AS [禁用时间],
+       ISNULL(u.FAPPGROUP, '')                          AS [许可分组代码]";
+
+            return $@"
+SELECT 1 AS [路由],{userCols}
+FROM T_HR_EMPINFO e
+INNER JOIN T_SEC_USER u ON u.FUSERID = e.FUserId
+WHERE e.FSTAFFNUMBER = @StaffNo AND ISNULL(e.FUserId, 0) > 0
+UNION ALL
+SELECT 2 AS [路由],{userCols}
+FROM T_HR_EMPINFO e
+INNER JOIN T_SEC_USER u ON (u.FPHONE = e.FMOBILE OR u.FUSERACCOUNT = e.FMOBILE)
+WHERE e.FSTAFFNUMBER = @StaffNo AND ISNULL(e.FMOBILE, '') <> ''
+UNION ALL
+SELECT 3 AS [路由],{userCols}
+FROM (
+    SELECT ISNULL(el.FNAME, '') AS PersonName
+    FROM T_HR_EMPINFO e
+    LEFT JOIN T_HR_EMPINFO_L el ON el.FID = e.FID AND el.FLOCALEID = 2052
+    WHERE e.FSTAFFNUMBER = @StaffNo
+    UNION
+    SELECT ISNULL(sl.FNAME, '')
+    FROM T_BD_STAFF s
+    LEFT JOIN T_BD_STAFF_L sl ON sl.FSTAFFID = s.FSTAFFID AND sl.FLOCALEID = 2052
+    WHERE s.FNUMBER = @StaffNo
+) p
+INNER JOIN T_SEC_USER u ON u.FNAME = p.PersonName
+WHERE p.PersonName <> ''
+ORDER BY [路由], [用户ID]";
         }
 
         /// <summary>
@@ -2495,7 +2905,19 @@ FROM (
                 {
                     ["name"] = "user-role-permissions",
                     ["description"] = "查询指定用户在各组织下的角色权限明细（用户、组织、角色、业务对象、权限项、权限状态）",
-                    ["parameters"] = "--user <用户ID>, --form <表单标识>, --permission <权限项>, --limit <条数>（均可选）"
+                    ["parameters"] = "--user <用户ID>, --form <表单标识>, --permission <权限项>, --limit <条数>, --summary（按组织+角色汇总条数）（均可选）"
+                },
+                new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["name"] = "offboard-assets",
+                    ["description"] = "按工号查询名下固定资产卡片（使用人线+保管人线，已按资产内码去重，附全部类别对照）",
+                    ["parameters"] = "--staff-no <工号>, --category <资产类别名称/编码/内码>, --limit <条数>（后两项可选）"
+                },
+                new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["name"] = "offboard-user",
+                    ["description"] = "离职核查一次取齐：账号状态、许可分组、角色汇总、名下资产（账号按 员工外键→手机号→姓名 退让匹配）",
+                    ["parameters"] = "--no <工号>, --category <资产类别>（可选）"
                 }
             };
         }

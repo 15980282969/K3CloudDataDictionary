@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -38,6 +39,7 @@ namespace K3CloudDataDictionary.Cli
 
             // 解析全局选项
             var globalOptions = ParseGlobalOptions(commandArgs);
+            DictionaryCache.ForceRefresh = globalOptions.RefreshDictionary;
 
             try
             {
@@ -48,7 +50,7 @@ namespace K3CloudDataDictionary.Cli
                 };
 
                 // 对需要连接的命令，自动检测连接可达性
-                if (commandsRequiringConnection.Contains(command))
+                if (commandsRequiringConnection.Contains(command) && NeedsConnection(command, commandArgs, globalOptions))
                 {
                     if (!CheckConnection(globalOptions, out string connectionString))
                     {
@@ -136,10 +138,45 @@ namespace K3CloudDataDictionary.Cli
                     case "--pretty":
                         options.PrettyPrint = true;
                         break;
+                    case "--no-conn-check":
+                        options.SkipConnectionCheck = true;
+                        break;
+                    case "--refresh-dict":
+                        options.RefreshDictionary = true;
+                        break;
                 }
             }
 
             return options;
+        }
+
+        /// <summary>
+        /// 判断命令是否需要先做连接可达性检测：只打印用法/帮助、列出内置查询、以及显式 --no-conn-check 时都不需要
+        /// </summary>
+        private static bool NeedsConnection(string command, string[] args, GlobalOptions options)
+        {
+            if (args.Length == 0) return false;
+            if (options.SkipConnectionCheck) return false;
+            if (HasOption(args, "help") || HasOption(args, "h")) return false;
+            if (command == "query" && args[0].Equals("list", StringComparison.OrdinalIgnoreCase)) return false;
+            return true;
+        }
+
+        /// <summary>
+        /// 获取某个选项的全部取值（支持同一选项重复出现，如 --param a=1 --param b=2）
+        /// </summary>
+        public static List<string> GetArgValues(string[] args, string name)
+        {
+            var values = new List<string>();
+            for (int i = 0; i < args.Length - 1; i++)
+            {
+                if (args[i].Equals(name, StringComparison.OrdinalIgnoreCase) ||
+                    args[i].Equals("--" + name, StringComparison.OrdinalIgnoreCase))
+                {
+                    values.Add(args[i + 1]);
+                }
+            }
+            return values;
         }
 
         /// <summary>
@@ -270,5 +307,11 @@ namespace K3CloudDataDictionary.Cli
 
         /// <summary>已解析的连接字符串（由自动连接检测设置）</summary>
         public string ResolvedConnectionString { get; set; }
+
+        /// <summary>跳过启动前的连接可达性检测</summary>
+        public bool SkipConnectionCheck { get; set; }
+
+        /// <summary>强制重建本地元数据字典缓存</summary>
+        public bool RefreshDictionary { get; set; }
     }
 }

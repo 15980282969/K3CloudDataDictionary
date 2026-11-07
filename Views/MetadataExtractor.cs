@@ -111,8 +111,16 @@ namespace K3CloudDataDictionary.Views
         /// </summary>
         /// <param name="connectionString">数据库连接字符串</param>
         public MetadataContext(string connectionString)
+            : this(MetadataDbHelper.LoadAllObjectBasicInfo(connectionString))
         {
-            _allObjects = MetadataDbHelper.LoadAllObjectBasicInfo(connectionString);
+        }
+
+        /// <summary>
+        /// 初始化上下文：复用调用方已加载的基础信息，避免同一份对象清单重复查询
+        /// </summary>
+        public MetadataContext(Dictionary<string, ObjectBasicInfo> allObjects)
+        {
+            _allObjects = allObjects;
             _extensionMappings = BuildExtensionMappings();
             _fidsWithExtensions = BuildFidsWithExtensions();
             _targetFids = _allObjects.Values

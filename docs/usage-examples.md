@@ -1884,6 +1884,12 @@ k3cli query user-role-permissions --user 110792 --limit 100 --pretty
 
 # 组合使用：按表单 + 权限项 + 限制条数
 k3cli query user-role-permissions --user 110792 --form CN_PAYAPPLY --permission "查看" --limit 50 --pretty
+
+# 只看按 组织 + 角色 汇总的条数（上千行明细压成几行）
+k3cli query user-role-permissions --user 10490542 --summary --pretty
+
+# 明细另存文件（stdout 重定向时已是无 BOM 的 UTF-8）
+k3cli query user-role-permissions --user 10490542 > permissions.json
 ```
 
 #### 输出字段说明
@@ -1934,12 +1940,91 @@ k3cli query user-role-permissions --user 110792 --form CN_PAYAPPLY --permission 
 #### 注意事项
 
 - 查询结果已按用户名称、组织编码、业务领域、子系统、业务对象、权限项名称、权限状态排序
-- 仅返回已启用（`FFORBIDSTATUS = 'A'`）的用户，已禁用的用户不显示
+- 不传 `--user` 时只返回已启用（`FFORBIDSTATUS = 'A'`）的用户；传了 `--user` 时禁用账号同样返回，禁用与否看 `FForbidStatusName`（离职核查常见禁用账号，早期版本会被静默过滤成 0 行）
 - 不传 `--user` 参数时返回所有已启用用户的权限明细，数据量可能较大，建议指定用户ID
 - 使用 `--form <表单标识>` 可按表单过滤，只返回该表单对应的权限对象记录（如 `CN_PAYAPPLY` 付款申请单）
 - 使用 `--permission <权限项>` 可按权限项名称模糊过滤（如 "新增"、"查看"、"审核"）
 - 使用 `--limit <条数>` 可限制返回条数，避免输出过大（如 `--limit 100`）
 - 权限状态为"有权"表示该用户通过角色拥有对应权限项，"禁止"表示显式禁止，"无权"表示未授权
+
+#### --summary 分组统计
+
+一个用户挂多个角色时，明细动辄数千行（实测某用户 3 个角色对应 2961 行）。`--summary` 按 组织 + 角色 汇总，只关心"有哪些角色、各涉及多少对象、授权/禁止多少条"时用这一档：
+
+```bash
+k3cli query user-role-permissions --user 10490542 --summary --pretty
+```
+
+| 字段 | 说明 |
+|------|------|
+| `FUserName` / `FUserID` | 用户名称 / 内码 |
+| `FForbidStatusName` | 账号是否禁用（是 / 否） |
+| `FOrgNumber` / `FOrgName` | 组织编码 / 名称 |
+| `FRoleName` | 角色名称 |
+| `FPermissionRowCount` | 该角色在本组织下的权限明细行数 |
+| `FObjectCount` | 涉及的业务对象个数 |
+| `FAllowCount` / `FDenyCount` / `FInheritCount` | 有权 / 禁止 / 继承 的行数 |
+
+`--summary` 与 `--limit` 互不影响：汇总后行数已经很少，一般不需要再配 `--limit`。
+
+### 案例：离职核查（offboard-assets / offboard-user 查询）
+
+#### 场景说明
+
+离职交接要一次回答"这个人还有哪些账号、哪些许可、哪些角色、名下有哪些电子设备"。手写这条链需要 6 段 SQL 并绕开 4 个坑，`offboard-assets` / `offboard-user` 把它固化下来。
+
+```bash
+# 名下全部资产 + 类别对照
+k3cli query offboard-assets --staff-no R000052 --pretty
+
+# 只要电子设备（名称 / 编码 / 内码都接受）
+k3cli query offboard-assets --staff-no R000052 --category 电子设备 --pretty
+k3cli query offboard-assets --staff-no R000052 --category ZCLB03_SYS --pretty
+
+# 离职核查一次取齐：账号 + 许可 + 角色汇总 + 资产
+k3cli query offboard-user --no R000052 --pretty
+k3cli query offboard-user --no R000052 --category 电子设备 --pretty
+```
+
+#### 封装掉的四个坑
+
+| 坑 | 现象 | 命令内部的处理 |
+|------|------|------|
+| 一个工号多个内码 | `T_BD_STAFF` 里同一 `FNUMBER` 可对应多行 `FSTAFFID`（实测某工号 8 个内码），只用一个内码会漏资产 | 先按工号收集 人员(`T_BD_STAFF.FNUMBER`) + 员工(`T_HR_EMPINFO.FSTAFFNUMBER`) 的全部内码，再整体匹配；输出的 `内码` 列出来源 |
+| 卡片按变更版本存多行 | 直接 JOIN `T_FA_CARD` 会把 3 项资产放大成 8 行 | `ROW_NUMBER() OVER (PARTITION BY 资产内码 ORDER BY v.fid DESC)` 取最新；卡片侧 `CROSS APPLY (TOP 1 ... ORDER BY FALTERID DESC)`；输出行数恒等于去重资产内码数 |
+| 资产视图没有类别列 | `V_FA_ASSET` 查不到资产类别，只能再 JOIN `T_FA_ASSETTYPE` | 类别取自最新卡片版本的 `FASSETTYPEID`，随资产一起输出 `资产类别` / `资产类别编码` |
+| 明细表无资产内码 | `T_FA_CARDDETAIL` 没有 `FASSETID`，保管人线没法按内码关联 | 保管人线按 `T_FA_CARDDETAIL.FASSETNO = 卡片 FNUMBER` 关联，`归属线` 标明"使用人 / 保管人" |
+
+#### 输出结构
+
+| 键 | 说明 |
+|------|------|
+| `工号` | 传入的工号 |
+| `内码` | 该工号在人员/员工两张表收集到的全部内码及来源表单 |
+| `资产` | 名下资产清单（已按内码去重），含 `归属线`、`使用人工号`、`保管人工号`、`资产类别`、`卡片当前状态`、`资产状态`、`数量`、`原值` |
+| `类别对照` | 该人全部类别的行数/数量/原值对照，用于回答"电子设备收完了，其他类别还剩多少" |
+| `资产类别` | `--category` 命中的类别（内码 + 编码 + 名称） |
+| `口径` | 上述规则的说明，可直接引用给业务方 |
+| `员工档案` / `账号` / `账号匹配方式` / `许可分组` / `角色汇总` | 仅 `offboard-user` 返回 |
+
+工号在人员和员工两张表都不存在时，输出 `提示` 且 `资产` 为空数组，不会静默返回空结果。
+
+#### 账号匹配规则（offboard-user）
+
+`T_HR_EMPINFO.FUserId`、`T_SEC_USER.FEMPID` 这类外键列在部分账套并未维护，按外键找不到账号时，命令按三级退让匹配，并在 `账号匹配方式` 里说明实际用了哪一级：
+
+1. 员工外键：`T_HR_EMPINFO.FUserId → T_SEC_USER.FUSERID`
+2. 手机号：`T_HR_EMPINFO.FMOBILE → T_SEC_USER.FPHONE / FUSERACCOUNT`
+3. 姓名：`T_SEC_USER.FNAME = 人员/员工名称`（同名会全部列出，需人工确认）
+
+实测某账套 `FUserId` 全为 0、626 个账号无重名，R000052 走第 2 级手机号命中 1 个账号。三级都没命中时 `账号` 为空、`账号匹配方式` 为"未匹配到账号"，只说明账套没维护关联，不等于该人没有账号。
+
+#### 注意事项
+
+- 电子设备对应的资产类别编码是 `ZCLB03_SYS`（本账套内码为 3）。`--category` 建议写编码，跨账套更稳；写名称且匹配不唯一时报错并列出候选，不会自己挑一个
+- `用工状态`、`员工禁用`、`账号禁用` 是三个独立开关，为空或"否"不代表已离职
+- `角色汇总` 就是 `user-role-permissions --summary` 的结果；要看具体权限对象，用输出的 `用户ID` 再去掉 `--summary` 展开
+- 想看固定资产卡片的字段定义用 `k3cli fields --form FA_CARD` 或 `k3cli form --id FA_CARD`
 
 ### 添加新查询
 

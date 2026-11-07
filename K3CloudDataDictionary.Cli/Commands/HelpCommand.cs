@@ -31,6 +31,8 @@ namespace K3CloudDataDictionary.Cli.Commands
 全局选项:
   --connection, -c <id>     指定连接 ID
   --pretty                  格式化 JSON 输出
+  --no-conn-check           跳过启动时的「正在检测连接」（少一条提示，不改变查询本身）
+  --refresh-dict            强制重建本地元数据字典缓存（data/dictionary.db，元数据变更后自动失效）
 
 示例:
   # 查询表单字段
@@ -463,12 +465,14 @@ delete 选项:
         public static void ShowQueryHelp()
         {
             Console.WriteLine(@"用法: k3cli query <queryName> [options]
-      k3cli query --sql ""<SELECT 语句>"" [--params ""值1,值2""] [options]
+      k3cli query --sql ""<SELECT 语句>"" [--param 名称=值] [options]
+      k3cli query --file ""<SQL 文件路径>"" [--param 名称=值] [options]
 
 说明:
   常用代码查询功能，快速调用预定义 SQL 返回业务数据。
-  --sql 模式可直接执行任意只读 SELECT（写操作一律被拒绝），
-  --params 中的值按位置映射为 @p1、@p2... 实现参数化查询。
+  --sql 模式可直接执行任意只读 SELECT（写操作一律被拒绝）。
+  参数化查询优先用 --param 名称=值（SQL 里写 @名称，可重复多次，值原样传入）；
+  旧的 --params 值1,值2 仍可用，按位置映射为 @p1、@p2...，值里含逗号时会被拆坏。
 
 可用查询:
   list                    列出所有可用查询
@@ -480,6 +484,8 @@ delete 选项:
   bill-by-no              按单据编号查询任意表单的头表与明细表数据
   role-permissions        查询各角色的功能权限明细（业务领域、子系统、业务对象、权限项、权限状态）
   user-role-permissions   查询指定用户在各组织下的角色权限明细（用户、组织、角色、业务对象、权限项、权限状态）
+  offboard-assets         按工号查询名下固定资产卡片（使用人线+保管人线，按资产内码去重，附全部类别对照）
+  offboard-user           离职核查一次取齐：账号状态、许可分组、角色汇总、名下资产
 
 user-licenses 选项:
   --org <keyword>         按组织名称模糊过滤
@@ -499,16 +505,28 @@ bill-by-no 选项:
   --no <单据编号>          单据编号（必填）
 
 role-permissions / user-role-permissions 选项:
-  --user <用户ID>          用户ID（可选，不传则查询全部已启用用户）
+  --user <用户ID>          用户ID（可选，不传则查询全部已启用用户；指定 --user 时禁用账号也会返回，禁用与否看 FForbidStatusName）
   --form <表单标识>        表单标识（可选，如 CN_PAYAPPLY，仅 user-role-permissions 支持）
   --permission <权限项>    权限项名称模糊匹配（可选，如 ""新增""、""查看""）
   --limit <条数>           限制返回条数（可选，如 100）
+  --summary               按 组织 + 角色 汇总条数，替代上千行明细（可选）
   --connection, -c <id>   指定连接 ID
   --pretty                格式化 JSON 输出
 
+offboard-assets 选项:
+  --staff-no <工号>        工号（必填，等价写法 --no）
+  --category <类别>        资产类别名称/编码/内码（可选，如 电子设备、ZCLB03_SYS、3；匹配不唯一时报错并列出候选）
+  --limit <条数>           限制返回条数（可选）
+
+offboard-user 选项:
+  --no <工号>              工号（必填，等价写法 --staff-no）
+  --category <类别>        资产类别（可选，只保留该类别资产）
+
 --sql 选项:
   --sql <SELECT 语句>     要执行的只读 SQL（必须以 SELECT 开头，仅允许单语句）
-  --params <值1,值2>      参数值，逗号分隔，按位置映射为 @p1、@p2...
+  --file <路径>           从文件读取 SQL（与 --sql 二选一，UTF-8 / 带 BOM / GBK 均可）
+  --param <名称=值>       命名参数，可重复写多次，值原样传入不再按逗号拆分（SQL 里写 @名称）
+  --params <值1,值2>      位置参数，逗号分隔，按顺序映射为 @p1、@p2...（值本身含逗号时改用 --param）
   --timeout <秒>          查询超时时间（默认 60 秒）
 
 示例:
@@ -564,6 +582,30 @@ role-permissions / user-role-permissions 选项:
 
   # 组合使用：按表单 + 权限项 + 限制条数
   k3cli query user-role-permissions --user 110792 --form CN_PAYAPPLY --permission ""查看"" --limit 50 --pretty
+
+  # 只看按组织+角色汇总的条数（几千行明细压成几行）
+  k3cli query user-role-permissions --user 10490542 --summary --pretty
+
+  # 把明细另存文件（stdout 已是 UTF-8 无 BOM，可直接重定向）
+  k3cli query user-role-permissions --user 10490542 > permissions.json
+
+  # 按工号查名下电子设备（内码全收集 + 版本去重 + 使用人/保管人两条线）
+  k3cli query offboard-assets --staff-no R000052 --category 电子设备 --pretty
+
+  # 按工号查名下全部资产，并给出该人名下其他类别对照
+  k3cli query offboard-assets --staff-no R000052 --pretty
+
+  # 离职核查：账号状态 + 许可分组 + 角色汇总 + 名下资产一次取齐
+  k3cli query offboard-user --no R000052 --pretty
+
+  # 离职核查只要电子设备
+  k3cli query offboard-user --no R000052 --category 电子设备 --pretty
+
+  # 命名参数：值含中文或逗号也不会被拆坏，可重复写多次
+  k3cli query --sql ""SELECT FUSERID, FNAME FROM T_SEC_USER WHERE FNAME = @name"" --param ""name=谢辉辉"" --pretty
+
+  # 从文件执行 SQL（文件里的 @uid、@name 用 --param 传值）
+  k3cli query --file D:\temp\query.sql --param uid=10490542 --param ""name=谢辉辉"" --pretty
 ");
         }
     }
